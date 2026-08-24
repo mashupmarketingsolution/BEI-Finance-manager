@@ -1,0 +1,309 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  MOBILE_BANKING
+  OTHER
+}
+
+enum ProjectStatus {
+  ONGOING
+  COMPLETED
+  ON_HOLD
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PurchasePaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum StockMovementType {
+  PURCHASE
+  PROJECT_USAGE
+  RETURN
+  DAMAGE
+  ADJUSTMENT
+}
+
+model Project {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique @db.VarChar(150)
+  contractValue Decimal       @default(0) @db.Decimal(15, 2)
+  notes         String?       @db.Text
+  status        ProjectStatus @default(ONGOING)
+
+  transactions   Transaction[]
+  purchases      Purchase[]
+  stockMovements StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("projects")
+}
+
+model Worker {
+  id     Int          @id @default(autoincrement())
+  name   String       @db.VarChar(150)
+  phone  String?      @db.VarChar(30)
+  role   String?      @db.VarChar(100)
+  status RecordStatus @default(ACTIVE)
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("workers")
+}
+
+model Vendor {
+  id          Int          @id @default(autoincrement())
+  name        String       @db.VarChar(150)
+  companyName String?      @db.VarChar(150)
+  phone       String?      @db.VarChar(30)
+  address     String?      @db.Text
+  status      RecordStatus @default(ACTIVE)
+
+  transactions   Transaction[]
+  materialPrices VendorMaterialPrice[]
+  purchases      Purchase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vendors")
+}
+
+model Category {
+  id     Int             @id @default(autoincrement())
+  name   String          @db.VarChar(100)
+  type   TransactionType
+  status RecordStatus    @default(ACTIVE)
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, type])
+  @@map("categories")
+}
+
+model Transaction {
+  id Int @id @default(autoincrement())
+
+  transactionDate DateTime
+  type            TransactionType
+  amount          Decimal         @db.Decimal(15, 2)
+
+  paymentMethod PaymentMethod @default(CASH)
+
+  description String? @db.Text
+  notes       String? @db.Text
+
+  projectId  Int?
+  categoryId Int?
+  workerId   Int?
+  vendorId   Int?
+
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  worker   Worker?   @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  vendor   Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionDate])
+  @@index([type])
+  @@index([projectId])
+  @@map("transactions")
+}
+
+model MaterialCategory {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique @db.VarChar(100)
+  description String?      @db.Text
+  status      RecordStatus @default(ACTIVE)
+
+  materials Material[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("material_categories")
+}
+
+model Material {
+  id   Int    @id @default(autoincrement())
+  code String @unique @db.VarChar(50)
+  name String @db.VarChar(150)
+
+  categoryId Int?
+  category   MaterialCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  subCategory String? @db.VarChar(100)
+  brand       String? @db.VarChar(100)
+  modelCode   String? @db.VarChar(100)
+
+  specification String? @db.Text
+  color         String? @db.VarChar(100)
+  size          String? @db.VarChar(100)
+
+  unit        String  @db.VarChar(30)
+  description String? @db.Text
+
+  status RecordStatus @default(ACTIVE)
+
+  vendorPrices   VendorMaterialPrice[]
+  purchaseItems  PurchaseItem[]
+  stockMovements StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([name])
+  @@index([brand])
+  @@map("materials")
+}
+
+model Purchase {
+  id Int @id @default(autoincrement())
+
+  purchaseNo   String   @unique @db.VarChar(50)
+  purchaseDate DateTime
+
+  vendorId  Int
+  projectId Int?
+
+  subtotal      Decimal @default(0) @db.Decimal(15, 2)
+  discount      Decimal @default(0) @db.Decimal(15, 2)
+  transportCost Decimal @default(0) @db.Decimal(15, 2)
+  grandTotal    Decimal @default(0) @db.Decimal(15, 2)
+
+  paymentStatus PurchasePaymentStatus @default(UNPAID)
+
+  paidAmount Decimal @default(0) @db.Decimal(15, 2)
+  dueAmount  Decimal @default(0) @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  vendor  Vendor   @relation(fields: [vendorId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  items PurchaseItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseDate])
+  @@index([vendorId])
+  @@index([projectId])
+  @@index([paymentStatus])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id Int @id @default(autoincrement())
+
+  purchaseId Int
+  materialId Int
+
+  quantity  Decimal @db.Decimal(15, 3)
+  unit      String  @db.VarChar(30)
+  unitPrice Decimal @db.Decimal(15, 2)
+  total     Decimal @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseId])
+  @@index([materialId])
+  @@map("purchase_items")
+}
+
+model StockMovement {
+  id Int @id @default(autoincrement())
+
+  materialId Int
+
+  movementType StockMovementType
+
+  quantity Decimal @db.Decimal(15, 3)
+  unit     String  @db.VarChar(30)
+
+  referenceType String? @db.VarChar(50)
+  referenceId   Int?
+
+  projectId Int?
+
+  unitCost Decimal? @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  movementDate DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([materialId])
+  @@index([movementType])
+  @@index([movementDate])
+  @@index([projectId])
+  @@map("stock_movements")
+}
+
+model VendorMaterialPrice {
+  id Int @id @default(autoincrement())
+
+  materialId Int
+  vendorId   Int
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  vendor   Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  unitPrice Decimal @db.Decimal(15, 2)
+  unit      String  @db.VarChar(30)
+
+  minimumQty   Decimal? @db.Decimal(15, 2)
+  leadTimeDays Int?
+
+  effectiveDate DateTime @default(now())
+  notes         String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([materialId])
+  @@index([vendorId])
+  @@index([materialId, vendorId])
+  @@index([effectiveDate])
+  @@map("vendor_material_prices")
+}
