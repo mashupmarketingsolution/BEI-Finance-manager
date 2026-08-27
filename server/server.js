@@ -1432,6 +1432,4792 @@ app.delete(
   }
 );
 
+// =========================================
+// BOQ API
+// =========================================
+
+// GET ALL BOQS
+app.get("/api/boqs", async (req, res) => {
+  try {
+    const boqs = await prisma.bOQ.findMany({
+      include: {
+        project: true,
+        items: {
+          include: {
+            material: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: boqs,
+    });
+  } catch (error) {
+    console.error("Get BOQs Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// GET SINGLE BOQ
+app.get("/api/boqs/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ ID",
+      });
+    }
+
+    const boq = await prisma.bOQ.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        project: true,
+        items: {
+          include: {
+            material: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+    });
+
+    if (!boq) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: boq,
+    });
+  } catch (error) {
+    console.error("Get BOQ Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// CREATE BOQ
+app.post("/api/boqs", async (req, res) => {
+  try {
+    const {
+      boqNo,
+      name,
+      projectId,
+      status,
+      notes,
+    } = req.body;
+
+    // -----------------------------
+    // BASIC VALIDATION
+    // -----------------------------
+
+    if (!boqNo || boqNo.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "BOQ number is required",
+      });
+    }
+
+    if (!name || name.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "BOQ name is required",
+      });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required",
+      });
+    }
+
+    // -----------------------------
+    // VERIFY PROJECT
+    // -----------------------------
+
+    const project = await prisma.project.findUnique({
+      where: {
+        id: Number(projectId),
+      },
+    });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+
+
+const allowedBOQStatuses = [
+  "DRAFT",
+  "FINAL",
+  "APPROVED",
+  "CANCELLED",
+];
+
+const boqStatus = status || "DRAFT";
+
+if (!allowedBOQStatuses.includes(boqStatus)) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid BOQ status",
+  });
+}
+
+    // -----------------------------
+    // CREATE BOQ
+    // -----------------------------
+
+    const boq = await prisma.bOQ.create({
+      data: {
+        boqNo: boqNo.trim(),
+        name: name.trim(),
+        projectId: Number(projectId),
+       // status: status || "DRAFT",//
+        status: boqStatus,
+
+        notes: notes || null,
+      },
+      include: {
+        project: true,
+        items: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "BOQ created successfully",
+      data: boq,
+    });
+  } catch (error) {
+    console.error("Create BOQ Error:", error);
+
+    if (error.code === "P2002") {
+      return res.status(400).json({
+        success: false,
+        message: "A BOQ with this number already exists",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// DELETE BOQ
+app.delete("/api/boqs/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ ID",
+      });
+    }
+
+    const existingBOQ = await prisma.bOQ.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!existingBOQ) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ not found",
+      });
+    }
+
+    await prisma.bOQ.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "BOQ deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete BOQ Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// =========================================
+// BOQ ITEM API
+// =========================================
+
+// GET ALL ITEMS OF A BOQ
+app.get("/api/boqs/:id/items", async (req, res) => {
+  try {
+    const boqId = Number(req.params.id);
+
+    if (!Number.isInteger(boqId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ ID",
+      });
+    }
+
+    const boq = await prisma.bOQ.findUnique({
+      where: {
+        id: boqId,
+      },
+    });
+
+    if (!boq) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ not found",
+      });
+    }
+
+    const items = await prisma.bOQItem.findMany({
+      where: {
+        boqId,
+      },
+      include: {
+        material: true,
+      },
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: items,
+    });
+  } catch (error) {
+    console.error("Get BOQ Items Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// CREATE BOQ ITEM
+app.post("/api/boqs/:id/items", async (req, res) => {
+  try {
+    const boqId = Number(req.params.id);
+
+    const {
+      materialId,
+      description,
+      quantity,
+      unit,
+      estimatedUnitPrice,
+      notes,
+    } = req.body;
+
+    // -----------------------------
+    // BASIC VALIDATION
+    // -----------------------------
+
+    if (!Number.isInteger(boqId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ ID",
+      });
+    }
+
+    if (!materialId) {
+      return res.status(400).json({
+        success: false,
+        message: "Material is required",
+      });
+    }
+
+    if (
+      quantity === undefined ||
+      quantity === null ||
+      Number(quantity) <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than 0",
+      });
+    }
+
+    if (!unit || unit.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Unit is required",
+      });
+    }
+
+    if (
+      estimatedUnitPrice === undefined ||
+      estimatedUnitPrice === null ||
+      Number(estimatedUnitPrice) < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Estimated unit price cannot be negative",
+      });
+    }
+
+    // -----------------------------
+    // VERIFY BOQ
+    // -----------------------------
+
+    const boq = await prisma.bOQ.findUnique({
+      where: {
+        id: boqId,
+      },
+    });
+
+    if (!boq) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ not found",
+      });
+    }
+
+    // -----------------------------
+    // VERIFY MATERIAL
+    // -----------------------------
+
+    const material = await prisma.material.findUnique({
+      where: {
+        id: Number(materialId),
+      },
+    });
+
+    if (!material) {
+      return res.status(400).json({
+        success: false,
+        message: "Material not found",
+      });
+    }
+
+    // -----------------------------
+    // CALCULATE TOTAL
+    // -----------------------------
+
+    const cleanQuantity = Number(quantity);
+    const cleanUnitPrice = Number(estimatedUnitPrice);
+
+    const estimatedTotal =
+      Math.round(
+        cleanQuantity * cleanUnitPrice * 100
+      ) / 100;
+
+    // -----------------------------
+    // CREATE ITEM
+    // -----------------------------
+
+    const item = await prisma.bOQItem.create({
+      data: {
+        boqId,
+        materialId: Number(materialId),
+
+        description:
+          description && description.trim() !== ""
+            ? description.trim()
+            : null,
+
+        quantity: cleanQuantity,
+        unit: unit.trim(),
+
+        estimatedUnitPrice: cleanUnitPrice,
+        estimatedTotal,
+
+        notes:
+          notes && notes.trim() !== ""
+            ? notes.trim()
+            : null,
+      },
+
+      include: {
+        material: true,
+        boq: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "BOQ item created successfully",
+      data: item,
+    });
+  } catch (error) {
+    console.error("Create BOQ Item Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// UPDATE BOQ ITEM
+app.put("/api/boq-items/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const {
+      materialId,
+      description,
+      quantity,
+      unit,
+      estimatedUnitPrice,
+      notes,
+    } = req.body;
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ item ID",
+      });
+    }
+
+    // -----------------------------
+    // FIND ITEM
+    // -----------------------------
+
+    const existingItem = await prisma.bOQItem.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ item not found",
+      });
+    }
+
+    // -----------------------------
+    // VALIDATE MATERIAL
+    // -----------------------------
+
+    if (!materialId) {
+      return res.status(400).json({
+        success: false,
+        message: "Material is required",
+      });
+    }
+
+    const material = await prisma.material.findUnique({
+      where: {
+        id: Number(materialId),
+      },
+    });
+
+    if (!material) {
+      return res.status(400).json({
+        success: false,
+        message: "Material not found",
+      });
+    }
+
+    // -----------------------------
+    // VALIDATE QUANTITY
+    // -----------------------------
+
+    if (
+      quantity === undefined ||
+      quantity === null ||
+      Number(quantity) <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than 0",
+      });
+    }
+
+    // -----------------------------
+    // VALIDATE UNIT
+    // -----------------------------
+
+    if (!unit || unit.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Unit is required",
+      });
+    }
+
+    // -----------------------------
+    // VALIDATE PRICE
+    // -----------------------------
+
+    if (
+      estimatedUnitPrice === undefined ||
+      estimatedUnitPrice === null ||
+      Number(estimatedUnitPrice) < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Estimated unit price cannot be negative",
+      });
+    }
+
+    // -----------------------------
+    // CALCULATE TOTAL
+    // -----------------------------
+
+    const cleanQuantity = Number(quantity);
+    const cleanUnitPrice = Number(estimatedUnitPrice);
+
+    const estimatedTotal =
+      Math.round(
+        cleanQuantity * cleanUnitPrice * 100
+      ) / 100;
+
+    // -----------------------------
+    // UPDATE ITEM
+    // -----------------------------
+
+    const updatedItem =
+      await prisma.bOQItem.update({
+        where: {
+          id,
+        },
+
+        data: {
+          materialId: Number(materialId),
+
+          description:
+            description &&
+            description.trim() !== ""
+              ? description.trim()
+              : null,
+
+          quantity: cleanQuantity,
+          unit: unit.trim(),
+
+          estimatedUnitPrice: cleanUnitPrice,
+          estimatedTotal,
+
+          notes:
+            notes && notes.trim() !== ""
+              ? notes.trim()
+              : null,
+        },
+
+        include: {
+          material: true,
+          boq: true,
+        },
+      });
+
+    res.json({
+      success: true,
+      message: "BOQ item updated successfully",
+      data: updatedItem,
+    });
+  } catch (error) {
+    console.error("Update BOQ Item Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// DELETE BOQ ITEM
+app.delete("/api/boq-items/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ item ID",
+      });
+    }
+
+    const existingItem =
+      await prisma.bOQItem.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ item not found",
+      });
+    }
+
+    await prisma.bOQItem.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "BOQ item deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete BOQ Item Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// =========================================
+// PURCHASE REQUEST API
+// =========================================
+
+// GET ALL PURCHASE REQUESTS
+app.get("/api/purchase-requests", async (req, res) => {
+  try {
+    const requests = await prisma.purchaseRequest.findMany({
+      include: {
+        project: true,
+        items: {
+          include: {
+            material: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+      orderBy: {
+        id: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: requests,
+    });
+  } catch (error) {
+    console.error(
+      "Get Purchase Requests Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Purchase requests load করা যায়নি!",
+    });
+  }
+});
+
+// CREATE PURCHASE REQUEST
+app.post("/api/purchase-requests", async (req, res) => {
+  try {
+    const {
+      requestNo,
+      requestDate,
+      projectId,
+      status,
+      priority,
+      notes,
+    } = req.body;
+
+    // ==============================
+    // VALIDATION
+    // ==============================
+
+    if (!requestNo || !requestNo.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Purchase request number is required",
+      });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required",
+      });
+    }
+
+    const allowedStatuses = [
+      "DRAFT",
+      "PENDING",
+      "APPROVED",
+      "REJECTED",
+      "CONVERTED",
+      "CANCELLED",
+    ];
+
+    const allowedPriorities = [
+      "LOW",
+      "NORMAL",
+      "HIGH",
+      "URGENT",
+    ];
+
+    const requestStatus =
+      status || "DRAFT";
+
+    const requestPriority =
+      priority || "NORMAL";
+
+    if (
+      !allowedStatuses.includes(
+        requestStatus
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid purchase request status",
+      });
+    }
+
+    if (
+      !allowedPriorities.includes(
+        requestPriority
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid purchase request priority",
+      });
+    }
+
+    // ==============================
+    // CHECK DUPLICATE REQUEST NO
+    // ==============================
+
+    const existingRequest =
+      await prisma.purchaseRequest.findUnique({
+        where: {
+          requestNo: requestNo.trim(),
+        },
+      });
+
+    if (existingRequest) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A purchase request with this number already exists",
+      });
+    }
+
+    // ==============================
+    // CHECK PROJECT
+    // ==============================
+
+    const project =
+      await prisma.project.findUnique({
+        where: {
+          id: Number(projectId),
+        },
+      });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // ==============================
+    // CREATE PURCHASE REQUEST
+    // ==============================
+
+    const purchaseRequest =
+      await prisma.purchaseRequest.create({
+        data: {
+          requestNo:
+            requestNo.trim(),
+
+          requestDate:
+            requestDate
+              ? new Date(requestDate)
+              : new Date(),
+
+          projectId:
+            Number(projectId),
+
+          status:
+            requestStatus,
+
+          priority:
+            requestPriority,
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          project: true,
+          items: {
+            include: {
+              material: true,
+            },
+          },
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Purchase request created successfully",
+      data: purchaseRequest,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Purchase Request Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Purchase request create করা যায়নি!",
+    });
+  }
+});
+// =========================================
+// CREATE PURCHASE REQUEST ITEM
+// =========================================
+// =========================================
+// UPDATE PURCHASE REQUEST ITEM
+// =========================================
+
+
+app.post(
+  "/api/purchase-requests/:id/items",
+  async (req, res) => {
+    try {
+      const purchaseRequestId =
+        Number(req.params.id);
+
+      const {
+        materialId,
+        quantity,
+        unit,
+        requiredDate,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // VALIDATION
+      // ==============================
+
+      if (!purchaseRequestId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request ID is required",
+        });
+      }
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      const qty = Number(quantity);
+
+      if (
+        Number.isNaN(qty) ||
+        qty <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || !unit.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Unit is required",
+        });
+      }
+
+      // ==============================
+      // CHECK PURCHASE REQUEST
+      // ==============================
+
+      const purchaseRequest =
+        await prisma.purchaseRequest.findUnique({
+          where: {
+            id: purchaseRequestId,
+          },
+        });
+
+      if (!purchaseRequest) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request not found",
+        });
+      }
+
+      // ==============================
+      // CHECK MATERIAL
+      // ==============================
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: Number(materialId),
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      // ==============================
+      // CREATE ITEM
+      // ==============================
+
+      const item =
+        await prisma.purchaseRequestItem.create({
+          data: {
+            purchaseRequestId,
+            materialId: Number(materialId),
+            quantity: qty,
+            unit: unit.trim(),
+
+            requiredDate: requiredDate
+              ? new Date(requiredDate)
+              : null,
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            material: true,
+            purchaseRequest: {
+              include: {
+                project: true,
+              },
+            },
+          },
+        });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Purchase request item created successfully",
+        data: item,
+      });
+    } catch (error) {
+      console.error(
+        "Create Purchase Request Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request item create করা যায়নি!",
+      });
+    }
+  }
+);
+
+app.put(
+  "/api/purchase-request-items/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        materialId,
+        quantity,
+        unit,
+        requiredDate,
+        notes,
+      } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: "Purchase request item ID is required",
+        });
+      }
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      const qty = Number(quantity);
+
+      if (Number.isNaN(qty) || qty <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || !unit.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Unit is required",
+        });
+      }
+
+      const existingItem =
+        await prisma.purchaseRequestItem.findUnique({
+          where: { id },
+        });
+
+      if (!existingItem) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase request item not found",
+        });
+      }
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: Number(materialId),
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      const item =
+        await prisma.purchaseRequestItem.update({
+          where: { id },
+
+          data: {
+            materialId: Number(materialId),
+            quantity: qty,
+            unit: unit.trim(),
+            requiredDate: requiredDate
+              ? new Date(requiredDate)
+              : null,
+            notes: notes?.trim() || null,
+          },
+
+          include: {
+            material: true,
+            purchaseRequest: {
+              include: {
+                project: true,
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase request item updated successfully",
+        data: item,
+      });
+    } catch (error) {
+      console.error(
+        "Update Purchase Request Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request item update করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// DELETE PURCHASE REQUEST ITEM
+// =========================================
+
+app.delete(
+  "/api/purchase-request-items/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request item ID is required",
+        });
+      }
+
+      const existingItem =
+        await prisma.purchaseRequestItem.findUnique({
+          where: { id },
+        });
+
+      if (!existingItem) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase request item not found",
+        });
+      }
+
+      await prisma.purchaseRequestItem.delete({
+        where: { id },
+      });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase request item deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete Purchase Request Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request item delete করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+
+// =========================================
+// UPDATE PURCHASE REQUEST
+// =========================================
+
+app.put(
+  "/api/purchase-requests/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        requestNo,
+        requestDate,
+        projectId,
+        status,
+        priority,
+        notes,
+      } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request ID is required",
+        });
+      }
+
+      // ==============================
+      // REQUIRED VALIDATION
+      // ==============================
+
+      if (!requestNo || !requestNo.trim()) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request number is required",
+        });
+      }
+
+      if (!projectId) {
+        return res.status(400).json({
+          success: false,
+          message: "Project is required",
+        });
+      }
+
+      const allowedStatuses = [
+        "DRAFT",
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CONVERTED",
+        "CANCELLED",
+      ];
+
+      const allowedPriorities = [
+        "LOW",
+        "NORMAL",
+        "HIGH",
+        "URGENT",
+      ];
+
+      const requestStatus =
+        status || "DRAFT";
+
+      const requestPriority =
+        priority || "NORMAL";
+
+      if (
+        !allowedStatuses.includes(
+          requestStatus
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid purchase request status",
+        });
+      }
+
+      if (
+        !allowedPriorities.includes(
+          requestPriority
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid purchase request priority",
+        });
+      }
+
+      // ==============================
+      // FIND EXISTING REQUEST
+      // ==============================
+
+      const existingRequest =
+        await prisma.purchaseRequest.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingRequest) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase request not found",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE REQUEST NO CHECK
+      // ==============================
+
+      const duplicateRequest =
+        await prisma.purchaseRequest.findFirst({
+          where: {
+            requestNo: requestNo.trim(),
+            NOT: {
+              id,
+            },
+          },
+        });
+
+      if (duplicateRequest) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A purchase request with this number already exists",
+        });
+      }
+
+      // ==============================
+      // CHECK PROJECT
+      // ==============================
+
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: Number(projectId),
+          },
+        });
+
+      if (!project) {
+        return res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+
+      // ==============================
+      // UPDATE REQUEST
+      // ==============================
+
+      const updatedRequest =
+        await prisma.purchaseRequest.update({
+          where: {
+            id,
+          },
+
+          data: {
+            requestNo:
+              requestNo.trim(),
+
+            requestDate:
+              requestDate
+                ? new Date(requestDate)
+                : existingRequest.requestDate,
+
+            projectId:
+              Number(projectId),
+
+            status:
+              requestStatus,
+
+            priority:
+              requestPriority,
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase request updated successfully",
+        data: updatedRequest,
+      });
+    } catch (error) {
+      console.error(
+        "Update Purchase Request Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request update করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// DELETE PURCHASE REQUEST
+// =========================================
+
+app.delete(
+  "/api/purchase-requests/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request ID is required",
+        });
+      }
+
+      const existingRequest =
+        await prisma.purchaseRequest.findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            items: true,
+          },
+        });
+
+      if (!existingRequest) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase request not found",
+        });
+      }
+
+      await prisma.purchaseRequest.delete({
+        where: {
+          id,
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase request deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete Purchase Request Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request delete করা যায়নি!",
+      });
+    }
+  }
+);
+// =========================================
+// GET SINGLE PURCHASE REQUEST
+// =========================================
+
+app.get(
+  "/api/purchase-requests/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase request ID is required",
+        });
+      }
+
+      const purchaseRequest =
+        await prisma.purchaseRequest.findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      if (!purchaseRequest) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase request not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: purchaseRequest,
+      });
+    } catch (error) {
+      console.error(
+        "Get Purchase Request Details Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request details load করা যায়নি!",
+      });
+    }
+  }
+);
+// =========================================
+// RFQ API
+// =========================================
+
+// GET ALL RFQs
+app.get("/api/rfqs", async (req, res) => {
+  try {
+    const rfqs = await prisma.rFQ.findMany({
+      include: {
+        project: true,
+
+        vendors: {
+          include: {
+            vendor: true,
+          },
+        },
+
+        items: {
+          include: {
+            material: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+
+      orderBy: {
+        id: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: rfqs,
+    });
+  } catch (error) {
+    console.error(
+      "Get RFQs Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "RFQs load করা যায়নি!",
+    });
+  }
+});
+
+// CREATE RFQ
+app.post("/api/rfqs", async (req, res) => {
+  try {
+    const {
+      rfqNo,
+      rfqDate,
+      projectId,
+      status,
+      notes,
+    } = req.body;
+
+    // ==============================
+    // VALIDATION
+    // ==============================
+
+    if (!rfqNo || !rfqNo.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "RFQ number is required",
+      });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required",
+      });
+    }
+
+    const allowedStatuses = [
+      "DRAFT",
+      "SENT",
+      "QUOTED",
+      "EVALUATED",
+      "AWARDED",
+      "CANCELLED",
+    ];
+
+    const rfqStatus = status || "DRAFT";
+
+    if (!allowedStatuses.includes(rfqStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid RFQ status",
+      });
+    }
+
+    // ==============================
+    // DUPLICATE RFQ NO
+    // ==============================
+
+    const existingRFQ =
+      await prisma.rFQ.findUnique({
+        where: {
+          rfqNo: rfqNo.trim(),
+        },
+      });
+
+    if (existingRFQ) {
+      return res.status(400).json({
+        success: false,
+        message: "An RFQ with this number already exists",
+      });
+    }
+
+    // ==============================
+    // CHECK PROJECT
+    // ==============================
+
+    const project =
+      await prisma.project.findUnique({
+        where: {
+          id: Number(projectId),
+        },
+      });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // ==============================
+    // CREATE RFQ
+    // ==============================
+
+    const rfq =
+      await prisma.rFQ.create({
+        data: {
+          rfqNo: rfqNo.trim(),
+
+          rfqDate: rfqDate
+            ? new Date(rfqDate)
+            : new Date(),
+
+          projectId: Number(projectId),
+
+          status: rfqStatus,
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          project: true,
+
+          vendors: {
+            include: {
+              vendor: true,
+            },
+          },
+
+          items: {
+            include: {
+              material: true,
+            },
+          },
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message: "RFQ created successfully",
+      data: rfq,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create RFQ Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "RFQ create করা যায়নি!",
+    });
+  }
+});
+
+// =========================================
+// UPDATE RFQ
+// =========================================
+
+app.put(
+  "/api/rfqs/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        rfqNo,
+        rfqDate,
+        projectId,
+        status,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      if (!rfqNo || !rfqNo.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "RFQ number is required",
+        });
+      }
+
+      if (!rfqDate) {
+        return res.status(400).json({
+          success: false,
+          message: "RFQ date is required",
+        });
+      }
+
+      if (!projectId) {
+        return res.status(400).json({
+          success: false,
+          message: "Project is required",
+        });
+      }
+
+      const allowedStatuses = [
+        "DRAFT",
+        "SENT",
+        "CLOSED",
+        "AWARDED",
+        "CANCELLED",
+      ];
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ status",
+        });
+      }
+
+      // ==============================
+      // FIND EXISTING RFQ
+      // ==============================
+
+      const existingRFQ =
+        await prisma.rFQ.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingRFQ) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE RFQ NUMBER
+      // ==============================
+
+      const duplicateRFQ =
+        await prisma.rFQ.findFirst({
+          where: {
+            rfqNo: rfqNo.trim(),
+            NOT: {
+              id,
+            },
+          },
+        });
+
+      if (duplicateRFQ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "An RFQ with this number already exists",
+        });
+      }
+
+      // ==============================
+      // CHECK PROJECT
+      // ==============================
+
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: Number(projectId),
+          },
+        });
+
+      if (!project) {
+        return res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+
+      // ==============================
+      // UPDATE RFQ
+      // ==============================
+
+      const updatedRFQ =
+        await prisma.rFQ.update({
+          where: {
+            id,
+          },
+
+          data: {
+            rfqNo:
+              rfqNo.trim(),
+
+            rfqDate:
+              new Date(rfqDate),
+
+            projectId:
+              Number(projectId),
+
+            status,
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+
+            vendors: {
+              include: {
+                vendor: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+
+            awardedVendor: true,
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "RFQ updated successfully",
+        data: updatedRFQ,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update RFQ Error:",
+        error
+      );
+
+      if (error.code === "P2002") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "An RFQ with this number already exists",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ update করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// DELETE RFQ
+// =========================================
+
+app.delete(
+  "/api/rfqs/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      // ==============================
+      // FIND RFQ
+      // ==============================
+
+      const existingRFQ =
+        await prisma.rFQ.findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            items: true,
+            vendors: true,
+            purchaseOrders: true,
+          },
+        });
+
+      if (!existingRFQ) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // BLOCK DELETE IF PO EXISTS
+      // ==============================
+
+      if (
+        existingRFQ.purchaseOrders &&
+        existingRFQ.purchaseOrders.length > 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot delete RFQ because purchase orders are linked to it",
+        });
+      }
+
+      // ==============================
+      // DELETE RFQ
+      // ==============================
+
+      await prisma.rFQ.delete({
+        where: {
+          id,
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          "RFQ deleted successfully",
+      });
+
+    } catch (error) {
+      console.error(
+        "Delete RFQ Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ delete করা যায়নি!",
+      });
+    }
+  }
+);
+// =========================================
+// RFQ ITEM API
+// =========================================
+
+// CREATE RFQ ITEM
+app.post(
+  "/api/rfqs/:id/items",
+  async (req, res) => {
+    try {
+      const rfqId = Number(req.params.id);
+
+      const {
+        materialId,
+        quantity,
+        unit,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(rfqId) || rfqId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      const qty = Number(quantity);
+
+      if (
+        Number.isNaN(qty) ||
+        qty <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || !unit.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Unit is required",
+        });
+      }
+
+      // ==============================
+      // CHECK RFQ
+      // ==============================
+
+      const rfq =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: rfqId,
+          },
+        });
+
+      if (!rfq) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // CHECK MATERIAL
+      // ==============================
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: Number(materialId),
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      // ==============================
+      // CREATE RFQ ITEM
+      // ==============================
+
+      const item =
+        await prisma.rFQItem.create({
+          data: {
+            rfqId,
+
+            materialId:
+              Number(materialId),
+
+            quantity: qty,
+
+            unit:
+              unit.trim(),
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            material: true,
+
+            rfq: {
+              include: {
+                project: true,
+              },
+            },
+          },
+        });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "RFQ item created successfully",
+        data: item,
+      });
+
+    } catch (error) {
+      console.error(
+        "Create RFQ Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ item create করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+
+// =========================================
+// UPDATE RFQ ITEM
+// =========================================
+
+app.put(
+  "/api/rfq-items/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        materialId,
+        quantity,
+        unit,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ item ID",
+        });
+      }
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      const qty = Number(quantity);
+
+      if (
+        Number.isNaN(qty) ||
+        qty <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || !unit.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Unit is required",
+        });
+      }
+
+      // ==============================
+      // FIND EXISTING ITEM
+      // ==============================
+
+      const existingItem =
+        await prisma.rFQItem.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingItem) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ item not found",
+        });
+      }
+
+      // ==============================
+      // CHECK MATERIAL
+      // ==============================
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: Number(materialId),
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      // ==============================
+      // UPDATE ITEM
+      // ==============================
+
+      const updatedItem =
+        await prisma.rFQItem.update({
+          where: {
+            id,
+          },
+
+          data: {
+            materialId:
+              Number(materialId),
+
+            quantity:
+              qty,
+
+            unit:
+              unit.trim(),
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            material: true,
+
+            rfq: {
+              include: {
+                project: true,
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "RFQ item updated successfully",
+        data: updatedItem,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update RFQ Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ item update করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+// =========================================
+// DELETE RFQ ITEM
+// =========================================
+
+app.delete(
+  "/api/rfq-items/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ item ID",
+        });
+      }
+
+      const existingItem =
+        await prisma.rFQItem.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingItem) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ item not found",
+        });
+      }
+
+      await prisma.rFQItem.delete({
+        where: {
+          id,
+        },
+      });
+
+      res.json({
+        success: true,
+        message: "RFQ item deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete RFQ Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ item delete করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// RFQ VENDOR API
+// =========================================
+
+// ADD VENDOR TO RFQ
+app.post(
+  "/api/rfqs/:id/vendors",
+  async (req, res) => {
+    try {
+      const rfqId = Number(req.params.id);
+
+      const {
+        vendorId,
+        quotedTotal,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(rfqId) || rfqId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      if (!vendorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor is required",
+        });
+      }
+
+      const cleanVendorId = Number(vendorId);
+
+      if (
+        Number.isNaN(cleanVendorId) ||
+        cleanVendorId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid vendor ID",
+        });
+      }
+
+      const cleanQuotedTotal =
+        quotedTotal === undefined ||
+        quotedTotal === null ||
+        quotedTotal === ""
+          ? null
+          : Number(quotedTotal);
+
+      if (
+        cleanQuotedTotal !== null &&
+        (Number.isNaN(cleanQuotedTotal) ||
+          cleanQuotedTotal < 0)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quoted total cannot be negative",
+        });
+      }
+
+      // ==============================
+      // CHECK RFQ
+      // ==============================
+
+      const rfq =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: rfqId,
+          },
+        });
+
+      if (!rfq) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // CHECK VENDOR
+      // ==============================
+
+      const vendor =
+        await prisma.vendor.findUnique({
+          where: {
+            id: cleanVendorId,
+          },
+        });
+
+      if (!vendor) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor not found",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE VENDOR CHECK
+      // ==============================
+
+      const existingRFQVendor =
+        await prisma.rFQVendor.findFirst({
+          where: {
+            rfqId,
+            vendorId: cleanVendorId,
+          },
+        });
+
+      if (existingRFQVendor) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This vendor is already added to this RFQ",
+        });
+      }
+
+      // ==============================
+      // CREATE RFQ VENDOR
+      // ==============================
+
+      const rfqVendor =
+        await prisma.rFQVendor.create({
+          data: {
+            rfqId,
+
+            vendorId:
+              cleanVendorId,
+
+            quotedTotal:
+              cleanQuotedTotal,
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            vendor: true,
+
+            rfq: {
+              include: {
+                project: true,
+                items: {
+                  include: {
+                    material: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Vendor added to RFQ successfully",
+        data: rfqVendor,
+      });
+
+    } catch (error) {
+      console.error(
+        "Add RFQ Vendor Error:",
+        error
+      );
+
+      if (error.code === "P2002") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This vendor is already added to this RFQ",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Vendor add করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// UPDATE RFQ VENDOR
+// =========================================
+
+app.put(
+  "/api/rfq-vendors/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        vendorId,
+        quotedTotal,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ vendor ID",
+        });
+      }
+
+      if (!vendorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor is required",
+        });
+      }
+
+      const cleanVendorId = Number(vendorId);
+
+      if (
+        Number.isNaN(cleanVendorId) ||
+        cleanVendorId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid vendor ID",
+        });
+      }
+
+      const cleanQuotedTotal =
+        quotedTotal === undefined ||
+        quotedTotal === null ||
+        quotedTotal === ""
+          ? null
+          : Number(quotedTotal);
+
+      if (
+        cleanQuotedTotal !== null &&
+        (
+          Number.isNaN(cleanQuotedTotal) ||
+          cleanQuotedTotal < 0
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quoted total cannot be negative",
+        });
+      }
+
+      // ==============================
+      // FIND EXISTING RFQ VENDOR
+      // ==============================
+
+      const existingRFQVendor =
+        await prisma.rFQVendor.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingRFQVendor) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "RFQ vendor not found",
+        });
+      }
+
+      // ==============================
+      // CHECK VENDOR
+      // ==============================
+
+      const vendor =
+        await prisma.vendor.findUnique({
+          where: {
+            id: cleanVendorId,
+          },
+        });
+
+      if (!vendor) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor not found",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE VENDOR CHECK
+      // ==============================
+
+      const duplicateVendor =
+        await prisma.rFQVendor.findFirst({
+          where: {
+            rfqId:
+              existingRFQVendor.rfqId,
+
+            vendorId:
+              cleanVendorId,
+
+            NOT: {
+              id,
+            },
+          },
+        });
+
+      if (duplicateVendor) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This vendor is already added to this RFQ",
+        });
+      }
+
+      // ==============================
+      // UPDATE RFQ VENDOR
+      // ==============================
+
+      const updatedRFQVendor =
+        await prisma.rFQVendor.update({
+          where: {
+            id,
+          },
+
+          data: {
+            vendorId:
+              cleanVendorId,
+
+            quotedTotal:
+              cleanQuotedTotal,
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            vendor: true,
+
+            rfq: {
+              include: {
+                project: true,
+
+                items: {
+                  include: {
+                    material: true,
+                  },
+                },
+
+                vendors: {
+                  include: {
+                    vendor: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "RFQ vendor updated successfully",
+        data: updatedRFQVendor,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update RFQ Vendor Error:",
+        error
+      );
+
+      if (error.code === "P2002") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This vendor is already added to this RFQ",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ vendor update করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+// =========================================
+// DELETE RFQ VENDOR
+// =========================================
+
+app.delete(
+  "/api/rfq-vendors/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ vendor ID",
+        });
+      }
+
+      const existingRFQVendor =
+        await prisma.rFQVendor.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingRFQVendor) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ vendor not found",
+        });
+      }
+
+      await prisma.rFQVendor.delete({
+        where: {
+          id,
+        },
+      });
+
+      res.json({
+        success: true,
+        message: "RFQ vendor deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete RFQ Vendor Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ vendor delete করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// RFQ PRICE COMPARISON
+// =========================================
+
+app.get(
+  "/api/rfqs/:id/price-comparison",
+  async (req, res) => {
+    try {
+      const rfqId = Number(req.params.id);
+
+      if (!Number.isInteger(rfqId) || rfqId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      const rfq = await prisma.rFQ.findUnique({
+        where: {
+          id: rfqId,
+        },
+
+        include: {
+          project: true,
+
+          items: {
+            include: {
+              material: true,
+            },
+            orderBy: {
+              id: "asc",
+            },
+          },
+
+          vendors: {
+            include: {
+              vendor: true,
+            },
+            orderBy: {
+              quotedTotal: "asc",
+            },
+          },
+        },
+      });
+
+      if (!rfq) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // =================================
+      // ONLY VENDORS WITH QUOTES
+      // =================================
+
+      const quotedVendors =
+        rfq.vendors.filter(
+          (item) =>
+            item.quotedTotal !== null
+        );
+
+      if (quotedVendors.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            rfqId: rfq.id,
+            rfqNo: rfq.rfqNo,
+            project: rfq.project,
+
+            items: rfq.items,
+
+            vendors: [],
+
+            lowestQuote: null,
+            highestQuote: null,
+            savingAmount: null,
+            bestVendor: null,
+          },
+        });
+      }
+
+      // =================================
+      // SORT BY LOWEST QUOTE
+      // =================================
+
+      const sortedVendors =
+        [...quotedVendors].sort(
+          (a, b) =>
+            Number(a.quotedTotal) -
+            Number(b.quotedTotal)
+        );
+
+      const lowestQuote =
+        Number(
+          sortedVendors[0].quotedTotal
+        );
+
+      const highestQuote =
+        Number(
+          sortedVendors[
+            sortedVendors.length - 1
+          ].quotedTotal
+        );
+
+      const savingAmount =
+        highestQuote - lowestQuote;
+
+      const bestVendor =
+        sortedVendors[0];
+
+      // =================================
+      // RESPONSE
+      // =================================
+
+      res.json({
+        success: true,
+
+        data: {
+          rfqId: rfq.id,
+          rfqNo: rfq.rfqNo,
+
+          project: rfq.project,
+
+          items: rfq.items,
+
+          vendors: sortedVendors.map(
+            (item, index) => ({
+              id: item.id,
+
+              vendorId:
+                item.vendorId,
+
+              vendorName:
+                item.vendor?.name || "-",
+
+              companyName:
+                item.vendor?.companyName ||
+                "-",
+
+              quotedTotal:
+                Number(
+                  item.quotedTotal
+                ),
+
+              notes:
+                item.notes,
+
+              rank: index + 1,
+            })
+          ),
+
+          lowestQuote,
+
+          highestQuote,
+
+          savingAmount,
+
+          bestVendor: {
+            rfqVendorId:
+              bestVendor.id,
+
+            vendorId:
+              bestVendor.vendorId,
+
+            vendorName:
+              bestVendor.vendor?.name ||
+              "-",
+
+            companyName:
+              bestVendor.vendor
+                ?.companyName || "-",
+
+            quotedTotal:
+              Number(
+                bestVendor.quotedTotal
+              ),
+          },
+        },
+      });
+    } catch (error) {
+      console.error(
+        "RFQ Price Comparison Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ price comparison করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// AWARD RFQ
+// =========================================
+
+app.post(
+  "/api/rfqs/:id/award",
+  async (req, res) => {
+    try {
+      const rfqId = Number(req.params.id);
+
+      const {
+        rfqVendorId,
+      } = req.body;
+
+      // ==============================
+      // VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(rfqId) || rfqId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      if (!rfqVendorId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "RFQ vendor is required",
+        });
+      }
+
+      const cleanRFQVendorId =
+        Number(rfqVendorId);
+
+      // ==============================
+      // CHECK RFQ
+      // ==============================
+
+      const rfq =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: rfqId,
+          },
+        });
+
+      if (!rfq) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // CHECK RFQ VENDOR
+      // ==============================
+
+      const rfqVendor =
+        await prisma.rFQVendor.findUnique({
+          where: {
+            id: cleanRFQVendorId,
+          },
+
+          include: {
+            vendor: true,
+          },
+        });
+
+      if (!rfqVendor) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "RFQ vendor not found",
+        });
+      }
+
+      if (rfqVendor.rfqId !== rfqId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This vendor does not belong to this RFQ",
+        });
+      }
+
+      if (
+        rfqVendor.quotedTotal === null
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot award a vendor without a quotation",
+        });
+      }
+
+      // ==============================
+      // AWARD RFQ
+      // ==============================
+
+      const awardedRFQ =
+        await prisma.rFQ.update({
+          where: {
+            id: rfqId,
+          },
+
+          data: {
+            status: "AWARDED",
+
+            awardedVendorId:
+              rfqVendor.vendorId,
+          },
+
+          include: {
+            project: true,
+
+            awardedVendor: true,
+
+            vendors: {
+              include: {
+                vendor: true,
+              },
+
+              orderBy: {
+                quotedTotal: "asc",
+              },
+            },
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "RFQ awarded successfully",
+        data: awardedRFQ,
+      });
+
+    } catch (error) {
+      console.error(
+        "Award RFQ Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ award করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// GET SINGLE RFQ
+// =========================================
+
+app.get("/api/rfqs/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid RFQ ID",
+      });
+    }
+
+    const rfq = await prisma.rFQ.findUnique({
+      where: {
+        id,
+      },
+
+      include: {
+        project: true,
+
+        items: {
+          include: {
+            material: true,
+          },
+
+          orderBy: {
+            id: "asc",
+          },
+        },
+
+        vendors: {
+          include: {
+            vendor: true,
+          },
+
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+    });
+
+    if (!rfq) {
+      return res.status(404).json({
+        success: false,
+        message: "RFQ not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: rfq,
+    });
+  } catch (error) {
+    console.error(
+      "Get RFQ Details Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "RFQ details load করা যায়নি!",
+    });
+  }
+});
+
+
+
+// =========================================
+// PURCHASE ORDER API
+// =========================================
+
+// CREATE PURCHASE ORDER
+app.post("/api/purchase-orders", async (req, res) => {
+  try {
+    const {
+      poNo,
+      poDate,
+      vendorId,
+      projectId,
+      rfqId,
+      discount,
+      transportCost,
+      notes,
+      items,
+    } = req.body;
+
+    // ==============================
+    // BASIC VALIDATION
+    // ==============================
+
+    if (!poNo || !poNo.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "PO number is required",
+      });
+    }
+
+    if (!poDate) {
+      return res.status(400).json({
+        success: false,
+        message: "PO date is required",
+      });
+    }
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor is required",
+      });
+    }
+
+    if (
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "At least one purchase order item is required",
+      });
+    }
+
+    // ==============================
+    // CHECK VENDOR
+    // ==============================
+
+    const vendor =
+      await prisma.vendor.findUnique({
+        where: {
+          id: Number(vendorId),
+        },
+      });
+
+    if (!vendor) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    // ==============================
+    // CHECK PROJECT
+    // ==============================
+
+    if (projectId) {
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: Number(projectId),
+          },
+        });
+
+      if (!project) {
+        return res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+    }
+
+    // ==============================
+    // CHECK RFQ
+    // ==============================
+
+    let rfq = null;
+
+    if (rfqId) {
+      rfq =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: Number(rfqId),
+          },
+        });
+
+      if (!rfq) {
+        return res.status(400).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      if (rfq.status !== "AWARDED") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only an awarded RFQ can be converted to a purchase order",
+        });
+      }
+
+      if (
+        rfq.awardedVendorId !==
+        Number(vendorId)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "PO vendor must match the awarded RFQ vendor",
+        });
+      }
+    }
+
+    // ==============================
+    // DUPLICATE PO NUMBER
+    // ==============================
+
+    const existingPO =
+      await prisma.purchaseOrder.findUnique({
+        where: {
+          poNo: poNo.trim(),
+        },
+      });
+
+    if (existingPO) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A purchase order with this number already exists",
+      });
+    }
+
+    // ==============================
+    // PREPARE ITEMS
+    // ==============================
+
+    let subtotal = 0;
+
+    const preparedItems = [];
+
+    for (const item of items) {
+      const materialId =
+        Number(item.materialId);
+
+      const quantity =
+        Number(item.quantity);
+
+      const unitPrice =
+        Number(item.unitPrice);
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Material is required for every PO item",
+        });
+      }
+
+      if (
+        Number.isNaN(quantity) ||
+        quantity <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (
+        Number.isNaN(unitPrice) ||
+        unitPrice < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price cannot be negative",
+        });
+      }
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: materialId,
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Material ID ${materialId} not found`,
+        });
+      }
+
+      const total =
+        quantity * unitPrice;
+
+      subtotal += total;
+
+      preparedItems.push({
+        materialId,
+        quantity,
+        unit:
+          item.unit?.trim() ||
+          material.unit,
+        unitPrice,
+        total,
+        notes:
+          item.notes?.trim() || null,
+      });
+    }
+
+    // ==============================
+    // CALCULATE TOTALS
+    // ==============================
+
+    const discountAmount =
+      Number(discount) || 0;
+
+    const transportAmount =
+      Number(transportCost) || 0;
+
+    if (discountAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Discount cannot be negative",
+      });
+    }
+
+    if (transportAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Transport cost cannot be negative",
+      });
+    }
+
+    if (discountAmount > subtotal) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Discount cannot be greater than subtotal",
+      });
+    }
+
+    const grandTotal =
+      subtotal -
+      discountAmount +
+      transportAmount;
+
+    // ==============================
+    // CREATE PO
+    // ==============================
+
+    const purchaseOrder =
+      await prisma.purchaseOrder.create({
+        data: {
+          poNo:
+            poNo.trim(),
+
+          poDate:
+            new Date(poDate),
+
+          vendorId:
+            Number(vendorId),
+
+          projectId:
+            projectId
+              ? Number(projectId)
+              : null,
+
+          rfqId:
+            rfqId
+              ? Number(rfqId)
+              : null,
+
+          status:
+            "DRAFT",
+
+          subtotal,
+
+          discount:
+            discountAmount,
+
+          transportCost:
+            transportAmount,
+
+          grandTotal,
+
+          notes:
+            notes?.trim() || null,
+
+          items: {
+            create: preparedItems.map(
+              (item) => ({
+                materialId:
+                  item.materialId,
+
+                quantity:
+                  item.quantity,
+
+                unit:
+                  item.unit,
+
+                unitPrice:
+                  item.unitPrice,
+
+                total:
+                  item.total,
+
+                notes:
+                  item.notes,
+              })
+            ),
+          },
+        },
+
+        include: {
+          vendor: true,
+          project: true,
+          rfq: true,
+
+          items: {
+            include: {
+              material: true,
+            },
+          },
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Purchase order created successfully",
+      data: purchaseOrder,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Purchase Order Error:",
+      error
+    );
+
+    if (error.code === "P2002") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Purchase order number already exists",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Purchase order create করা যায়নি!",
+    });
+  }
+});
+
+// =========================================
+// GET ALL PURCHASE ORDERS
+// =========================================
+
+app.get("/api/purchase-orders", async (req, res) => {
+  try {
+    const purchaseOrders =
+      await prisma.purchaseOrder.findMany({
+        include: {
+          vendor: true,
+          project: true,
+          rfq: true,
+          items: {
+            include: {
+              material: true,
+            },
+          },
+        },
+        orderBy: {
+          id: "desc",
+        },
+      });
+
+    res.json({
+      success: true,
+      data: purchaseOrders,
+    });
+  } catch (error) {
+    console.error(
+      "Get Purchase Orders Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message:
+        "Purchase orders load করা যায়নি!",
+    });
+  }
+});
+
+
+// =========================================
+// GET SINGLE PURCHASE ORDER
+// =========================================
+
+app.get(
+  "/api/purchase-orders/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase order ID",
+        });
+      }
+
+      const purchaseOrder =
+        await prisma.purchaseOrder.findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            vendor: true,
+            project: true,
+            rfq: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      if (!purchaseOrder) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase order not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: purchaseOrder,
+      });
+    } catch (error) {
+      console.error(
+        "Get Single Purchase Order Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase order details load করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+
+// =========================================
+// UPDATE PURCHASE ORDER
+// =========================================
+
+app.put(
+  "/api/purchase-orders/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase order ID",
+        });
+      }
+
+      const {
+        poNo,
+        poDate,
+        vendorId,
+        projectId,
+        rfqId,
+        discount,
+        transportCost,
+        notes,
+        items,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!poNo || !poNo.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "PO number is required",
+        });
+      }
+
+      if (!poDate) {
+        return res.status(400).json({
+          success: false,
+          message: "PO date is required",
+        });
+      }
+
+      if (!vendorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor is required",
+        });
+      }
+
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one purchase order item is required",
+        });
+      }
+
+      // ==============================
+      // FIND EXISTING PO
+      // ==============================
+
+      const existingPO =
+        await prisma.purchaseOrder.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingPO) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase order not found",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE PO NUMBER
+      // ==============================
+
+      const duplicatePO =
+        await prisma.purchaseOrder.findFirst({
+          where: {
+            poNo: poNo.trim(),
+
+            NOT: {
+              id,
+            },
+          },
+        });
+
+      if (duplicatePO) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A purchase order with this number already exists",
+        });
+      }
+
+      // ==============================
+      // CHECK VENDOR
+      // ==============================
+
+      const vendor =
+        await prisma.vendor.findUnique({
+          where: {
+            id: Number(vendorId),
+          },
+        });
+
+      if (!vendor) {
+        return res.status(400).json({
+          success: false,
+          message: "Vendor not found",
+        });
+      }
+
+      // ==============================
+      // CHECK PROJECT
+      // ==============================
+
+      if (projectId) {
+        const project =
+          await prisma.project.findUnique({
+            where: {
+              id: Number(projectId),
+            },
+          });
+
+        if (!project) {
+          return res.status(400).json({
+            success: false,
+            message: "Project not found",
+          });
+        }
+      }
+
+      // ==============================
+      // CHECK RFQ
+      // ==============================
+
+      if (rfqId) {
+        const rfq =
+          await prisma.rFQ.findUnique({
+            where: {
+              id: Number(rfqId),
+            },
+          });
+
+        if (!rfq) {
+          return res.status(400).json({
+            success: false,
+            message: "RFQ not found",
+          });
+        }
+
+        if (rfq.status !== "AWARDED") {
+          return res.status(400).json({
+            success: false,
+            message:
+              "RFQ must be awarded before using it in a PO",
+          });
+        }
+
+        if (
+          rfq.awardedVendorId !==
+          Number(vendorId)
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "PO vendor must match the awarded RFQ vendor",
+          });
+        }
+      }
+
+      // ==============================
+      // PREPARE ITEMS
+      // ==============================
+
+      let subtotal = 0;
+
+      const preparedItems = [];
+
+      for (const item of items) {
+        const materialId =
+          Number(item.materialId);
+
+        const quantity =
+          Number(item.quantity);
+
+        const unitPrice =
+          Number(item.unitPrice);
+
+        if (!materialId) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Material is required for every PO item",
+          });
+        }
+
+        if (
+          Number.isNaN(quantity) ||
+          quantity <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Quantity must be greater than 0",
+          });
+        }
+
+        if (
+          Number.isNaN(unitPrice) ||
+          unitPrice < 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Unit price cannot be negative",
+          });
+        }
+
+        const material =
+          await prisma.material.findUnique({
+            where: {
+              id: materialId,
+            },
+          });
+
+        if (!material) {
+          return res.status(400).json({
+            success: false,
+            message:
+              `Material ID ${materialId} not found`,
+          });
+        }
+
+        const total =
+          quantity * unitPrice;
+
+        subtotal += total;
+
+        preparedItems.push({
+          materialId,
+          quantity,
+          unit:
+            item.unit?.trim() ||
+            material.unit,
+          unitPrice,
+          total,
+          notes:
+            item.notes?.trim() || null,
+        });
+      }
+
+      // ==============================
+      // CALCULATE TOTALS
+      // ==============================
+
+      const discountAmount =
+        Number(discount) || 0;
+
+      const transportAmount =
+        Number(transportCost) || 0;
+
+      if (discountAmount < 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Discount cannot be negative",
+        });
+      }
+
+      if (transportAmount < 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Transport cost cannot be negative",
+        });
+      }
+
+      if (discountAmount > subtotal) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Discount cannot be greater than subtotal",
+        });
+      }
+
+      const grandTotal =
+        subtotal -
+        discountAmount +
+        transportAmount;
+
+      // ==============================
+      // UPDATE PO + ITEMS
+      // ==============================
+
+      const updatedPO =
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.purchaseOrder.update({
+              where: {
+                id,
+              },
+
+              data: {
+                poNo:
+                  poNo.trim(),
+
+                poDate:
+                  new Date(poDate),
+
+                vendorId:
+                  Number(vendorId),
+
+                projectId:
+                  projectId
+                    ? Number(projectId)
+                    : null,
+
+                rfqId:
+                  rfqId
+                    ? Number(rfqId)
+                    : null,
+
+                subtotal,
+
+                discount:
+                  discountAmount,
+
+                transportCost:
+                  transportAmount,
+
+                grandTotal,
+
+                notes:
+                  notes?.trim() || null,
+              },
+            });
+
+            await tx.purchaseOrderItem.deleteMany({
+              where: {
+                purchaseOrderId: id,
+              },
+            });
+
+            for (const item of preparedItems) {
+              await tx.purchaseOrderItem.create({
+                data: {
+                  purchaseOrderId:
+                    id,
+
+                  materialId:
+                    item.materialId,
+
+                  quantity:
+                    item.quantity,
+
+                  unit:
+                    item.unit,
+
+                  unitPrice:
+                    item.unitPrice,
+
+                  total:
+                    item.total,
+
+                  notes:
+                    item.notes,
+                },
+              });
+            }
+
+            return tx.purchaseOrder.findUnique({
+              where: {
+                id,
+              },
+
+              include: {
+                vendor: true,
+                project: true,
+                rfq: true,
+
+                items: {
+                  include: {
+                    material: true,
+                  },
+                },
+              },
+            });
+          }
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Purchase order updated successfully",
+        data: updatedPO,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update Purchase Order Error:",
+        error
+      );
+
+      if (error.code === "P2002") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase order number already exists",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase order update করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+
+// =========================================
+// DELETE PURCHASE ORDER
+// =========================================
+
+app.delete(
+  "/api/purchase-orders/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase order ID",
+        });
+      }
+
+      const existingPO =
+        await prisma.purchaseOrder.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingPO) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase order not found",
+        });
+      }
+
+      await prisma.purchaseOrder.delete({
+        where: {
+          id,
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase order deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Delete Purchase Order Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase order delete করা যায়নি!",
+      });
+    }
+  }
+);
+
+// =========================================
+// UPDATE PURCHASE ORDER STATUS
+// =========================================
+
+app.patch(
+  "/api/purchase-orders/:id/status",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const { status } = req.body;
+
+      // ==============================
+      // VALIDATE PO ID
+      // ==============================
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase order ID",
+        });
+      }
+
+      // ==============================
+      // VALIDATE STATUS
+      // ==============================
+
+      const allowedStatuses = [
+        "DRAFT",
+        "CONFIRMED",
+        "SENT",
+        "PARTIAL",
+        "COMPLETED",
+        "CANCELLED",
+      ];
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase order status",
+        });
+      }
+
+      // ==============================
+      // FIND PO
+      // ==============================
+
+      const purchaseOrder =
+        await prisma.purchaseOrder.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!purchaseOrder) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase order not found",
+        });
+      }
+
+      const currentStatus =
+        purchaseOrder.status;
+
+      // ==============================
+      // ALREADY SAME STATUS
+      // ==============================
+
+      if (currentStatus === status) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Purchase order is already ${status}`,
+        });
+      }
+
+      // ==============================
+      // STATUS WORKFLOW
+      // ==============================
+
+      const allowedTransitions = {
+        DRAFT: [
+          "CONFIRMED",
+          "CANCELLED",
+        ],
+
+        CONFIRMED: [
+          "SENT",
+          "CANCELLED",
+        ],
+
+        SENT: [
+          "PARTIAL",
+          "COMPLETED",
+          "CANCELLED",
+        ],
+
+        PARTIAL: [
+          "COMPLETED",
+          "CANCELLED",
+        ],
+
+        COMPLETED: [],
+
+        CANCELLED: [],
+      };
+
+      const nextStatuses =
+        allowedTransitions[
+          currentStatus
+        ] || [];
+
+      if (
+        !nextStatuses.includes(status)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Cannot change purchase order status from ${currentStatus} to ${status}`,
+        });
+      }
+
+      // ==============================
+      // UPDATE STATUS
+      // ==============================
+
+      const updatedPurchaseOrder =
+        await prisma.purchaseOrder.update({
+          where: {
+            id,
+          },
+
+          data: {
+            status,
+          },
+
+          include: {
+            vendor: true,
+            project: true,
+            rfq: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "Purchase order status updated successfully",
+        data: updatedPurchaseOrder,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update Purchase Order Status Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase order status update করা যায়নি!",
+      });
+    }
+  }
+);
+
+
+
+
+// =========================================
+// CONVERT PURCHASE ORDER TO PURCHASE
+// =========================================
+
+app.post(
+  "/api/purchase-orders/:id/convert-to-purchase",
+  async (req, res) => {
+    try {
+      const purchaseOrderId =
+        Number(req.params.id);
+
+      if (
+        !Number.isInteger(purchaseOrderId) ||
+        purchaseOrderId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid purchase order ID",
+        });
+      }
+
+      // ==============================
+      // GET PURCHASE ORDER
+      // ==============================
+
+      const purchaseOrder =
+        await prisma.purchaseOrder.findUnique({
+          where: {
+            id: purchaseOrderId,
+          },
+
+          include: {
+            vendor: true,
+            project: true,
+            rfq: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      if (!purchaseOrder) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase order not found",
+        });
+      }
+
+      // ==============================
+      // CHECK STATUS
+      // ==============================
+
+      if (
+        purchaseOrder.status !==
+        "COMPLETED"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only a completed purchase order can be converted to purchase",
+        });
+      }
+
+      // ==============================
+      // CHECK ALREADY CONVERTED
+      // ==============================
+
+      if (purchaseOrder.purchaseId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This purchase order has already been converted to a purchase",
+          data: {
+            purchaseId:
+              purchaseOrder.purchaseId,
+          },
+        });
+      }
+
+      // ==============================
+      // CHECK ITEMS
+      // ==============================
+
+      if (
+        !Array.isArray(
+          purchaseOrder.items
+        ) ||
+        purchaseOrder.items.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase order has no items",
+        });
+      }
+
+      // ==============================
+      // CREATE PURCHASE
+      // ==============================
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            // ---------------------------------
+            // CREATE PURCHASE
+            // ---------------------------------
+
+            const purchase =
+              await tx.purchase.create({
+                data: {
+                  purchaseNo:
+                    purchaseOrder.poNo,
+
+                  purchaseDate:
+                    purchaseOrder.poDate,
+
+                  vendorId:
+                    purchaseOrder.vendorId,
+
+                  projectId:
+                    purchaseOrder.projectId,
+
+                  subtotal:
+                    purchaseOrder.subtotal,
+
+                  discount:
+                    purchaseOrder.discount,
+
+                  transportCost:
+                    purchaseOrder.transportCost,
+
+                  grandTotal:
+                    purchaseOrder.grandTotal,
+
+                  paymentStatus:
+                    "UNPAID",
+
+                  paidAmount: 0,
+
+                  dueAmount:
+                    purchaseOrder.grandTotal,
+
+                  notes:
+                    purchaseOrder.notes ||
+                    `Converted from ${purchaseOrder.poNo}`,
+                },
+              });
+
+            // ---------------------------------
+            // CREATE PURCHASE ITEMS
+            // ---------------------------------
+
+            for (
+              const item of
+                purchaseOrder.items
+            ) {
+              await tx.purchaseItem.create({
+                data: {
+                  purchaseId:
+                    purchase.id,
+
+                  materialId:
+                    item.materialId,
+
+                  quantity:
+                    item.quantity,
+
+                  unit:
+                    item.unit,
+
+                  unitPrice:
+                    item.unitPrice,
+
+                  total:
+                    item.total,
+
+                  notes:
+                    item.notes,
+                },
+              });
+
+              // -------------------------------
+              // CREATE STOCK MOVEMENT
+              // -------------------------------
+
+              await tx.stockMovement.create({
+                data: {
+                  materialId:
+                    item.materialId,
+
+                  movementType:
+                    "PURCHASE",
+
+                  quantity:
+                    item.quantity,
+
+                  unit:
+                    item.unit,
+
+                  referenceType:
+                    "PURCHASE",
+
+                  referenceId:
+                    purchase.id,
+
+                  projectId:
+                    purchaseOrder.projectId,
+
+                  unitCost:
+                    item.unitPrice,
+
+                  notes:
+                    `Purchase ${purchase.purchaseNo}`,
+                },
+              });
+            }
+
+            // ---------------------------------
+            // MATERIAL EXPENSE CATEGORY
+            // ---------------------------------
+
+            let materialCategory =
+              await tx.category.findFirst({
+                where: {
+                  name: "Materials",
+                  type: "EXPENSE",
+                  status: "ACTIVE",
+                },
+              });
+
+            if (!materialCategory) {
+              materialCategory =
+                await tx.category.create({
+                  data: {
+                    name: "Materials",
+                    type: "EXPENSE",
+                    status: "ACTIVE",
+                  },
+                });
+            }
+
+            // ---------------------------------
+            // CREATE EXPENSE TRANSACTION
+            // ---------------------------------
+
+            await tx.transaction.create({
+              data: {
+                transactionDate:
+                  purchaseOrder.poDate,
+
+                type:
+                  "EXPENSE",
+
+                amount:
+                  purchaseOrder.grandTotal,
+
+                paymentMethod:
+                  "OTHER",
+
+                description:
+                  `Material Purchase - ${purchase.purchaseNo}`,
+
+                notes:
+                  purchaseOrder.notes ||
+                  `Purchase ${purchase.purchaseNo}`,
+
+                projectId:
+                  purchaseOrder.projectId,
+
+                categoryId:
+                  materialCategory.id,
+
+                vendorId:
+                  purchaseOrder.vendorId,
+              },
+            });
+
+            // ---------------------------------
+            // LINK PURCHASE TO PO
+            // ---------------------------------
+
+            await tx.purchaseOrder.update({
+              where: {
+                id: purchaseOrderId,
+              },
+
+              data: {
+                purchaseId:
+                  purchase.id,
+              },
+            });
+
+            return purchase;
+          }
+        );
+
+      // ==============================
+      // GET COMPLETE PURCHASE
+      // ==============================
+
+      const savedPurchase =
+        await prisma.purchase.findUnique({
+          where: {
+            id: result.id,
+          },
+
+          include: {
+            vendor: true,
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+            },
+          },
+        });
+
+      // ==============================
+      // SUCCESS
+      // ==============================
+
+      res.status(201).json({
+        success: true,
+
+        message:
+          "Purchase order converted to purchase successfully",
+
+        data: {
+          purchaseOrderId:
+            purchaseOrderId,
+
+          purchaseId:
+            result.id,
+
+          purchase:
+            savedPurchase,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "Convert Purchase Order Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase order conversion করা যায়নি!",
+      });
+    }
+  }
+);
+
+
 
 // =========================================
 // PURCHASE API
@@ -1727,69 +6513,113 @@ app.post("/api/purchases", async (req, res) => {
             },
           });
 
-        // CREATE ITEMS + STOCK MOVEMENTS
-        for (
-          const item of preparedItems
-        ) {
+      // CREATE ITEMS + STOCK MOVEMENTS
+for (const item of preparedItems) {
 
-          await tx.purchaseItem.create({
-            data: {
-              purchaseId:
-                purchase.id,
+  await tx.purchaseItem.create({
+    data: {
+      purchaseId: purchase.id,
 
-              materialId:
-                item.materialId,
+      materialId: item.materialId,
 
-              quantity:
-                item.quantity,
+      quantity: item.quantity,
 
-              unit:
-                item.unit,
+      unit: item.unit,
 
-              unitPrice:
-                item.unitPrice,
+      unitPrice: item.unitPrice,
 
-              total:
-                item.total,
+      total: item.total,
 
-              notes:
-                item.notes,
+      notes: item.notes,
+    },
+  });
+
+
+  await tx.stockMovement.create({
+    data: {
+      materialId: item.materialId,
+
+      movementType: "PURCHASE",
+
+      quantity: item.quantity,
+
+      unit: item.unit,
+
+      referenceType: "PURCHASE",
+
+      referenceId: purchase.id,
+
+      projectId: projectId
+        ? Number(projectId)
+        : null,
+
+      unitCost: item.unitPrice,
+
+      notes:
+        `Purchase ${purchase.purchaseNo}`,
+    },
+  });
+}
+
+
+// -----------------------------------------
+// CREATE ONE EXPENSE TRANSACTION
+// FOR THE WHOLE PURCHASE
+// -----------------------------------------
+
+        let materialCategory =
+          await tx.category.findFirst({
+            where: {
+              name: "Materials",
+              type: "EXPENSE",
+              status: "ACTIVE",
             },
           });
 
-          await tx.stockMovement.create({
-            data: {
-              materialId:
-                item.materialId,
-
-              movementType:
-                "PURCHASE",
-
-              quantity:
-                item.quantity,
-
-              unit:
-                item.unit,
-
-              referenceType:
-                "PURCHASE",
-
-              referenceId:
-                purchase.id,
-
-              projectId:
-                projectId
-                  ? Number(projectId)
-                  : null,
-
-              unitCost:
-                item.unitPrice,
-
-              notes:
-                `Purchase ${purchase.purchaseNo}`,
-            },
-          });
+        if (!materialCategory) {
+          materialCategory =
+            await tx.category.create({
+              data: {
+                name: "Materials",
+                type: "EXPENSE",
+                status: "ACTIVE",
+              },
+            });
         }
+
+
+        await tx.transaction.create({
+          data: {
+            transactionDate:
+              new Date(purchaseDate),
+
+            type: "EXPENSE",
+
+            // FULL PURCHASE GRAND TOTAL
+            amount: grandTotal,
+
+            paymentMethod: "OTHER",
+
+            description:
+              `Material Purchase - ${purchase.purchaseNo}`,
+
+            notes:
+              notes?.trim() ||
+              `Purchase ${purchase.purchaseNo}`,
+
+            projectId: projectId
+              ? Number(projectId)
+              : null,
+
+            categoryId:
+              materialCategory.id,
+
+            vendorId:
+              Number(vendorId),
+          },
+        });
+
+
 
         return purchase;
       }
@@ -1893,6 +6723,596 @@ app.get("/api/purchases/:id", async (req, res) => {
     });
   }
 });
+
+
+
+// =====================================================
+// DELETE PURCHASE
+// =====================================================
+
+app.delete("/api/purchases/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid purchase ID",
+      });
+    }
+
+    // -----------------------------------------
+    // FIND PURCHASE
+    // -----------------------------------------
+
+    const existingPurchase =
+      await prisma.purchase.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          items: true,
+          vendor: true,
+          project: true,
+        },
+      });
+
+    if (!existingPurchase) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase not found",
+      });
+    }
+
+    // -----------------------------------------
+    // DELETE EVERYTHING IN ONE TRANSACTION
+    // -----------------------------------------
+
+    await prisma.$transaction(async (tx) => {
+
+      // 1. Find automatic purchase expense
+      const automaticExpense =
+        await tx.transaction.findFirst({
+          where: {
+            type: "EXPENSE",
+            description:
+              `Material Purchase - ${existingPurchase.purchaseNo}`,
+            vendorId:
+              existingPurchase.vendorId,
+          },
+        });
+
+      // 2. Delete automatic expense
+      if (automaticExpense) {
+        await tx.transaction.delete({
+          where: {
+            id: automaticExpense.id,
+          },
+        });
+      }
+
+      // 3. Delete purchase stock movements
+      await tx.stockMovement.deleteMany({
+        where: {
+          referenceType: "PURCHASE",
+          referenceId: id,
+        },
+      });
+
+      // 4. Delete purchase items
+      await tx.purchaseItem.deleteMany({
+        where: {
+          purchaseId: id,
+        },
+      });
+
+      // 5. Delete purchase
+      await tx.purchase.delete({
+        where: {
+          id,
+        },
+      });
+    });
+
+    res.json({
+      success: true,
+      message:
+        "Purchase deleted successfully",
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Delete Purchase Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// =====================================================
+// UPDATE PURCHASE
+// =====================================================
+
+app.put("/api/purchases/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid purchase ID",
+      });
+    }
+
+    const {
+      purchaseNo,
+      purchaseDate,
+      vendorId,
+      projectId,
+      discount,
+      transportCost,
+      paidAmount,
+      notes,
+      items,
+    } = req.body;
+
+    if (!purchaseNo?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Purchase number is required",
+      });
+    }
+
+    if (!purchaseDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Purchase date is required",
+      });
+    }
+
+    if (!vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor is required",
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one purchase item is required",
+      });
+    }
+
+    const existingPurchase =
+      await prisma.purchase.findUnique({
+        where: { id },
+      });
+
+    if (!existingPurchase) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase not found",
+      });
+    }
+
+    const vendor =
+      await prisma.vendor.findUnique({
+        where: {
+          id: Number(vendorId),
+        },
+      });
+
+    if (!vendor) {
+      return res.status(400).json({
+        success: false,
+        message: "Vendor not found",
+      });
+    }
+
+    if (projectId) {
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: Number(projectId),
+          },
+        });
+
+      if (!project) {
+        return res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+    }
+
+    // -----------------------------------------
+    // PREPARE ITEMS + TOTAL
+    // -----------------------------------------
+
+    let subtotal = 0;
+    const preparedItems = [];
+
+    for (const item of items) {
+      const materialId = Number(item.materialId);
+      const quantity = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (
+        Number.isNaN(unitPrice) ||
+        unitPrice < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid unit price",
+        });
+      }
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: materialId,
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Material ID ${materialId} not found`,
+        });
+      }
+
+      const total =
+        quantity * unitPrice;
+
+      subtotal += total;
+
+      preparedItems.push({
+        materialId,
+        quantity,
+        unit:
+          item.unit?.trim() ||
+          material.unit,
+        unitPrice,
+        total,
+        notes:
+          item.notes?.trim() || null,
+      });
+    }
+
+    const discountAmount =
+      Number(discount) || 0;
+
+    const transportAmount =
+      Number(transportCost) || 0;
+
+    const grandTotal =
+      subtotal -
+      discountAmount +
+      transportAmount;
+
+    const finalPaidAmount =
+      Number(paidAmount) || 0;
+
+    if (finalPaidAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Paid amount cannot be negative",
+      });
+    }
+
+    if (finalPaidAmount > grandTotal) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Paid amount cannot be greater than grand total",
+      });
+    }
+
+    const dueAmount =
+      grandTotal - finalPaidAmount;
+
+    const paymentStatus =
+      finalPaidAmount === 0
+        ? "UNPAID"
+        : finalPaidAmount >= grandTotal
+        ? "PAID"
+        : "PARTIAL";
+
+    // -----------------------------------------
+    // DATABASE TRANSACTION
+    // -----------------------------------------
+
+    await prisma.$transaction(async (tx) => {
+
+      // 1. Update purchase
+      await tx.purchase.update({
+        where: { id },
+
+        data: {
+          purchaseNo:
+            purchaseNo.trim(),
+
+          purchaseDate:
+            new Date(purchaseDate),
+
+          vendorId:
+            Number(vendorId),
+
+          projectId:
+            projectId
+              ? Number(projectId)
+              : null,
+
+          subtotal,
+
+          discount:
+            discountAmount,
+
+          transportCost:
+            transportAmount,
+
+          grandTotal,
+
+          paymentStatus,
+
+          paidAmount:
+            finalPaidAmount,
+
+          dueAmount,
+
+          notes:
+            notes?.trim() || null,
+        },
+      });
+
+      // 2. Remove old purchase items
+      await tx.purchaseItem.deleteMany({
+        where: {
+          purchaseId: id,
+        },
+      });
+
+      // 3. Remove old PURCHASE stock movements
+      await tx.stockMovement.deleteMany({
+        where: {
+          referenceType: "PURCHASE",
+          referenceId: id,
+        },
+      });
+
+      // 4. Re-create purchase items + stock
+      for (const item of preparedItems) {
+
+        await tx.purchaseItem.create({
+          data: {
+            purchaseId: id,
+            materialId:
+              item.materialId,
+            quantity:
+              item.quantity,
+            unit:
+              item.unit,
+            unitPrice:
+              item.unitPrice,
+            total:
+              item.total,
+            notes:
+              item.notes,
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            materialId:
+              item.materialId,
+
+            movementType:
+              "PURCHASE",
+
+            quantity:
+              item.quantity,
+
+            unit:
+              item.unit,
+
+            referenceType:
+              "PURCHASE",
+
+            referenceId:
+              id,
+
+            projectId:
+              projectId
+                ? Number(projectId)
+                : null,
+
+            unitCost:
+              item.unitPrice,
+
+            notes:
+              `Purchase ${purchaseNo.trim()}`,
+          },
+        });
+      }
+
+      // 5. Find automatic purchase expense
+      const expense =
+        await tx.transaction.findFirst({
+          where: {
+            type: "EXPENSE",
+            description: {
+              startsWith:
+                "Material Purchase - ",
+            },
+            vendorId:
+              Number(
+                existingPurchase.vendorId
+              ),
+          },
+
+          orderBy: {
+            id: "desc",
+          },
+        });
+
+      // 6. Materials expense category
+      let materialCategory =
+        await tx.category.findFirst({
+          where: {
+            name: "Materials",
+            type: "EXPENSE",
+            status: "ACTIVE",
+          },
+        });
+
+      if (!materialCategory) {
+        materialCategory =
+          await tx.category.create({
+            data: {
+              name: "Materials",
+              type: "EXPENSE",
+              status: "ACTIVE",
+            },
+          });
+      }
+
+      // 7. Update automatic expense
+      if (expense) {
+
+        await tx.transaction.update({
+          where: {
+            id: expense.id,
+          },
+
+          data: {
+            transactionDate:
+              new Date(purchaseDate),
+
+            amount:
+              grandTotal,
+
+            paymentMethod:
+              "OTHER",
+
+            description:
+              `Material Purchase - ${purchaseNo.trim()}`,
+
+            notes:
+              notes?.trim() ||
+              `Purchase ${purchaseNo.trim()}`,
+
+            projectId:
+              projectId
+                ? Number(projectId)
+                : null,
+
+            categoryId:
+              materialCategory.id,
+
+            vendorId:
+              Number(vendorId),
+          },
+        });
+
+      } else {
+
+        // Safety fallback
+        await tx.transaction.create({
+          data: {
+            transactionDate:
+              new Date(purchaseDate),
+
+            type:
+              "EXPENSE",
+
+            amount:
+              grandTotal,
+
+            paymentMethod:
+              "OTHER",
+
+            description:
+              `Material Purchase - ${purchaseNo.trim()}`,
+
+            notes:
+              notes?.trim() ||
+              `Purchase ${purchaseNo.trim()}`,
+
+            projectId:
+              projectId
+                ? Number(projectId)
+                : null,
+
+            categoryId:
+              materialCategory.id,
+
+            vendorId:
+              Number(vendorId),
+          },
+        });
+      }
+    });
+
+    const updatedPurchase =
+      await prisma.purchase.findUnique({
+        where: { id },
+
+        include: {
+          vendor: true,
+          project: true,
+
+          items: {
+            include: {
+              material: true,
+            },
+          },
+        },
+      });
+
+    res.json({
+      success: true,
+      message:
+        "Purchase updated successfully",
+      data: updatedPurchase,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Update Purchase Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
 // GET STOCK MOVEMENTS
 app.get("/api/stock-movements", async (req, res) => {
@@ -2200,6 +7620,405 @@ app.post("/api/stock-movements/usage", async (req, res) => {
   } catch (error) {
     console.error(
       "Create Stock Usage Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// =====================================================
+// CREATE STOCK RETURN
+// =====================================================
+
+app.post("/api/stock-movements/return", async (req, res) => {
+  try {
+    const {
+      materialId,
+      quantity,
+      unit,
+      projectId,
+      notes,
+    } = req.body;
+
+    const materialIdNumber = Number(materialId);
+    const quantityNumber = Number(quantity);
+
+    if (!materialIdNumber || materialIdNumber <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Material is required",
+      });
+    }
+
+    if (
+      Number.isNaN(quantityNumber) ||
+      quantityNumber <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than 0",
+      });
+    }
+
+    const material =
+      await prisma.material.findUnique({
+        where: {
+          id: materialIdNumber,
+        },
+      });
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Material not found",
+      });
+    }
+
+    if (projectId) {
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: Number(projectId),
+          },
+        });
+
+      if (!project) {
+        return res.status(400).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+    }
+
+    const movement =
+      await prisma.stockMovement.create({
+        data: {
+          materialId: materialIdNumber,
+
+          movementType: "RETURN",
+
+          quantity: quantityNumber,
+
+          unit:
+            unit?.trim() || material.unit,
+
+          referenceType: "STOCK_RETURN",
+
+          projectId: projectId
+            ? Number(projectId)
+            : null,
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          material: true,
+          project: true,
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Stock return recorded successfully",
+      data: movement,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Stock Return Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// =====================================================
+// CREATE STOCK DAMAGE
+// =====================================================
+
+app.post("/api/stock-movements/damage", async (req, res) => {
+  try {
+    const {
+      materialId,
+      quantity,
+      unit,
+      notes,
+    } = req.body;
+
+    const materialIdNumber = Number(materialId);
+    const quantityNumber = Number(quantity);
+
+    if (!materialIdNumber || materialIdNumber <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Material is required",
+      });
+    }
+
+    if (
+      Number.isNaN(quantityNumber) ||
+      quantityNumber <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than 0",
+      });
+    }
+
+    const material =
+      await prisma.material.findUnique({
+        where: {
+          id: materialIdNumber,
+        },
+      });
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Material not found",
+      });
+    }
+
+    // Check current stock
+    const stockMovements =
+      await prisma.stockMovement.findMany({
+        where: {
+          materialId: materialIdNumber,
+        },
+        select: {
+          movementType: true,
+          quantity: true,
+        },
+      });
+
+    let stockIn = 0;
+    let stockOut = 0;
+
+    for (const movement of stockMovements) {
+      const qty = Number(movement.quantity);
+
+      if (
+        movement.movementType === "PURCHASE" ||
+        movement.movementType === "RETURN" ||
+        movement.movementType === "ADJUSTMENT"
+      ) {
+        stockIn += qty;
+      }
+
+      if (
+        movement.movementType === "PROJECT_USAGE" ||
+        movement.movementType === "DAMAGE"
+      ) {
+        stockOut += qty;
+      }
+    }
+
+    const currentStock = stockIn - stockOut;
+
+    if (quantityNumber > currentStock) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient stock. Available stock: ${currentStock}`,
+      });
+    }
+
+    const movement =
+      await prisma.stockMovement.create({
+        data: {
+          materialId: materialIdNumber,
+
+          movementType: "DAMAGE",
+
+          quantity: quantityNumber,
+
+          unit:
+            unit?.trim() || material.unit,
+
+          referenceType: "STOCK_DAMAGE",
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          material: true,
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Stock damage recorded successfully",
+      data: movement,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Stock Damage Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// =====================================================
+// CREATE STOCK ADJUSTMENT
+// =====================================================
+
+app.post("/api/stock-movements/adjustment", async (req, res) => {
+  try {
+    const {
+      materialId,
+      quantity,
+      unit,
+      notes,
+    } = req.body;
+
+    const materialIdNumber = Number(materialId);
+    const quantityNumber = Number(quantity);
+
+    if (!materialIdNumber || materialIdNumber <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Material is required",
+      });
+    }
+
+    if (
+      Number.isNaN(quantityNumber) ||
+      quantityNumber === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Adjustment quantity cannot be 0",
+      });
+    }
+
+    const material =
+      await prisma.material.findUnique({
+        where: {
+          id: materialIdNumber,
+        },
+      });
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Material not found",
+      });
+    }
+
+    // Calculate current stock
+    const stockMovements =
+      await prisma.stockMovement.findMany({
+        where: {
+          materialId: materialIdNumber,
+        },
+        select: {
+          movementType: true,
+          quantity: true,
+        },
+      });
+
+    let stockIn = 0;
+    let stockOut = 0;
+
+    for (const movement of stockMovements) {
+      const qty = Number(movement.quantity);
+
+      if (
+        movement.movementType === "PURCHASE" ||
+        movement.movementType === "RETURN"
+      ) {
+        stockIn += qty;
+      }
+
+      if (
+        movement.movementType === "PROJECT_USAGE" ||
+        movement.movementType === "DAMAGE"
+      ) {
+        stockOut += qty;
+      }
+
+      if (
+        movement.movementType === "ADJUSTMENT"
+      ) {
+        // Existing adjustment:
+        // positive = stock in
+        // negative = stock out
+        if (qty > 0) {
+          stockIn += qty;
+        } else {
+          stockOut += Math.abs(qty);
+        }
+      }
+    }
+
+    const currentStock =
+      stockIn - stockOut;
+
+    // Negative adjustment cannot exceed stock
+    if (
+      quantityNumber < 0 &&
+      Math.abs(quantityNumber) > currentStock
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient stock. Available stock: ${currentStock}`,
+      });
+    }
+
+    const movement =
+      await prisma.stockMovement.create({
+        data: {
+          materialId: materialIdNumber,
+
+          movementType: "ADJUSTMENT",
+
+          // IMPORTANT:
+          // Positive = increase
+          // Negative = decrease
+          quantity: quantityNumber,
+
+          unit:
+            unit?.trim() || material.unit,
+
+          referenceType: "STOCK_ADJUSTMENT",
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          material: true,
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Stock adjustment recorded successfully",
+      data: movement,
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Stock Adjustment Error:",
       error
     );
 

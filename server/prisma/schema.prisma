@@ -35,6 +35,47 @@ enum PurchasePaymentStatus {
   PAID
 }
 
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CONVERTED
+  CANCELLED
+}
+
+enum PurchaseRequestPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum RFQStatus {
+  DRAFT
+  SENT
+  QUOTED
+  EVALUATED
+  AWARDED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  SENT
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+enum BOQStatus {
+  DRAFT
+  FINAL
+  APPROVED
+  CANCELLED
+}
+
 enum StockMovementType {
   PURCHASE
   PROJECT_USAGE
@@ -50,9 +91,13 @@ model Project {
   notes         String?       @db.Text
   status        ProjectStatus @default(ONGOING)
 
-  transactions   Transaction[]
-  purchases      Purchase[]
-  stockMovements StockMovement[]
+  transactions     Transaction[]
+  purchases        Purchase[]
+  stockMovements   StockMovement[]
+  purchaseRequests PurchaseRequest[]
+  rfqs             RFQ[]
+  boqs             BOQ[]
+  purchaseOrders   PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -86,6 +131,9 @@ model Vendor {
   transactions   Transaction[]
   materialPrices VendorMaterialPrice[]
   purchases      Purchase[]
+  rfqVendors     RFQVendor[]
+  awardedRFQs    RFQ[]                 @relation("RFQAwardedVendor")
+  purchaseOrders PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,6 +226,12 @@ model Material {
   purchaseItems  PurchaseItem[]
   stockMovements StockMovement[]
 
+  boqItems BOQItem[]
+
+  purchaseRequestItems PurchaseRequestItem[]
+  rfqItems             RFQItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -208,8 +262,9 @@ model Purchase {
 
   notes String? @db.Text
 
-  vendor  Vendor   @relation(fields: [vendorId], references: [id])
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  vendor        Vendor         @relation(fields: [vendorId], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation("PurchaseOrderPurchase")
 
   items PurchaseItem[]
 
@@ -280,6 +335,54 @@ model StockMovement {
   @@map("stock_movements")
 }
 
+model BOQ {
+  id Int @id @default(autoincrement())
+
+  boqNo     String    @unique @db.VarChar(50)
+  name      String    @db.VarChar(150)
+  projectId Int
+  status    BOQStatus @default(DRAFT)
+
+  notes String? @db.Text
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   BOQItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@map("boqs")
+}
+
+model BOQItem {
+  id Int @id @default(autoincrement())
+
+  boqId      Int
+  materialId Int
+
+  description String? @db.Text
+
+  quantity Decimal @db.Decimal(15, 3)
+  unit     String  @db.VarChar(30)
+
+  estimatedUnitPrice Decimal @default(0) @db.Decimal(15, 2)
+  estimatedTotal     Decimal @default(0) @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  boq      BOQ      @relation(fields: [boqId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([boqId])
+  @@index([materialId])
+  @@map("boq_items")
+}
+
 model VendorMaterialPrice {
   id Int @id @default(autoincrement())
 
@@ -306,4 +409,194 @@ model VendorMaterialPrice {
   @@index([materialId, vendorId])
   @@index([effectiveDate])
   @@map("vendor_material_prices")
+}
+
+model PurchaseRequest {
+  id Int @id @default(autoincrement())
+
+  requestNo   String                  @unique @db.VarChar(50)
+  requestDate DateTime
+  projectId   Int
+  status      PurchaseRequestStatus   @default(DRAFT)
+  priority    PurchaseRequestPriority @default(NORMAL)
+
+  notes String? @db.Text
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  items PurchaseRequestItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([requestDate])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id Int @id @default(autoincrement())
+
+  purchaseRequestId Int
+  materialId        Int
+
+  quantity Decimal @db.Decimal(15, 3)
+  unit     String  @db.VarChar(30)
+
+  requiredDate DateTime?
+
+  notes String? @db.Text
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseRequestId])
+  @@index([materialId])
+  @@map("purchase_request_items")
+}
+
+model RFQ {
+  id Int @id @default(autoincrement())
+
+  rfqNo     String   @unique @db.VarChar(50)
+  rfqDate   DateTime
+  projectId Int
+
+  status          RFQStatus @default(DRAFT)
+  awardedVendorId Int?
+
+  notes String? @db.Text
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  awardedVendor Vendor? @relation("RFQAwardedVendor", fields: [awardedVendorId], references: [id], onDelete: SetNull)
+
+  vendors        RFQVendor[]
+  items          RFQItem[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([rfqDate])
+  @@map("rfqs")
+}
+
+model RFQVendor {
+  id Int @id @default(autoincrement())
+
+  rfqId    Int
+  vendorId Int
+
+  quotedTotal Decimal? @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([rfqId, vendorId])
+  @@index([rfqId])
+  @@index([vendorId])
+  @@map("rfq_vendors")
+}
+
+model RFQItem {
+  id Int @id @default(autoincrement())
+
+  rfqId      Int
+  materialId Int
+
+  quantity Decimal @db.Decimal(15, 3)
+  unit     String  @db.VarChar(30)
+
+  notes String? @db.Text
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rfqId])
+  @@index([materialId])
+  @@map("rfq_items")
+}
+
+model PurchaseOrder {
+  id Int @id @default(autoincrement())
+
+  poNo   String   @unique @db.VarChar(50)
+  poDate DateTime
+
+  vendorId   Int
+  projectId  Int?
+  rfqId      Int?
+  purchaseId Int? @unique
+
+  status PurchaseOrderStatus @default(DRAFT)
+
+  subtotal      Decimal @default(0) @db.Decimal(15, 2)
+  discount      Decimal @default(0) @db.Decimal(15, 2)
+  transportCost Decimal @default(0) @db.Decimal(15, 2)
+  grandTotal    Decimal @default(0) @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  rfq      RFQ?      @relation(fields: [rfqId], references: [id], onDelete: SetNull)
+  purchase Purchase? @relation("PurchaseOrderPurchase", fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  items PurchaseOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([projectId])
+  @@index([rfqId])
+  @@index([purchaseId])
+  @@index([status])
+  @@index([poDate])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id Int @id @default(autoincrement())
+
+  purchaseOrderId Int
+  materialId      Int
+
+  quantity  Decimal @db.Decimal(15, 3)
+  unit      String  @db.VarChar(30)
+  unitPrice Decimal @db.Decimal(15, 2)
+  total     Decimal @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([materialId])
+  @@map("purchase_order_items")
 }
