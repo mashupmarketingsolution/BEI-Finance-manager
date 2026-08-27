@@ -12,12 +12,24 @@ const PORT = process.env.PORT || 5000;
 // PRISMA + MARIADB CONNECTION
 // =========================================
 
+//  const adapter = new PrismaMariaDb({
+ // host: "localhost",
+  //port: 3306,
+ // user: "root",
+ // password: "",
+ // database: "be_interior_finance",
+ // connectionLimit: 5,
+//});  
+
+
+const dbUrl = new URL(process.env.DATABASE_URL);
+
 const adapter = new PrismaMariaDb({
-  host: "localhost",
-  port: 3306,
-  user: "root",
-  password: "",
-  database: "be_interior_finance",
+  host: dbUrl.hostname,
+  port: Number(dbUrl.port || 3306),
+  user: decodeURIComponent(dbUrl.username),
+  password: decodeURIComponent(dbUrl.password),
+  database: dbUrl.pathname.replace("/", ""),
   connectionLimit: 5,
 });
 
