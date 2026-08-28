@@ -153,17 +153,127 @@ app.get("/api/projects", async (req, res) => {
   }
 });
 
-// GET SINGLE PROJECT
+// =========================================
+// GET SINGLE PROJECT WITH SUMMARY
+// =========================================
+
 app.get("/api/projects/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
 
     const project = await prisma.project.findUnique({
       where: {
         id,
       },
+
       include: {
-        transactions: true,
+        // -----------------------------
+        // TRANSACTIONS
+        // -----------------------------
+        transactions: {
+          orderBy: {
+            transactionDate: "desc",
+          },
+        },
+
+        // -----------------------------
+        // BOQ
+        // -----------------------------
+        boqs: {
+          include: {
+            items: true,
+          },
+        },
+
+        // -----------------------------
+        // PURCHASE REQUESTS
+        // -----------------------------
+        purchaseRequests: {
+          include: {
+            items: {
+              include: {
+                material: true,
+              },
+            },
+          },
+          orderBy: {
+            id: "desc",
+          },
+        },
+
+        // -----------------------------
+        // RFQs
+        // -----------------------------
+        rfqs: {
+          include: {
+            items: {
+              include: {
+                material: true,
+              },
+            },
+
+            vendors: {
+              include: {
+                vendor: true,
+              },
+            },
+
+            awardedVendor: true,
+          },
+
+          orderBy: {
+            id: "desc",
+          },
+        },
+
+        // -----------------------------
+        // PURCHASE ORDERS
+        // -----------------------------
+        purchaseOrders: {
+          include: {
+            vendor: true,
+
+            rfq: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+            },
+
+            purchase: true,
+          },
+
+          orderBy: {
+            id: "desc",
+          },
+        },
+
+        // -----------------------------
+        // ACTUAL PURCHASES
+        // -----------------------------
+        purchases: {
+          include: {
+            vendor: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+            },
+          },
+
+          orderBy: {
+            purchaseDate: "desc",
+          },
+        },
       },
     });
 
@@ -174,12 +284,98 @@ app.get("/api/projects/:id", async (req, res) => {
       });
     }
 
+    // =========================================
+    // FINANCIAL SUMMARY
+    // =========================================
+
+    let totalIncome = 0;
+    let totalExpenses = 0;
+
+    for (const transaction of project.transactions) {
+      const amount =
+        Number(transaction.amount) || 0;
+
+      if (transaction.type === "INCOME") {
+        totalIncome += amount;
+      }
+
+      if (transaction.type === "EXPENSE") {
+        totalExpenses += amount;
+      }
+    }
+
+    const balance =
+      totalIncome - totalExpenses;
+
+    // =========================================
+    // PURCHASE SUMMARY
+    // =========================================
+
+    const totalPurchaseOrders =
+      project.purchaseOrders.length;
+
+    const totalPurchases =
+      project.purchases.length;
+
+    const totalPurchaseOrderValue =
+      project.purchaseOrders.reduce(
+        (sum, po) =>
+          sum +
+          (Number(po.grandTotal) || 0),
+        0
+      );
+
+    const totalPurchaseValue =
+      project.purchases.reduce(
+        (sum, purchase) =>
+          sum +
+          (Number(purchase.grandTotal) || 0),
+        0
+      );
+
+    // =========================================
+    // RESPONSE
+    // =========================================
+
     res.json({
       success: true,
-      data: project,
+
+      data: {
+        ...project,
+
+        summary: {
+          totalIncome,
+          totalExpenses,
+          balance,
+
+          totalBOQs:
+            project.boqs.length,
+
+          totalPurchaseRequests:
+            project.purchaseRequests.length,
+
+          totalRFQs:
+            project.rfqs.length,
+
+          totalPurchaseOrders,
+
+          totalPurchases,
+
+          totalPurchaseOrderValue,
+
+          totalPurchaseValue,
+
+          totalTransactions:
+            project.transactions.length,
+        },
+      },
     });
+
   } catch (error) {
-    console.error("Get Project Error:", error);
+    console.error(
+      "Get Project Details Error:",
+      error
+    );
 
     res.status(500).json({
       success: false,

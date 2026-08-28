@@ -5133,3 +5133,230 @@ tbody tr:hover {
     overflow-x: auto;
   }
 }
+
+/* =====================================================
+   PROJECT VIEW MODAL
+===================================================== */
+
+.project-view-modal {
+  width: min(800px, 100%);
+}
+
+.project-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.project-info-card {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.project-info-card span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.project-info-card strong {
+  display: block;
+  font-size: 14px;
+  color: #172033;
+}
+
+.project-notes-section {
+  margin-top: 22px;
+}
+
+.project-notes-section > span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.project-notes-box {
+  min-height: 80px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  .project-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .project-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =====================================================
+   PROJECT DETAILS DASHBOARD
+===================================================== */
+
+.project-view-modal {
+  width: min(1050px, 100%);
+  max-height: 92vh;
+}
+
+.project-details-section {
+  margin-bottom: 26px;
+}
+
+.project-details-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.project-details-section-header h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #172033;
+}
+
+.project-details-section-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Financial cards */
+
+.project-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.project-summary-card {
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.project-summary-card span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.project-summary-card strong {
+  display: block;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.project-summary-card.income strong {
+  color: #16a34a;
+}
+
+.project-summary-card.expense strong {
+  color: #dc2626;
+}
+
+.project-summary-card.balance strong {
+  color: #7c3aed;
+}
+
+/* Activity */
+
+.project-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.project-activity-card {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.project-activity-card span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.project-activity-card strong {
+  display: block;
+  font-size: 19px;
+  color: #172033;
+}
+
+/* Empty sections */
+
+.project-empty-section {
+  padding: 28px 20px;
+  text-align: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* Tables */
+
+.project-details-section .table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.project-details-section table {
+  width: 100%;
+  min-width: 700px;
+}
+
+.project-details-section table td small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .project-activity-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .project-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-activity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 500px) {
+  .project-activity-grid {
+    grid-template-columns: 1fr;
+  }
+}

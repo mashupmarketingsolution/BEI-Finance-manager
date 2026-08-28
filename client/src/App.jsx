@@ -315,6 +315,9 @@ const [rfqEditForm, setRfqEditForm] = useState({
 const [savingRFQEdit, setSavingRFQEdit] = useState(false);
 const [selectedRFQ, setSelectedRFQ] = useState(null);
 const [showRFQViewModal, setShowRFQViewModal] = useState(false);
+const [selectedProject, setSelectedProject] = useState(null);
+const [showProjectViewModal, setShowProjectViewModal] = useState(false);
+
 
 const [selectedPurchaseRequest, setSelectedPurchaseRequest] = useState(null);
 const [showPurchaseRequestViewModal, setShowPurchaseRequestViewModal] = useState(false);
@@ -4536,9 +4539,37 @@ setMaterialPriceFormMessage("");
 
 
 
+// =========================================
+  // View PROJECT
+  // =========================================
 
 
+const viewProject = async (id) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/projects/${id}`
+    );
 
+    if (response.data.success) {
+      const project = response.data.data;
+
+      setSelectedProject(project);
+      setShowProjectViewModal(true);
+    }
+  } catch (error) {
+    console.error(
+      "View Project Error:",
+      error
+    );
+
+    setMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Project details load করা যায়নি!"
+      }`
+    );
+  }
+};
 
   // =========================================
   // EDIT PROJECT
@@ -5754,6 +5785,18 @@ setMaterialPriceFormMessage("");
                       <td>
                         <div className="income-actions">
 
+                        <button
+                            type="button"
+                            className="view-button"
+                            onClick={() => {
+                              viewProject(project.id);
+                            }}
+                          >
+                            View
+                        </button>
+
+
+
                           <button
                             type="button"
                             className="edit-income-button"
@@ -5861,6 +5904,793 @@ setMaterialPriceFormMessage("");
     );
   };
 
+const renderProjectViewModal = () => {
+  if (
+    !showProjectViewModal ||
+    !selectedProject
+  ) {
+    return null;
+  }
+
+  const project = selectedProject;
+  const summary = project.summary || {};
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={() =>
+        setShowProjectViewModal(false)
+      }
+    >
+      <div
+        className="modal-container project-view-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+
+        {/* =========================================
+            HEADER
+        ========================================= */}
+        <div className="modal-header">
+          <div>
+            <h2>{project.name}</h2>
+
+            <p>
+              Project Overview & Financial Summary
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close-button"
+            onClick={() =>
+              setShowProjectViewModal(false)
+            }
+          >
+            ×
+          </button>
+        </div>
+
+
+        {/* =========================================
+            BODY
+        ========================================= */}
+        <div className="modal-body">
+
+
+          {/* =======================================
+              BASIC INFORMATION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Project Information</h3>
+
+                <p>
+                  Basic information about this project
+                </p>
+              </div>
+            </div>
+
+
+            <div className="project-info-grid">
+
+              <div className="project-info-card">
+                <span>Project ID</span>
+
+                <strong>
+                  #{project.id}
+                </strong>
+              </div>
+
+
+              <div className="project-info-card">
+                <span>Project Name</span>
+
+                <strong>
+                  {project.name || "-"}
+                </strong>
+              </div>
+
+
+              <div className="project-info-card">
+                <span>Contract Value</span>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    project.contractValue || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+
+              <div className="project-info-card">
+                <span>Status</span>
+
+                <strong>
+                  {project.status || "-"}
+                </strong>
+              </div>
+
+
+              <div className="project-info-card">
+                <span>Created Date</span>
+
+                <strong>
+                  {project.createdAt
+                    ? new Date(
+                        project.createdAt
+                      ).toLocaleDateString(
+                        "en-GB"
+                      )
+                    : "-"}
+                </strong>
+              </div>
+
+
+              <div className="project-info-card">
+                <span>Updated Date</span>
+
+                <strong>
+                  {project.updatedAt
+                    ? new Date(
+                        project.updatedAt
+                      ).toLocaleDateString(
+                        "en-GB"
+                      )
+                    : "-"}
+                </strong>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =======================================
+              FINANCIAL SUMMARY
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Financial Summary</h3>
+
+                <p>
+                  Project-wise financial position
+                </p>
+              </div>
+            </div>
+
+
+            <div className="project-summary-grid">
+
+              <div className="project-summary-card income">
+                <span>Total Income</span>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    summary.totalIncome || 0
+                  ).toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+
+              <div className="project-summary-card expense">
+                <span>Total Expenses</span>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    summary.totalExpenses || 0
+                  ).toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+
+              <div className="project-summary-card balance">
+                <span>Balance</span>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    summary.balance || 0
+                  ).toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =======================================
+              ACTIVITY SUMMARY
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Project Activity</h3>
+
+                <p>
+                  Procurement and project activity summary
+                </p>
+              </div>
+            </div>
+
+
+            <div className="project-activity-grid">
+
+              <div className="project-activity-card">
+                <span>BOQs</span>
+
+                <strong>
+                  {summary.totalBOQs || 0}
+                </strong>
+              </div>
+
+
+              <div className="project-activity-card">
+                <span>Purchase Requests</span>
+
+                <strong>
+                  {summary.totalPurchaseRequests || 0}
+                </strong>
+              </div>
+
+
+              <div className="project-activity-card">
+                <span>RFQs</span>
+
+                <strong>
+                  {summary.totalRFQs || 0}
+                </strong>
+              </div>
+
+
+              <div className="project-activity-card">
+                <span>Purchase Orders</span>
+
+                <strong>
+                  {summary.totalPurchaseOrders || 0}
+                </strong>
+              </div>
+
+
+              <div className="project-activity-card">
+                <span>Purchases</span>
+
+                <strong>
+                  {summary.totalPurchases || 0}
+                </strong>
+              </div>
+
+
+              <div className="project-activity-card">
+                <span>Transactions</span>
+
+                <strong>
+                  {summary.totalTransactions || 0}
+                </strong>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =======================================
+              BOQ SECTION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>BOQ</h3>
+
+                <p>
+                  Bills of Quantity for this project
+                </p>
+              </div>
+            </div>
+
+
+            {project.boqs?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>BOQ No</th>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Items</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {project.boqs.map(
+                      (boq) => (
+                        <tr key={boq.id}>
+
+                          <td>
+                            <strong>
+                              {boq.boqNo}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {boq.name || "-"}
+                          </td>
+
+                          <td>
+                            <span className="status-badge">
+                              {boq.status}
+                            </span>
+                          </td>
+
+                          <td>
+                            {boq.items?.length || 0}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No BOQ found for this project.
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =======================================
+              RFQ SECTION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>RFQs</h3>
+
+                <p>
+                  Request for Quotations
+                </p>
+              </div>
+            </div>
+
+
+            {project.rfqs?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>RFQ No</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Items</th>
+                      <th>Vendors</th>
+                      <th>Awarded Vendor</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {project.rfqs.map(
+                      (rfq) => (
+                        <tr key={rfq.id}>
+
+                          <td>
+                            <strong>
+                              {rfq.rfqNo}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {rfq.rfqDate
+                              ? new Date(
+                                  rfq.rfqDate
+                                ).toLocaleDateString(
+                                  "en-GB"
+                                )
+                              : "-"}
+                          </td>
+
+                          <td>
+                            <span className="status-badge">
+                              {rfq.status}
+                            </span>
+                          </td>
+
+                          <td>
+                            {rfq.items?.length || 0}
+                          </td>
+
+                          <td>
+                            {rfq.vendors?.length || 0}
+                          </td>
+
+                          <td>
+                            {rfq.awardedVendor?.companyName ||
+                              rfq.awardedVendor?.name ||
+                              "-"}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No RFQ found for this project.
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =======================================
+              PURCHASE ORDER SECTION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Purchase Orders</h3>
+
+                <p>
+                  Purchase orders related to this project
+                </p>
+              </div>
+            </div>
+
+
+            {project.purchaseOrders?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>PO No</th>
+                      <th>Date</th>
+                      <th>Vendor</th>
+                      <th>Status</th>
+                      <th>Grand Total</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {project.purchaseOrders.map(
+                      (po) => (
+                        <tr key={po.id}>
+
+                          <td>
+                            <strong>
+                              {po.poNo}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {po.poDate
+                              ? new Date(
+                                  po.poDate
+                                ).toLocaleDateString(
+                                  "en-GB"
+                                )
+                              : "-"}
+                          </td>
+
+                          <td>
+                            {po.vendor?.companyName ||
+                              po.vendor?.name ||
+                              "-"}
+                          </td>
+
+                          <td>
+                            <span className="status-badge">
+                              {po.status}
+                            </span>
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              po.grandTotal || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No purchase orders found.
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =======================================
+              PURCHASE SECTION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Purchases</h3>
+
+                <p>
+                  Actual purchases for this project
+                </p>
+              </div>
+            </div>
+
+
+            {project.purchases?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>Purchase No</th>
+                      <th>Date</th>
+                      <th>Vendor</th>
+                      <th>Status</th>
+                      <th>Total</th>
+                      <th>Due</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {project.purchases.map(
+                      (purchase) => (
+                        <tr key={purchase.id}>
+
+                          <td>
+                            <strong>
+                              {purchase.purchaseNo}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {purchase.purchaseDate
+                              ? new Date(
+                                  purchase.purchaseDate
+                                ).toLocaleDateString(
+                                  "en-GB"
+                                )
+                              : "-"}
+                          </td>
+
+                          <td>
+                            {purchase.vendor?.companyName ||
+                              purchase.vendor?.name ||
+                              "-"}
+                          </td>
+
+                          <td>
+                            {purchase.paymentStatus ||
+                              "-"}
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              purchase.grandTotal || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              purchase.dueAmount || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No purchases found.
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =======================================
+              TRANSACTIONS SECTION
+          ======================================= */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Transactions</h3>
+
+                <p>
+                  Financial transactions related to this project
+                </p>
+              </div>
+            </div>
+
+
+            {project.transactions?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {project.transactions.map(
+                      (transaction) => (
+                        <tr key={transaction.id}>
+
+                          <td>
+                            {transaction.transactionDate
+                              ? new Date(
+                                  transaction.transactionDate
+                                ).toLocaleDateString(
+                                  "en-GB"
+                                )
+                              : "-"}
+                          </td>
+
+                          <td>
+                            <span className="status-badge">
+                              {transaction.type}
+                            </span>
+                          </td>
+
+                          <td>
+                            {transaction.description ||
+                              "-"}
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              transaction.amount || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No transactions found.
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =======================================
+              NOTES
+          ======================================= */}
+          <div className="project-notes-section">
+
+            <span>Project Notes</span>
+
+            <div className="project-notes-box">
+              {project.notes ||
+                "No notes available"}
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* =========================================
+            FOOTER
+        ========================================= */}
+        <div className="modal-footer">
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() =>
+              setShowProjectViewModal(false)
+            }
+          >
+            Close
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
 
 const renderBOQs = () => {
   return (
@@ -6066,8 +6896,6 @@ const renderBOQs = () => {
     </section>
   );
 };
-
-
 
 const saveBOQ = async () => {
   if (savingBOQ) {
@@ -6405,7 +7233,6 @@ const renderBOQModal = () => {
     </div>
   );
 };
-
 
 const renderBOQDetailsModal = () => {
   if (!showBOQDetailsModal || !selectedBOQ) {
@@ -7053,7 +7880,6 @@ const renderBOQItemModal = () => {
     </div>
   );
 };
-
 const renderBOQItemViewModal = () => {
   if (!showBOQItemViewModal || !selectedBOQItem) {
     return null;
@@ -7474,13 +8300,6 @@ const renderBOQItemViewModal = () => {
       </section>
     );
   };
-
-
-
-
-
-
-
   const renderExpenses = () => {
     const expenseCategories = categories.filter(
       (category) => category.type === "EXPENSE"
@@ -7788,9 +8607,6 @@ const renderBOQItemViewModal = () => {
       </section>
     );
   };
-
-
-
   const renderMaterials = () => {
     return (
       <section className="dashboard">
@@ -10696,8 +11512,6 @@ const renderBOQItemViewModal = () => {
       </section>
     );
   };
-
-
   const renderPurchases = () => {
     return (
       <section className="dashboard">
@@ -12138,8 +12952,6 @@ const renderRFQs = () => {
     </section>
   );
 };
-
-
 const renderPurchaseRequestViewModal = () => {
   if (
     !showPurchaseRequestViewModal ||
@@ -12599,9 +13411,6 @@ const renderPurchaseRequestEditModal = () => {
     </div>
   );
 };
-
-
-
 const renderPurchaseRequestModal = () => {
   if (!showPurchaseRequestModal) {
     return null;
@@ -16571,6 +17380,7 @@ const renderRFQEditModal = () => {
         {renderRFQModal()}
         {renderRFQViewModal()}
         {renderRFQEditModal()}
+        {renderProjectViewModal()}
       </main>
 
 
