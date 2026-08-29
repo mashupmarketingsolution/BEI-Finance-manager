@@ -1675,7 +1675,6 @@ app.get("/api/boqs", async (req, res) => {
   }
 });
 
-
 // GET SINGLE BOQ
 app.get("/api/boqs/:id", async (req, res) => {
   try {
@@ -1725,7 +1724,6 @@ app.get("/api/boqs/:id", async (req, res) => {
     });
   }
 });
-
 
 // CREATE BOQ
 app.post("/api/boqs", async (req, res) => {
@@ -1840,6 +1838,198 @@ if (!allowedBOQStatuses.includes(boqStatus)) {
   }
 });
 
+// =========================================
+// UPDATE BOQ
+// =========================================
+
+app.put("/api/boqs/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const {
+      boqNo,
+      name,
+      projectId,
+      status,
+      notes,
+    } = req.body;
+
+    // -----------------------------
+    // BASIC VALIDATION
+    // -----------------------------
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ ID",
+      });
+    }
+
+    if (!boqNo || !boqNo.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "BOQ number is required",
+      });
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "BOQ name is required",
+      });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required",
+      });
+    }
+
+    // -----------------------------
+    // VALIDATE STATUS
+    // -----------------------------
+
+    const allowedBOQStatuses = [
+      "DRAFT",
+      "FINAL",
+      "APPROVED",
+      "CANCELLED",
+    ];
+
+    const boqStatus = status || "DRAFT";
+
+    if (!allowedBOQStatuses.includes(boqStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid BOQ status",
+      });
+    }
+
+    // -----------------------------
+    // FIND EXISTING BOQ
+    // -----------------------------
+
+    const existingBOQ =
+      await prisma.bOQ.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingBOQ) {
+      return res.status(404).json({
+        success: false,
+        message: "BOQ not found",
+      });
+    }
+
+    // -----------------------------
+    // CHECK PROJECT
+    // -----------------------------
+
+    const project =
+      await prisma.project.findUnique({
+        where: {
+          id: Number(projectId),
+        },
+      });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // -----------------------------
+    // DUPLICATE BOQ NUMBER
+    // -----------------------------
+
+    const duplicateBOQ =
+      await prisma.bOQ.findFirst({
+        where: {
+          boqNo: boqNo.trim(),
+
+          NOT: {
+            id,
+          },
+        },
+      });
+
+    if (duplicateBOQ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A BOQ with this number already exists",
+      });
+    }
+
+    // -----------------------------
+    // UPDATE BOQ
+    // -----------------------------
+
+    const updatedBOQ =
+      await prisma.bOQ.update({
+        where: {
+          id,
+        },
+
+        data: {
+          boqNo: boqNo.trim(),
+
+          name: name.trim(),
+
+          projectId:
+            Number(projectId),
+
+          status:
+            boqStatus,
+
+          notes:
+            notes?.trim() || null,
+        },
+
+        include: {
+          project: true,
+
+          items: {
+            include: {
+              material: true,
+            },
+
+            orderBy: {
+              id: "asc",
+            },
+          },
+        },
+      });
+
+    res.json({
+      success: true,
+
+      message:
+        "BOQ updated successfully",
+
+      data: updatedBOQ,
+    });
+
+ } catch (error) {
+  console.error("Update BOQ Error FULL:");
+  console.error("message:", error.message);
+  console.error("code:", error.code);
+  console.error("meta:", error.meta);
+  console.error("stack:", error.stack);
+
+  res.status(500).json({
+    success: false,
+    message:
+      error.message || "BOQ update করা যায়নি!",
+    code: error.code || null,
+    meta: error.meta || null,
+  });
+}
+});
 
 // DELETE BOQ
 app.delete("/api/boqs/:id", async (req, res) => {

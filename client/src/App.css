@@ -5360,3 +5360,45 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+.purchase-order-view-modal {
+  width: min(1000px, 100%);
+  max-height: 92vh;
+}
+
+.purchase-order-view-modal .project-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 850px) {
+  .purchase-order-view-modal .project-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .purchase-order-view-modal .project-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.purchase-order-modal .modal-message {
+  margin: 16px 24px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.purchase-order-modal .modal-message.success {
+  background: #ecfdf3;
+  color: #087443;
+  border: 1px solid #a7f3d0;
+}
+
+.purchase-order-modal .modal-message.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}

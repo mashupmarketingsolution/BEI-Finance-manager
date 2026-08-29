@@ -228,6 +228,29 @@ function App() {
 
   const [savingPurchase, setSavingPurchase] =
     useState(false);
+// =========================================
+// PURCHASE ORDER STATES
+// =========================================
+
+const [purchaseOrders, setPurchaseOrders] = useState([]);
+
+const [purchaseOrderLoading, setPurchaseOrderLoading] =
+  useState(false);
+
+const [purchaseOrderMessage, setPurchaseOrderMessage] =
+  useState("");
+
+const [savingPurchaseOrder, setSavingPurchaseOrder] =
+  useState(false);
+
+const [editingPurchaseOrderId, setEditingPurchaseOrderId] =
+  useState(null);
+
+const [showPurchaseOrderModal, setShowPurchaseOrderModal] =
+  useState(false);
+
+const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
+const [showPurchaseOrderViewModal, setShowPurchaseOrderViewModal] = useState(false);
 
 const [editingPurchaseId, setEditingPurchaseId] =
   useState(null);
@@ -258,11 +281,26 @@ const [editingPurchaseId, setEditingPurchaseId] =
       },
     ]);
 
-
-
-
   const [selectedPurchase, setSelectedPurchase] =
     useState(null);
+
+
+const [purchaseOrderForm, setPurchaseOrderForm] =
+  useState({
+    poNo: "",
+    poDate: new Date()
+      .toISOString()
+      .split("T")[0],
+    vendorId: "",
+    projectId: "",
+    rfqId: "",
+    discount: 0,
+    transportCost: 0,
+    notes: "",
+  });
+
+const [purchaseOrderItems, setPurchaseOrderItems] =
+  useState([]);
 
 
 // purchaseRequests State //
@@ -367,6 +405,339 @@ const loadPurchaseRequests = async () => {
   }
 };
 
+const loadPurchaseOrders = async () => {
+  try {
+    setPurchaseOrderLoading(true);
+
+    const response = await axios.get(
+      `${API_URL}/api/purchase-orders`
+    );
+
+    if (response.data.success) {
+      setPurchaseOrders(
+        response.data.data || []
+      );
+    } else {
+      setPurchaseOrderMessage(
+        response.data.message ||
+          "Purchase orders load করা যায়নি!"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Load Purchase Orders Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase orders load করা যায়নি!"
+      }`
+    );
+  } finally {
+    setPurchaseOrderLoading(false);
+  }
+};
+const savePurchaseOrder = async () => {
+  if (savingPurchaseOrder) {
+    return;
+  }
+
+  setPurchaseOrderMessage("");
+
+  const poNo = purchaseOrderForm.poNo.trim();
+  const poDate = purchaseOrderForm.poDate;
+  const vendorId = Number(
+    purchaseOrderForm.vendorId
+  );
+
+  const projectId = purchaseOrderForm.projectId
+    ? Number(purchaseOrderForm.projectId)
+    : null;
+
+  const rfqId = purchaseOrderForm.rfqId
+    ? Number(purchaseOrderForm.rfqId)
+    : null;
+
+  const discount = Number(
+    purchaseOrderForm.discount || 0
+  );
+
+  const transportCost = Number(
+    purchaseOrderForm.transportCost || 0
+  );
+
+  // ==============================
+  // VALIDATION
+  // ==============================
+
+  if (!poNo) {
+    setPurchaseOrderMessage(
+      "❌ PO number is required"
+    );
+    return;
+  }
+
+  if (!poDate) {
+    setPurchaseOrderMessage(
+      "❌ PO date is required"
+    );
+    return;
+  }
+
+  if (!vendorId) {
+    setPurchaseOrderMessage(
+      "❌ Vendor is required"
+    );
+    return;
+  }
+
+  if (
+    !Array.isArray(purchaseOrderItems) ||
+    purchaseOrderItems.length === 0
+  ) {
+    setPurchaseOrderMessage(
+      "❌ At least one purchase order item is required"
+    );
+    return;
+  }
+
+  for (const item of purchaseOrderItems) {
+    if (!Number(item.materialId)) {
+      setPurchaseOrderMessage(
+        "❌ Material is required for every item"
+      );
+      return;
+    }
+
+    if (
+      Number(item.quantity) <= 0 ||
+      Number.isNaN(Number(item.quantity))
+    ) {
+      setPurchaseOrderMessage(
+        "❌ Quantity must be greater than 0"
+      );
+      return;
+    }
+
+    if (
+      Number(item.unitPrice) < 0 ||
+      Number.isNaN(Number(item.unitPrice))
+    ) {
+      setPurchaseOrderMessage(
+        "❌ Unit price cannot be negative"
+      );
+      return;
+    }
+  }
+
+  if (discount < 0) {
+    setPurchaseOrderMessage(
+      "❌ Discount cannot be negative"
+    );
+    return;
+  }
+
+  if (transportCost < 0) {
+    setPurchaseOrderMessage(
+      "❌ Transport cost cannot be negative"
+    );
+    return;
+  }
+
+  setSavingPurchaseOrder(true);
+
+  try {
+    const payload = {
+      poNo,
+      poDate,
+      vendorId,
+      projectId,
+      rfqId,
+      discount,
+      transportCost,
+      notes:
+        purchaseOrderForm.notes.trim() || null,
+
+      items: purchaseOrderItems.map((item) => ({
+        materialId: Number(item.materialId),
+        quantity: Number(item.quantity),
+        unit: item.unit?.trim() || "",
+        unitPrice: Number(item.unitPrice),
+        notes: item.notes?.trim() || null,
+      })),
+    };
+
+    const response = editingPurchaseOrderId
+      ? await axios.put(
+          `${API_URL}/api/purchase-orders/${editingPurchaseOrderId}`,
+          payload
+        )
+      : await axios.post(
+          `${API_URL}/api/purchase-orders`,
+          payload
+        );
+
+    if (response.data.success) {
+      setPurchaseOrderMessage(
+        editingPurchaseOrderId
+          ? "✅ Purchase Order updated successfully"
+          : "✅ Purchase Order created successfully"
+      );
+
+      await loadPurchaseOrders();
+
+      setPurchaseOrderForm({
+        poNo: "",
+        poDate: new Date()
+          .toISOString()
+          .split("T")[0],
+        vendorId: "",
+        projectId: "",
+        rfqId: "",
+        discount: 0,
+        transportCost: 0,
+        notes: "",
+      });
+
+      setPurchaseOrderItems([]);
+      setEditingPurchaseOrderId(null);
+
+      setTimeout(() => {
+        setShowPurchaseOrderModal(false);
+        setPurchaseOrderMessage("");
+      }, 800);
+    }
+  } catch (error) {
+    console.error(
+      "Save Purchase Order Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase order save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingPurchaseOrder(false);
+  }
+};
+const handleDeletePurchaseOrder = async (poId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this Purchase Order?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setPurchaseOrderMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/purchase-orders/${poId}`
+    );
+
+    if (response.data.success) {
+      setPurchaseOrderMessage(
+        "✅ Purchase Order deleted successfully"
+      );
+
+      await loadPurchaseOrders();
+
+      setTimeout(() => {
+        setPurchaseOrderMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete Purchase Order Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase Order delete করা যায়নি!"
+      }`
+    );
+  }
+};
+const handlePurchaseOrderStatusUpdate = async (
+  poId,
+  newStatus
+) => {
+  if (!poId || !newStatus) {
+    return;
+  }
+
+  try {
+    setPurchaseOrderMessage("");
+
+    const response = await axios.patch(
+      `${API_URL}/api/purchase-orders/${poId}/status`,
+      {
+        status: newStatus,
+      }
+    );
+
+    if (response.data.success) {
+      setPurchaseOrderMessage(
+        "✅ Purchase order status updated successfully"
+      );
+
+      await loadPurchaseOrders();
+
+      setTimeout(() => {
+        setPurchaseOrderMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Purchase Order Status Update Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase order status update করা যায়নি!"
+      }`
+    );
+  }
+};
+const getNextPurchaseOrderStatuses = (currentStatus) => {
+  const transitions = {
+    DRAFT: [
+      "CONFIRMED",
+      "CANCELLED",
+    ],
+
+    CONFIRMED: [
+      "SENT",
+      "CANCELLED",
+    ],
+
+    SENT: [
+      "PARTIAL",
+      "COMPLETED",
+      "CANCELLED",
+    ],
+
+    PARTIAL: [
+      "COMPLETED",
+      "CANCELLED",
+    ],
+
+    COMPLETED: [],
+    CANCELLED: [],
+  };
+
+  return transitions[currentStatus] || [];
+};
 const loadRFQs = async () => {
   try {
     setRfqLoading(true);
@@ -1126,6 +1497,10 @@ const handleDeletePurchase = async (purchase) => {
     setMessage("");
   }, 3000);
 };
+
+
+
+
 
   // =========================================
   // MATERIALS
@@ -1939,6 +2314,7 @@ const saveBOQItem = async () => {
   }
 };
 
+
 const handleDeleteBOQItem = async (itemId) => {
   if (!selectedBOQ) {
     return;
@@ -1999,7 +2375,47 @@ const handleDeleteBOQItem = async (itemId) => {
   }
 };
 
+const handleDeleteBOQ = async (boqId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this BOQ?"
+  );
 
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setBoqMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/boqs/${boqId}`
+    );
+
+    if (response.data.success) {
+      setBoqMessage(
+        "✅ BOQ deleted successfully"
+      );
+
+      await loadBOQs();
+
+      setTimeout(() => {
+        setBoqMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete BOQ Error:",
+      error
+    );
+
+    setBoqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "BOQ delete করা যায়নি!"
+      }`
+    );
+  }
+};
   const handleProjectPageChange = (newPage) => {
     setProjectPage(newPage);
 
@@ -2343,6 +2759,128 @@ const openPurchaseModal = async () => {
       setSavingPurchase(false);
     }
   };
+
+const viewPurchaseOrder = async (id) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/purchase-orders/${id}`
+    );
+
+    if (response.data.success) {
+      const po = response.data.data;
+
+      setSelectedPurchaseOrder(po);
+      setShowPurchaseOrderViewModal(true);
+    }
+  } catch (error) {
+    console.error(
+      "View Purchase Order Error:",
+      error
+    );
+
+    setMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase order details load করা যায়নি!"
+      }`
+    );
+  }
+};
+const editPurchaseOrder = async (poId) => {
+  try {
+    setPurchaseOrderMessage("");
+
+    const response = await axios.get(
+      `${API_URL}/api/purchase-orders/${poId}`
+    );
+
+    if (!response.data.success) {
+      setPurchaseOrderMessage(
+        response.data.message ||
+          "Purchase Order load করা যায়নি!"
+      );
+      return;
+    }
+
+    const po = response.data.data;
+
+    setEditingPurchaseOrderId(po.id);
+
+    setPurchaseOrderForm({
+      poNo: po.poNo || "",
+
+      poDate: po.poDate
+        ? new Date(po.poDate)
+            .toISOString()
+            .split("T")[0]
+        : new Date()
+            .toISOString()
+            .split("T")[0],
+
+      vendorId: po.vendorId
+        ? String(po.vendorId)
+        : "",
+
+      projectId: po.projectId
+        ? String(po.projectId)
+        : "",
+
+      rfqId: po.rfqId
+        ? String(po.rfqId)
+        : "",
+
+      discount: po.discount ?? 0,
+
+      transportCost:
+        po.transportCost ?? 0,
+
+      notes: po.notes || "",
+    });
+
+    setPurchaseOrderItems(
+      (po.items || []).map((item) => ({
+        id: item.id,
+
+        materialId: item.materialId
+          ? String(item.materialId)
+          : "",
+
+        quantity:
+          item.quantity ?? "",
+
+        unit: item.unit || "",
+
+        unitPrice:
+          item.unitPrice ?? "",
+
+        notes: item.notes || "",
+      }))
+    );
+
+    // Ensure dropdown data is available
+    await Promise.all([
+      loadRFQs(),
+      loadMaterials(),
+    ]);
+
+    setShowPurchaseOrderModal(true);
+
+  } catch (error) {
+    console.error(
+      "Edit Purchase Order Load Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase Order details load করা যায়নি!"
+      }`
+    );
+  }
+};
+
+
 
   // =========================================
   // LOAD DASHBOARD
@@ -6267,6 +6805,107 @@ const renderProjectViewModal = () => {
 
           </div>
 
+{/* =======================================
+    PURCHASE REQUESTS SECTION
+======================================= */}
+<div className="project-details-section">
+
+  <div className="project-details-section-header">
+    <div>
+      <h3>Purchase Requests</h3>
+
+      <p>
+        Material purchase requests for this project
+      </p>
+    </div>
+  </div>
+
+  {project.purchaseRequests?.length > 0 ? (
+
+    <div className="table-wrapper">
+
+      <table>
+
+        <thead>
+          <tr>
+            <th>Request No</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Items</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+          {project.purchaseRequests.map(
+            (request) => (
+              <tr key={request.id}>
+
+                <td>
+                  <strong>
+                    {request.requestNo}
+                  </strong>
+                </td>
+
+                <td>
+                  {request.requestDate
+                    ? new Date(
+                        request.requestDate
+                      ).toLocaleDateString(
+                        "en-GB"
+                      )
+                    : "-"}
+                </td>
+
+                <td>
+                  <span className="status-badge">
+                    {request.status}
+                  </span>
+                </td>
+
+                <td>
+                  {request.priority || "-"}
+                </td>
+
+                <td>
+                  {request.items?.length || 0}
+                </td>
+
+                <td>
+                  <button
+                    type="button"
+                    className="view-button"
+                    onClick={() => {
+                      viewPurchaseRequest(
+                        request.id
+                      );
+                    }}
+                  >
+                    View
+                  </button>
+                </td>
+
+              </tr>
+            )
+          )}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  ) : (
+
+    <div className="project-empty-section">
+      No purchase requests found.
+    </div>
+
+  )}
+
+</div>
 
           {/* =======================================
               RFQ SECTION
@@ -6298,6 +6937,7 @@ const renderProjectViewModal = () => {
                       <th>Items</th>
                       <th>Vendors</th>
                       <th>Awarded Vendor</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
 
@@ -6343,6 +6983,17 @@ const renderProjectViewModal = () => {
                               "-"}
                           </td>
 
+                          <td>
+                            <button
+                              type="button"
+                              className="view-button"
+                              onClick={() => {
+                                viewRFQ(rfq.id);
+                              }}
+                            >
+                              View
+                            </button>
+                          </td>
                         </tr>
                       )
                     )}
@@ -6393,6 +7044,7 @@ const renderProjectViewModal = () => {
                       <th>Vendor</th>
                       <th>Status</th>
                       <th>Grand Total</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
 
@@ -6438,7 +7090,17 @@ const renderProjectViewModal = () => {
                               "en-BD"
                             )}
                           </td>
-
+                          <td>
+                            <button
+                              type="button"
+                              className="view-button"
+                              onClick={() => {
+                                viewPurchaseOrder(po.id);
+                              }}
+                            >
+                              View
+                            </button>
+                          </td>
                         </tr>
                       )
                     )}
@@ -6691,6 +7353,313 @@ const renderProjectViewModal = () => {
     </div>
   );
 };
+const renderPurchaseOrderViewModal = () => {
+  if (
+    !showPurchaseOrderViewModal ||
+    !selectedPurchaseOrder
+  ) {
+    return null;
+  }
+
+  const po = selectedPurchaseOrder;
+
+  const itemsTotal = (po.items || []).reduce(
+    (sum, item) =>
+      sum + Number(item.total || 0),
+    0
+  );
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={() =>
+        setShowPurchaseOrderViewModal(false)
+      }
+    >
+      <div
+        className="modal-container purchase-order-view-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+
+        <div className="modal-header">
+          <div>
+            <h2>{po.poNo}</h2>
+            <p>Purchase Order Details</p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close-button"
+            onClick={() =>
+              setShowPurchaseOrderViewModal(false)
+            }
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="modal-body">
+
+          {/* BASIC INFO */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Purchase Order Information</h3>
+                <p>
+                  Basic purchase order details
+                </p>
+              </div>
+            </div>
+
+            <div className="project-info-grid">
+
+              <div className="project-info-card">
+                <span>PO No</span>
+                <strong>
+                  {po.poNo || "-"}
+                </strong>
+              </div>
+
+              <div className="project-info-card">
+                <span>PO Date</span>
+                <strong>
+                  {po.poDate
+                    ? new Date(
+                        po.poDate
+                      ).toLocaleDateString(
+                        "en-GB"
+                      )
+                    : "-"}
+                </strong>
+              </div>
+
+              <div className="project-info-card">
+                <span>Vendor</span>
+                <strong>
+                  {po.vendor?.companyName ||
+                    po.vendor?.name ||
+                    "-"}
+                </strong>
+              </div>
+
+              <div className="project-info-card">
+                <span>Project</span>
+                <strong>
+                  {po.project?.name || "-"}
+                </strong>
+              </div>
+
+              <div className="project-info-card">
+                <span>Status</span>
+                <strong>
+                  {po.status || "-"}
+                </strong>
+              </div>
+
+              <div className="project-info-card">
+                <span>RFQ</span>
+                <strong>
+                  {po.rfq?.rfqNo || "-"}
+                </strong>
+              </div>
+
+            </div>
+          </div>
+
+          {/* AMOUNTS */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Amount Summary</h3>
+                <p>
+                  Purchase order financial summary
+                </p>
+              </div>
+            </div>
+
+            <div className="project-summary-grid">
+
+              <div className="project-summary-card income">
+                <span>Subtotal</span>
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    po.subtotal || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+              <div className="project-summary-card expense">
+                <span>Discount</span>
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    po.discount || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+              <div className="project-summary-card balance">
+                <span>Transport Cost</span>
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    po.transportCost || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+              <div className="project-summary-card">
+                <span>Grand Total</span>
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    po.grandTotal || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ITEMS */}
+          <div className="project-details-section">
+
+            <div className="project-details-section-header">
+              <div>
+                <h3>Purchase Order Items</h3>
+                <p>
+                  Materials included in this purchase order
+                </p>
+              </div>
+            </div>
+
+            {po.items?.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Qty</th>
+                      <th>Unit</th>
+                      <th>Unit Price</th>
+                      <th>Total</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {po.items.map(
+                      (item) => (
+                        <tr key={item.id}>
+
+                          <td>
+                            <strong>
+                              {item.material?.name ||
+                                "-"}
+                            </strong>
+
+                            <small>
+                              {item.material?.code ||
+                                ""}
+                            </small>
+                          </td>
+
+                          <td>
+                            {item.quantity}
+                          </td>
+
+                          <td>
+                            {item.unit}
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              item.unitPrice || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                          <td>
+                            ৳{" "}
+                            {Number(
+                              item.total || 0
+                            ).toLocaleString(
+                              "en-BD"
+                            )}
+                          </td>
+
+                          <td>
+                            {item.notes || "-"}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="project-empty-section">
+                No items found.
+              </div>
+
+            )}
+
+            <div className="project-notes-box">
+              Items Total: ৳{" "}
+              {itemsTotal.toLocaleString("en-BD")}
+            </div>
+
+          </div>
+
+          {/* NOTES */}
+          <div className="project-notes-section">
+
+            <span>Notes</span>
+
+            <div className="project-notes-box">
+              {po.notes ||
+                "No notes available"}
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="modal-footer">
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() =>
+              setShowPurchaseOrderViewModal(false)
+            }
+          >
+            Close
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
 
 const renderBOQs = () => {
   return (
@@ -6874,6 +7843,25 @@ const renderBOQs = () => {
                       >
                         View
                       </button>
+                        <button
+                          type="button"
+                          className="edit-income-button"
+                          onClick={() => {
+                            editBOQ(boq.id);
+                          }}
+                        >
+                          Edit
+                        </button>
+                      <button
+                        type="button"
+                        className="delete-button"
+                        onClick={() => {
+                          handleDeleteBOQ(boq.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                 
 
                       </div>
 
@@ -6908,67 +7896,91 @@ const saveBOQ = async () => {
   const name = boqForm.name.trim();
   const projectId = Number(boqForm.projectId);
 
+  const allowedBOQStatuses = [
+    "DRAFT",
+    "FINAL",
+    "APPROVED",
+    "CANCELLED",
+  ];
+
+  const boqStatus =
+    boqForm.status || "DRAFT";
+
   // ==============================
   // VALIDATION
   // ==============================
 
   if (!boqNo) {
-    setBoqMessage("❌ BOQ number is required");
+    setBoqMessage(
+      "❌ BOQ number is required"
+    );
     return;
   }
 
   if (!name) {
-    setBoqMessage("❌ BOQ name is required");
+    setBoqMessage(
+      "❌ BOQ name is required"
+    );
     return;
   }
 
   if (!projectId) {
-    setBoqMessage("❌ Project is required");
+    setBoqMessage(
+      "❌ Project is required"
+    );
+    return;
+  }
+
+  if (
+    !allowedBOQStatuses.includes(
+      boqStatus
+    )
+  ) {
+    setBoqMessage(
+      "❌ Invalid BOQ status"
+    );
     return;
   }
 
   setSavingBOQ(true);
 
-const allowedBOQStatuses = [
-  "DRAFT",
-  "FINAL",
-  "APPROVED",
-  "CANCELLED",
-];
-
-const boqStatus = status || "DRAFT";
-
-if (!allowedBOQStatuses.includes(boqStatus)) {
-  return res.status(400).json({
-    success: false,
-    message: "Invalid BOQ status",
-  });
-}
-
-
   try {
     // ==============================
-    // CREATE BOQ
+    // PAYLOAD
     // ==============================
 
     const payload = {
       boqNo,
       name,
       projectId,
-      //status: status || "DRAFT",//
       status: boqStatus,
-      
-      notes: boqForm.notes.trim() || null,
+      notes:
+        boqForm.notes.trim() || null,
     };
 
-    const response = await axios.post(
-      `${API_URL}/api/boqs`,
-      payload
-    );
+    // ==============================
+    // EDIT BOQ
+    // ==============================
+
+    const response = editingBOQId
+      ? await axios.put(
+          `${API_URL}/api/boqs/${editingBOQId}`,
+          payload
+        )
+      : await axios.post(
+          `${API_URL}/api/boqs`,
+          payload
+        );
+
+    // ==============================
+    // SUCCESS
+    // ==============================
 
     if (response.data.success) {
       setBoqMessage(
-        "✅ BOQ created successfully"
+        editingBOQId
+          ? "✅ BOQ updated successfully"
+          : "✅ BOQ created successfully"
       );
 
       await loadBOQs();
@@ -6988,6 +8000,7 @@ if (!allowedBOQStatuses.includes(boqStatus)) {
         setBoqMessage("");
       }, 800);
     }
+
   } catch (error) {
     console.error(
       "Save BOQ Error:",
@@ -7003,8 +8016,48 @@ if (!allowedBOQStatuses.includes(boqStatus)) {
   } finally {
     setSavingBOQ(false);
   }
-
 };
+
+const editBOQ = async (id) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/boqs/${id}`
+    );
+
+    if (response.data.success) {
+      const boq = response.data.data;
+
+      setEditingBOQId(boq.id);
+
+      setBoqForm({
+        boqNo: boq.boqNo || "",
+        name: boq.name || "",
+        projectId: boq.projectId
+          ? String(boq.projectId)
+          : "",
+        status: boq.status || "DRAFT",
+        notes: boq.notes || "",
+      });
+
+      setBoqMessage("");
+
+      setShowBOQModal(true);
+    }
+  } catch (error) {
+    console.error(
+      "Edit BOQ Load Error:",
+      error
+    );
+
+    setBoqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "BOQ details load করা যায়নি!"
+      }`
+    );
+  }
+};
+
 const renderBOQModal = () => {
   if (!showBOQModal) return null;
 
@@ -12772,6 +13825,308 @@ const renderPurchaseRequests = () => {
     </section>
   );
 };
+
+// =========================================
+// RENDER PURCHASE ORDERS
+// =========================================
+
+const renderPurchaseOrders = () => {
+  return (
+    <section className="dashboard">
+
+      {purchaseOrderMessage && (
+        <div
+          className={`message-box ${
+            purchaseOrderMessage.includes("❌")
+              ? "message-error"
+              : "message-success"
+          }`}
+        >
+          {purchaseOrderMessage}
+        </div>
+      )}
+
+      <div className="content-card">
+
+        <div className="card-header">
+
+          <div>
+            <h2>Purchase Orders</h2>
+
+            <p>
+              Manage project purchase orders
+            </p>
+          </div>
+
+          <div className="header-actions">
+
+            <RefreshButton
+              onRefresh={loadPurchaseOrders}
+            />
+
+            <button
+              type="button"
+              className="add-button"
+            
+             onClick={async () => {
+              setEditingPurchaseOrderId(null);
+
+              setPurchaseOrderForm({
+                poNo: "",
+                poDate: new Date()
+                  .toISOString()
+                  .split("T")[0],
+                vendorId: "",
+                projectId: "",
+                rfqId: "",
+                discount: 0,
+                transportCost: 0,
+                notes: "",
+              });
+
+              setPurchaseOrderItems([]);
+              setPurchaseOrderMessage("");
+
+              // Load required dropdown data
+              await Promise.all([
+                loadRFQs(),
+                loadMaterials(),
+              ]);
+
+              setShowPurchaseOrderModal(true);
+            }}
+              
+            >
+              <Plus size={18} />
+              Add Purchase Order
+            </button>
+
+          </div>
+
+        </div>
+
+
+        {purchaseOrderLoading ? (
+
+          <div className="loading-state">
+            Loading purchase orders...
+          </div>
+
+        ) : purchaseOrders.length === 0 ? (
+
+          <div className="empty-state">
+
+            <ClipboardList size={50} />
+
+            <h3>No Purchase Orders Found</h3>
+
+            <p>
+              Your purchase order list is currently empty.
+            </p>
+
+            <button
+              type="button"
+              className="empty-add-button"
+
+              onClick={() => {
+                setEditingPurchaseOrderId(null);
+
+                setPurchaseOrderForm({
+                  poNo: "",
+                  poDate: new Date()
+                    .toISOString()
+                    .split("T")[0],
+                  vendorId: "",
+                  projectId: "",
+                  rfqId: "",
+                  discount: 0,
+                  transportCost: 0,
+                  notes: "",
+                });
+
+                setPurchaseOrderItems([]);
+
+                setPurchaseOrderMessage("");
+
+                setShowPurchaseOrderModal(true);
+              }}
+              
+            >
+              <Plus size={18} />
+              Add Your First Purchase Order
+            </button>
+
+          </div>
+
+        ) : (
+
+          <div className="table-wrapper">
+
+            <table>
+
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>PO No</th>
+                  <th>Date</th>
+                  <th>Project</th>
+                  <th>Vendor</th>
+                  <th>RFQ</th>
+                  <th>Status</th>
+                  <th>Grand Total</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+
+                {purchaseOrders.map(
+                  (po) => (
+                    <tr key={po.id}>
+
+                      <td>
+                        #{po.id}
+                      </td>
+
+                      <td>
+                        <strong>
+                          {po.poNo}
+                        </strong>
+                      </td>
+
+                      <td>
+                        {po.poDate
+                          ? new Date(
+                              po.poDate
+                            ).toLocaleDateString(
+                              "en-GB"
+                            )
+                          : "-"}
+                      </td>
+
+                      <td>
+                        {po.project?.name || "-"}
+                      </td>
+
+                      <td>
+                        {po.vendor?.companyName ||
+                          po.vendor?.name ||
+                          "-"}
+                      </td>
+
+                      <td>
+                        {po.rfq?.rfqNo || "-"}
+                      </td>
+
+                      <td>
+                      <div className="purchase-order-status-cell">
+
+                        <span className="status-badge">
+                          {po.status || "-"}
+                        </span>
+
+                        {getNextPurchaseOrderStatuses(
+                          po.status
+                        ).length > 0 && (
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const newStatus =
+                                e.target.value;
+
+                              if (!newStatus) {
+                                return;
+                              }
+
+                              handlePurchaseOrderStatusUpdate(
+                                po.id,
+                                newStatus
+                              );
+                            }}
+                          >
+                            <option value="">
+                              Change Status
+                            </option>
+
+                            {getNextPurchaseOrderStatuses(
+                              po.status
+                            ).map((status) => (
+                              <option
+                                key={status}
+                                value={status}
+                              >
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </td>
+
+                      <td className="money">
+                        ৳{" "}
+                        {Number(
+                          po.grandTotal || 0
+                        ).toLocaleString(
+                          "en-BD"
+                        )}
+                      </td>
+
+                      <td>
+
+                        <div className="purchase-order-actions">
+                          
+                          <button
+                            type="button"
+                            className="view-button"
+                            onClick={() => {
+                              viewPurchaseOrder(
+                                po.id
+                              );
+                            }}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            className="edit-button"
+                            onClick={() => {
+                              editPurchaseOrder(po.id);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="delete-button"
+                            onClick={() => {
+                              handleDeletePurchaseOrder(po.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+
+                      </td>
+
+                    </tr>
+                  )
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </section>
+  );
+};
+
 const renderRFQs = () => {
   return (
     <section className="dashboard">
@@ -13636,6 +14991,773 @@ const renderPurchaseRequestModal = () => {
             {savingPurchaseRequest
               ? "Saving..."
               : "Save Purchase Request"}
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
+const renderPurchaseOrderModal = () => {
+  if (!showPurchaseOrderModal) {
+    return null;
+  }
+
+  const totalSubtotal =
+    purchaseOrderItems.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.quantity || 0) *
+        Number(item.unitPrice || 0),
+      0
+    );
+
+  const discountAmount =
+    Number(purchaseOrderForm.discount || 0);
+
+  const transportAmount =
+    Number(
+      purchaseOrderForm.transportCost || 0
+    );
+
+  const grandTotal =
+    totalSubtotal -
+    discountAmount +
+    transportAmount;
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={() =>
+        setShowPurchaseOrderModal(false)
+      }
+    >
+      <div
+        className="modal-container purchase-order-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+
+        {/* HEADER */}
+
+        <div className="modal-header">
+          <div>
+            <h2>
+              {editingPurchaseOrderId
+                ? "Edit Purchase Order"
+                : "Add Purchase Order"}
+            </h2>
+
+            <p>
+              Create project purchase order
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close-button"
+            onClick={() =>
+              setShowPurchaseOrderModal(false)
+            }
+          >
+            ×
+          </button>
+        </div>
+
+        {/* MESSAGE */}
+
+        {purchaseOrderMessage && (
+          <div
+            className={`modal-message ${
+              purchaseOrderMessage.includes("❌")
+                ? "error"
+                : "success"
+            }`}
+          >
+            {purchaseOrderMessage}
+          </div>
+        )}
+
+        {/* BODY */}
+
+        <div className="modal-body">
+
+          {/* BASIC INFORMATION */}
+
+          <div className="form-section">
+
+            <div className="form-section-header">
+              <h3>Purchase Order Information</h3>
+            </div>
+
+            <div className="form-grid">
+
+              {/* PO NO */}
+
+              <div className="form-group">
+                <label>
+                  PO Number *
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    purchaseOrderForm.poNo
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        poNo:
+                          e.target.value,
+                      })
+                    )
+                  }
+                  placeholder="PO-0003"
+                />
+              </div>
+
+              {/* PO DATE */}
+
+              <div className="form-group">
+                <label>
+                  PO Date *
+                </label>
+
+                <input
+                  type="date"
+                  value={
+                    purchaseOrderForm.poDate
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        poDate:
+                          e.target.value,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              {/* VENDOR */}
+
+              <div className="form-group">
+                <label>
+                  Vendor *
+                </label>
+
+                <select
+                  value={
+                    purchaseOrderForm.vendorId
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        vendorId:
+                          e.target.value,
+                      })
+                    )
+                  }
+                >
+                  <option value="">
+                    Select Vendor
+                  </option>
+
+                  {vendors.map(
+                    (vendor) => (
+                      <option
+                        key={vendor.id}
+                        value={vendor.id}
+                      >
+                        {vendor.companyName ||
+                          vendor.name}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              {/* PROJECT */}
+
+              <div className="form-group">
+                <label>
+                  Project
+                </label>
+
+                <select
+                  value={
+                    purchaseOrderForm.projectId
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        projectId:
+                          e.target.value,
+                      })
+                    )
+                  }
+                >
+                  <option value="">
+                    Select Project
+                  </option>
+
+                  {projects.map(
+                    (project) => (
+                      <option
+                        key={project.id}
+                        value={project.id}
+                      >
+                        {project.name}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              {/* RFQ */}
+
+              <div className="form-group">
+                <label>
+                  RFQ
+                </label>
+
+                <select
+                  value={
+                    purchaseOrderForm.rfqId
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        rfqId:
+                          e.target.value,
+                      })
+                    )
+                  }
+                >
+                  <option value="">
+                    Select RFQ
+                  </option>
+
+                  {rfqs
+                    .filter(
+                      (rfq) =>
+                        rfq.status ===
+                        "AWARDED"
+                    )
+                    .map(
+                      (rfq) => (
+                        <option
+                          key={rfq.id}
+                          value={rfq.id}
+                        >
+                          {rfq.rfqNo}
+                        </option>
+                      )
+                    )}
+                </select>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* ITEMS */}
+
+          <div className="form-section">
+
+            <div className="form-section-header">
+              <div>
+                <h3>Purchase Order Items</h3>
+
+                <p>
+                  Materials included in this PO
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="add-button"
+                onClick={() =>
+                  setPurchaseOrderItems(
+                    (prev) => [
+                      ...prev,
+                      {
+                        materialId: "",
+                        quantity: "",
+                        unit: "",
+                        unitPrice: "",
+                        notes: "",
+                      },
+                    ]
+                  )
+                }
+              >
+                <Plus size={18} />
+                Add Item
+              </button>
+            </div>
+
+            {purchaseOrderItems.length ===
+            0 ? (
+
+              <div className="empty-state">
+                <ClipboardList
+                  size={40}
+                />
+
+                <h4>
+                  No items added
+                </h4>
+
+                <p>
+                  Add at least one material
+                  item to this purchase order.
+                </p>
+              </div>
+
+            ) : (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Qty</th>
+                      <th>Unit</th>
+                      <th>Unit Price</th>
+                      <th>Total</th>
+                      <th>Notes</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {purchaseOrderItems.map(
+                      (item, index) => {
+
+                        const itemTotal =
+                          Number(
+                            item.quantity || 0
+                          ) *
+                          Number(
+                            item.unitPrice || 0
+                          );
+
+                        return (
+                          <tr
+                            key={index}
+                          >
+
+                            {/* MATERIAL */}
+
+                            <td>
+                              <select
+                                value={
+                                  item.materialId
+                                }
+                                onChange={(e) => {
+                                  const materialId =
+                                    e.target.value;
+
+                                  const material =
+                                    materials.find(
+                                      (m) =>
+                                        String(
+                                          m.id
+                                        ) ===
+                                        String(
+                                          materialId
+                                        )
+                                    );
+
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.map(
+                                        (
+                                          current,
+                                          i
+                                        ) =>
+                                          i === index
+                                            ? {
+                                                ...current,
+                                                materialId,
+                                                unit:
+                                                  material?.unit ||
+                                                  "",
+                                              }
+                                            : current
+                                      )
+                                  );
+                                }}
+                              >
+
+                                <option value="">
+                                  Select Material
+                                </option>
+
+                                {materials.map(
+                                  (material) => (
+                                    <option
+                                      key={
+                                        material.id
+                                      }
+                                      value={
+                                        material.id
+                                      }
+                                    >
+                                      {material.name}
+                                    </option>
+                                  )
+                                )}
+
+                              </select>
+                            </td>
+
+                            {/* QUANTITY */}
+
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={
+                                  item.quantity
+                                }
+                                onChange={(e) =>
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.map(
+                                        (
+                                          current,
+                                          i
+                                        ) =>
+                                          i === index
+                                            ? {
+                                                ...current,
+                                                quantity:
+                                                  e.target
+                                                    .value,
+                                              }
+                                            : current
+                                      )
+                                  )
+                                }
+                              />
+                            </td>
+
+                            {/* UNIT */}
+
+                            <td>
+                              <input
+                                type="text"
+                                value={
+                                  item.unit
+                                }
+                                onChange={(e) =>
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.map(
+                                        (
+                                          current,
+                                          i
+                                        ) =>
+                                          i === index
+                                            ? {
+                                                ...current,
+                                                unit:
+                                                  e.target
+                                                    .value,
+                                              }
+                                            : current
+                                      )
+                                  )
+                                }
+                              />
+                            </td>
+
+                            {/* UNIT PRICE */}
+
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={
+                                  item.unitPrice
+                                }
+                                onChange={(e) =>
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.map(
+                                        (
+                                          current,
+                                          i
+                                        ) =>
+                                          i === index
+                                            ? {
+                                                ...current,
+                                                unitPrice:
+                                                  e.target
+                                                    .value,
+                                              }
+                                            : current
+                                      )
+                                  )
+                                }
+                              />
+                            </td>
+
+                            {/* TOTAL */}
+
+                            <td className="money">
+                              ৳{" "}
+                              {itemTotal.toLocaleString(
+                                "en-BD"
+                              )}
+                            </td>
+
+                            {/* NOTES */}
+
+                            <td>
+                              <input
+                                type="text"
+                                value={
+                                  item.notes
+                                }
+                                onChange={(e) =>
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.map(
+                                        (
+                                          current,
+                                          i
+                                        ) =>
+                                          i === index
+                                            ? {
+                                                ...current,
+                                                notes:
+                                                  e.target
+                                                    .value,
+                                              }
+                                            : current
+                                      )
+                                  )
+                                }
+                              />
+                            </td>
+
+                            {/* DELETE */}
+
+                            <td>
+
+                              <button
+                                type="button"
+                                className="delete-button"
+                                onClick={() =>
+                                  setPurchaseOrderItems(
+                                    (prev) =>
+                                      prev.filter(
+                                        (
+                                          _,
+                                          i
+                                        ) =>
+                                          i !== index
+                                      )
+                                  )
+                                }
+                              >
+                                Delete
+                              </button>
+
+                            </td>
+
+                          </tr>
+                        );
+                      }
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            )}
+
+          </div>
+
+          {/* FINANCIAL SUMMARY */}
+
+          <div className="form-section">
+
+            <div className="form-grid">
+
+              <div className="form-group">
+                <label>
+                  Discount
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    purchaseOrderForm.discount
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        discount:
+                          e.target.value,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>
+                  Transport Cost
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    purchaseOrderForm.transportCost
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        transportCost:
+                          e.target.value,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+            </div>
+
+            <div className="purchase-order-total-summary">
+
+              <div>
+                <span>Subtotal</span>
+
+                <strong>
+                  ৳{" "}
+                  {totalSubtotal.toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>Discount</span>
+
+                <strong>
+                  ৳{" "}
+                  {discountAmount.toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>Transport</span>
+
+                <strong>
+                  ৳{" "}
+                  {transportAmount.toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+              <div className="grand-total">
+                <span>Grand Total</span>
+
+                <strong>
+                  ৳{" "}
+                  {grandTotal.toLocaleString(
+                    "en-BD"
+                  )}
+                </strong>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* NOTES */}
+
+          <div className="form-group">
+
+            <label>
+              Notes
+            </label>
+
+            <textarea
+              rows="3"
+              value={
+                purchaseOrderForm.notes
+              }
+              onChange={(e) =>
+                setPurchaseOrderForm(
+                  (prev) => ({
+                    ...prev,
+                    notes:
+                      e.target.value,
+                  })
+                )
+              }
+              placeholder="Optional notes..."
+            />
+
+          </div>
+
+        </div>
+
+        {/* FOOTER */}
+
+        <div className="modal-footer">
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() =>
+              setShowPurchaseOrderModal(false)
+            }
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="add-button"
+            disabled={
+              savingPurchaseOrder
+            }
+            onClick={savePurchaseOrder}
+          >
+            {savingPurchaseOrder
+              ? "Saving..."
+              : editingPurchaseOrderId
+              ? "Update Purchase Order"
+              : "Save Purchase Order"}
           </button>
 
         </div>
@@ -17367,20 +19489,27 @@ const renderRFQEditModal = () => {
         {activePage === "materials" && renderMaterials()}
         {activePage === "purchases" && renderPurchases()}
         {activePage === "purchase-requests" && renderPurchaseRequests()}
+        {activePage === "purchase-orders" && renderPurchaseOrders()}
         {activePage === "rfqs" && renderRFQs()}
 
       
+        {renderProjectViewModal()}
+
         {renderBOQModal()}
         {renderBOQDetailsModal()}
         {renderBOQItemModal()}
         {renderBOQItemViewModal()}
+
         {renderPurchaseRequestModal()}
         {renderPurchaseRequestViewModal()}
         {renderPurchaseRequestEditModal()}
+
         {renderRFQModal()}
         {renderRFQViewModal()}
         {renderRFQEditModal()}
-        {renderProjectViewModal()}
+
+        {renderPurchaseOrderModal()}
+        {renderPurchaseOrderViewModal()}
       </main>
 
 
