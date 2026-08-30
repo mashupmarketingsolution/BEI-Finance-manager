@@ -307,6 +307,21 @@ const [purchaseOrderItems, setPurchaseOrderItems] =
 
 const [purchaseRequests, setPurchaseRequests] = useState([]);
 const [editingPurchaseRequestId, setEditingPurchaseRequestId] = useState(null);
+const [purchaseRequestItems, setPurchaseRequestItems] = useState([]);
+
+const [purchaseRequestItemForm, setPurchaseRequestItemForm] = useState({
+  materialId: "",
+  quantity: "",
+  unit: "",
+  requiredDate: "",
+  notes: "",
+});
+
+const [editingPurchaseRequestItemId, setEditingPurchaseRequestItemId] =
+  useState(null);
+
+const [savingPurchaseRequestItem, setSavingPurchaseRequestItem] =
+  useState(false);
 
 const [showPurchaseRequestEditModal, setShowPurchaseRequestEditModal] = useState(false);
 
@@ -326,6 +341,34 @@ const [purchaseRequestMessage, setPurchaseRequestMessage] = useState("");
 const [rfqs, setRfqs] = useState([]);
 const [rfqLoading, setRfqLoading] = useState(false);
 const [rfqMessage, setRfqMessage] = useState("");
+
+const [rfqPriceComparison, setRfqPriceComparison] =
+  useState(null);
+const [loadingRFQPriceComparison, setLoadingRFQPriceComparison] =
+  useState(false);
+
+const [rfqItems, setRfqItems] = useState([]);
+const [rfqVendors, setRfqVendors] = useState([]);
+
+const [rfqVendorForm, setRfqVendorForm] = useState({
+  vendorId: "",
+  quotedTotal: "",
+  notes: "",
+});
+
+const [savingRFQVendor, setSavingRFQVendor] =
+  useState(false);
+const [rfqItemForm, setRfqItemForm] = useState({
+  materialId: "",
+  quantity: "",
+  unit: "",
+  notes: "",
+});
+
+const [editingRFQItemId, setEditingRFQItemId] = useState(null);
+
+const [savingRFQItem, setSavingRFQItem] = useState(false);
+
 
 const [showRFQModal, setShowRFQModal] = useState(false);
 
@@ -371,8 +414,6 @@ const [purchaseRequestForm, setPurchaseRequestForm] = useState({
 });
 
 const [savingPurchaseRequest, setSavingPurchaseRequest] = useState(false);
-
-
 
 const loadPurchaseRequests = async () => {
   try {
@@ -709,6 +750,47 @@ const handlePurchaseOrderStatusUpdate = async (
     );
   }
 };
+const handleConvertPurchaseOrder = async (poId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to convert this Purchase Order into a Purchase?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setPurchaseOrderMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/purchase-orders/${poId}/convert-to-purchase`
+    );
+
+    if (response.data.success) {
+      setPurchaseOrderMessage(
+        "✅ Purchase Order converted to Purchase successfully"
+      );
+
+      await loadPurchaseOrders();
+
+      setTimeout(() => {
+        setPurchaseOrderMessage("");
+      }, 2500);
+    }
+  } catch (error) {
+    console.error(
+      "Convert Purchase Order Error:",
+      error
+    );
+
+    setPurchaseOrderMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase Order convert করা যায়নি!"
+      }`
+    );
+  }
+};
 const getNextPurchaseOrderStatuses = (currentStatus) => {
   const transitions = {
     DRAFT: [
@@ -847,6 +929,8 @@ const saveRFQ = async () => {
 };
 const editRFQ = async (id) => {
   try {
+  await loadMaterials();
+  await loadVendors();
     const response = await axios.get(
       `${API_URL}/api/rfqs/${id}`
     );
@@ -869,6 +953,40 @@ const editRFQ = async (id) => {
         status: rfq.status || "DRAFT",
         notes: rfq.notes || "",
       });
+      setRfqItems(
+        (rfq.items || []).map((item) => ({
+          id: item.id,
+          materialId: String(item.materialId || ""),
+          quantity: item.quantity ?? "",
+          unit: item.unit || "",
+          notes: item.notes || "",
+        }))
+      );
+
+      setRfqVendors(
+        (rfq.vendors || []).map((item) => ({
+          id: item.id,
+          vendorId: String(item.vendorId || ""),
+          quotedTotal: item.quotedTotal ?? "",
+          notes: item.notes || "",
+        }))
+      );
+
+      setRfqVendorForm({
+        vendorId: "",
+        quotedTotal: "",
+        notes: "",
+      });
+
+      setEditingRFQItemId(null);
+
+      setRfqItemForm({
+        materialId: "",
+        quantity: "",
+        unit: "",
+        notes: "",
+      });
+
 
       setRfqMessage("");
       setShowRFQEditModal(true);
@@ -922,6 +1040,545 @@ const deleteRFQ = async (id) => {
       `❌ ${
         error.response?.data?.message ||
         "RFQ delete করা যায়নি!"
+      }`
+    );
+  }
+};
+
+// =========================================
+// LOAD RFQ PRICE COMPARISON
+// =========================================
+
+const loadRFQPriceComparison = async (rfqId) => {
+  try {
+    if (!rfqId) {
+      return;
+    }
+
+    setLoadingRFQPriceComparison(true);
+
+    const response = await axios.get(
+      `${API_URL}/api/rfqs/${rfqId}/price-comparison`
+    );
+
+    if (response.data.success) {
+     
+      setRfqPriceComparison(
+      response.data.data || null
+    );
+
+    } else {
+      setRfqPriceComparison(null);
+    }
+  } catch (error) {
+    console.error(
+      "Load RFQ Price Comparison Error:",
+      error
+    );
+    setRfqPriceComparison(null);
+   
+  } finally {
+    setLoadingRFQPriceComparison(false);
+  }
+};
+
+// =========================================
+// AWARD RFQ TO VENDOR
+// =========================================
+
+const awardRFQ = async (rfqId, rfqVendorId) => {
+  try {
+    if (!rfqId || !rfqVendorId) {
+      setRfqMessage("❌ RFQ এবং Vendor নির্বাচন করুন");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to award this RFQ to this vendor?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRfqMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/rfqs/${rfqId}/award`,
+      {
+        rfqVendorId: Number(rfqVendorId),
+      }
+    );
+
+    if (response.data.success) {
+      setRfqMessage(
+        "✅ RFQ awarded successfully"
+      );
+
+      await loadRFQs();
+
+      await loadRFQPriceComparison(rfqId);
+    }
+  } catch (error) {
+    console.error(
+      "Award RFQ Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "RFQ award করা যায়নি!"
+      }`
+    );
+  }
+};
+// =========================================
+// ADD RFQ VENDOR
+// =========================================
+
+const addRFQVendor = async () => {
+  try {
+    if (!editingRFQId) {
+      setRfqMessage("❌ RFQ select করা হয়নি!");
+      return;
+    }
+
+    if (!rfqVendorForm.vendorId) {
+      setRfqMessage("❌ Vendor is required");
+      return;
+    }
+
+    if (
+      rfqVendorForm.quotedTotal !== "" &&
+      Number(rfqVendorForm.quotedTotal) < 0
+    ) {
+      setRfqMessage(
+        "❌ Quoted total cannot be negative"
+      );
+      return;
+    }
+
+    setSavingRFQVendor(true);
+    setRfqMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/rfqs/${editingRFQId}/vendors`,
+      {
+        vendorId: Number(
+          rfqVendorForm.vendorId
+        ),
+
+        quotedTotal:
+          rfqVendorForm.quotedTotal === ""
+            ? null
+            : Number(
+                rfqVendorForm.quotedTotal
+              ),
+
+        notes:
+          rfqVendorForm.notes?.trim() || null,
+      }
+    );
+
+    if (response.data.success) {
+      setRfqVendors((prev) => [
+        ...prev,
+        response.data.data,
+      ]);
+
+      setRfqVendorForm({
+        vendorId: "",
+        quotedTotal: "",
+        notes: "",
+      });
+
+      setRfqMessage(
+        "✅ Vendor added to RFQ successfully"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Add RFQ Vendor Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Vendor add করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingRFQVendor(false);
+  }
+};
+
+const editRFQVendor = (item) => {
+  setEditingRFQVendorId(item.id);
+
+  setRfqVendorForm({
+    vendorId: String(item.vendorId || ""),
+    quotedTotal:
+      item.quotedTotal ?? "",
+    notes: item.notes || "",
+  });
+};
+const updateRFQVendor = async () => {
+  try {
+    if (!editingRFQVendorId) {
+      return;
+    }
+
+    if (!rfqVendorForm.vendorId) {
+      setRfqMessage("❌ Vendor is required");
+      return;
+    }
+
+    if (
+      rfqVendorForm.quotedTotal !== "" &&
+      Number(rfqVendorForm.quotedTotal) < 0
+    ) {
+      setRfqMessage(
+        "❌ Quoted total cannot be negative"
+      );
+      return;
+    }
+
+    setSavingRFQVendor(true);
+    setRfqMessage("");
+
+    const response = await axios.put(
+      `${API_URL}/api/rfq-vendors/${editingRFQVendorId}`,
+      {
+        vendorId: Number(
+          rfqVendorForm.vendorId
+        ),
+
+        quotedTotal:
+          rfqVendorForm.quotedTotal === ""
+            ? null
+            : Number(
+                rfqVendorForm.quotedTotal
+              ),
+
+        notes:
+          rfqVendorForm.notes?.trim() || null,
+      }
+    );
+
+    if (response.data.success) {
+      setRfqVendors((prev) =>
+        prev.map((item) =>
+          item.id === editingRFQVendorId
+            ? response.data.data
+            : item
+        )
+      );
+
+      setEditingRFQVendorId(null);
+
+      setRfqVendorForm({
+        vendorId: "",
+        quotedTotal: "",
+        notes: "",
+      });
+
+      setRfqMessage(
+        "✅ RFQ vendor updated successfully"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Update RFQ Vendor Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "RFQ vendor update করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingRFQVendor(false);
+  }
+};
+const handleDeleteRFQVendor = async (vendorItemId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to remove this vendor from the RFQ?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setRfqMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/rfq-vendors/${vendorItemId}`
+    );
+
+    if (response.data.success) {
+      setRfqVendors((prev) =>
+        prev.filter(
+          (item) => item.id !== vendorItemId
+        )
+      );
+
+      setRfqMessage(
+        "✅ Vendor removed from RFQ successfully"
+      );
+
+      await loadRFQs();
+
+      setTimeout(() => {
+        setRfqMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete RFQ Vendor Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Vendor delete করা যায়নি!"
+      }`
+    );
+  }
+};
+const [editingRFQVendorId, setEditingRFQVendorId] =
+  useState(null);
+
+// =========================================
+// ADD RFQ ITEM
+// =========================================
+
+
+
+
+const addRFQItem = async () => {
+  try {
+    if (!editingRFQId) {
+      setRfqMessage("❌ RFQ select করা হয়নি!");
+      return;
+    }
+
+    if (!rfqItemForm.materialId) {
+      setRfqMessage("❌ Material is required");
+      return;
+    }
+
+    if (
+      !rfqItemForm.quantity ||
+      Number(rfqItemForm.quantity) <= 0
+    ) {
+      setRfqMessage(
+        "❌ Quantity must be greater than 0"
+      );
+      return;
+    }
+
+    if (!rfqItemForm.unit?.trim()) {
+      setRfqMessage("❌ Unit is required");
+      return;
+    }
+
+    setSavingRFQItem(true);
+    setRfqMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/rfqs/${editingRFQId}/items`,
+      {
+        materialId: Number(
+          rfqItemForm.materialId
+        ),
+
+        quantity: Number(
+          rfqItemForm.quantity
+        ),
+
+        unit:
+          rfqItemForm.unit.trim(),
+
+        notes:
+          rfqItemForm.notes?.trim() || null,
+      }
+    );
+
+    if (response.data.success) {
+      setRfqItems((prev) => [
+        ...prev,
+        response.data.data,
+      ]);
+
+      setRfqItemForm({
+        materialId: "",
+        quantity: "",
+        unit: "",
+        notes: "",
+      });
+
+      setRfqMessage(
+        "✅ RFQ item added successfully"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Add RFQ Item Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "RFQ item add করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingRFQItem(false);
+  }
+};
+const editRFQItem = (item) => {
+  setEditingRFQItemId(item.id);
+
+  setRfqItemForm({
+    materialId: String(item.materialId || ""),
+    quantity: item.quantity ?? "",
+    unit: item.unit || "",
+    notes: item.notes || "",
+  });
+};
+const updateRFQItem = async () => {
+  try {
+    if (!editingRFQItemId) {
+      return;
+    }
+
+    if (!rfqItemForm.materialId) {
+      setRfqMessage("❌ Material is required");
+      return;
+    }
+
+    if (
+      !rfqItemForm.quantity ||
+      Number(rfqItemForm.quantity) <= 0
+    ) {
+      setRfqMessage(
+        "❌ Quantity must be greater than 0"
+      );
+      return;
+    }
+
+    if (!rfqItemForm.unit?.trim()) {
+      setRfqMessage("❌ Unit is required");
+      return;
+    }
+
+    setSavingRFQItem(true);
+    setRfqMessage("");
+
+    const response = await axios.put(
+      `${API_URL}/api/rfq-items/${editingRFQItemId}`,
+      {
+        materialId: Number(
+          rfqItemForm.materialId
+        ),
+        quantity: Number(
+          rfqItemForm.quantity
+        ),
+        unit:
+          rfqItemForm.unit.trim(),
+        notes:
+          rfqItemForm.notes?.trim() || null,
+      }
+    );
+
+    if (response.data.success) {
+      setRfqItems((prev) =>
+        prev.map((item) =>
+          item.id === editingRFQItemId
+            ? response.data.data
+            : item
+        )
+      );
+
+      setEditingRFQItemId(null);
+
+      setRfqItemForm({
+        materialId: "",
+        quantity: "",
+        unit: "",
+        notes: "",
+      });
+
+      setRfqMessage(
+        "✅ RFQ item updated successfully"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Update RFQ Item Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "RFQ item update করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingRFQItem(false);
+  }
+};
+
+
+const handleDeleteRFQItem = async (itemId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this RFQ item?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setRfqMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/rfq-items/${itemId}`
+    );
+
+    if (response.data.success) {
+      setRfqItems((prev) =>
+        prev.filter((item) => item.id !== itemId)
+      );
+
+      setRfqMessage(
+        "✅ RFQ item deleted successfully"
+      );
+
+      await loadRFQs();
+
+      setTimeout(() => {
+        setRfqMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete RFQ Item Error:",
+      error
+    );
+
+    setRfqMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "RFQ item delete করা যায়নি!"
       }`
     );
   }
@@ -1007,6 +1664,8 @@ const viewRFQ = async (id) => {
       const rfq = response.data.data;
 
       setSelectedRFQ(rfq);
+    // ✅ Price comparison load
+      await loadRFQPriceComparison(id);
       setShowRFQViewModal(true);
     }
   } catch (error) {
@@ -1034,6 +1693,9 @@ useEffect(() => {
   if (activePage === "rfqs") {
     loadRFQs();
   }
+  if (activePage === "purchase-orders") {
+  loadPurchaseOrders();
+}
 }, [activePage]);
 
 
@@ -1063,8 +1725,10 @@ const viewPurchaseRequest = async (id) => {
     );
   }
 };
+
 const editPurchaseRequest = async (id) => {
   try {
+    await loadMaterials();
     const response = await axios.get(
       `${API_URL}/api/purchase-requests/${id}`
     );
@@ -1088,6 +1752,22 @@ const editPurchaseRequest = async (id) => {
         priority: request.priority || "NORMAL",
         notes: request.notes || "",
       });
+      setPurchaseRequestItems(
+        (request.items || []).map((item) => ({
+          id: item.id,
+          materialId: String(item.materialId || ""),
+          quantity: item.quantity ?? "",
+          unit: item.unit || "",
+          requiredDate: item.requiredDate
+            ? new Date(item.requiredDate)
+                .toISOString()
+                .split("T")[0]
+            : "",
+          notes: item.notes || "",
+        }))
+      );
+
+      setEditingPurchaseRequestItemId(null);
 
       setPurchaseRequestMessage("");
 
@@ -1107,6 +1787,9 @@ const editPurchaseRequest = async (id) => {
     );
   }
 };
+
+
+
 const deletePurchaseRequest = async (id) => {
   const confirmed = window.confirm(
     "Are you sure you want to delete this purchase request?"
@@ -1142,6 +1825,225 @@ const deletePurchaseRequest = async (id) => {
       `❌ ${
         error.response?.data?.message ||
         "Purchase request delete করা যায়নি!"
+      }`
+    );
+  }
+};
+
+const savePurchaseRequestItem = async () => {
+  if (savingPurchaseRequestItem) {
+    return;
+  }
+
+  if (!editingPurchaseRequestId) {
+    setPurchaseRequestMessage(
+      "❌ Purchase request not selected"
+    );
+    return;
+  }
+
+  const materialId = Number(
+    purchaseRequestItemForm.materialId
+  );
+
+  const quantity = Number(
+    purchaseRequestItemForm.quantity
+  );
+
+  const unit =
+    purchaseRequestItemForm.unit.trim();
+
+  if (!materialId) {
+    setPurchaseRequestMessage(
+      "❌ Material is required"
+    );
+    return;
+  }
+
+  if (!quantity || quantity <= 0) {
+    setPurchaseRequestMessage(
+      "❌ Quantity must be greater than 0"
+    );
+    return;
+  }
+
+  if (!unit) {
+    setPurchaseRequestMessage(
+      "❌ Unit is required"
+    );
+    return;
+  }
+
+  try {
+    setSavingPurchaseRequestItem(true);
+    setPurchaseRequestMessage("");
+
+    const payload = {
+      materialId,
+      quantity,
+      unit,
+      requiredDate:
+        purchaseRequestItemForm.requiredDate || null,
+      notes:
+        purchaseRequestItemForm.notes.trim() || null,
+    };
+
+    let response;
+
+    if (editingPurchaseRequestItemId) {
+      response = await axios.put(
+        `${API_URL}/api/purchase-request-items/${editingPurchaseRequestItemId}`,
+        payload
+      );
+    } else {
+      response = await axios.post(
+        `${API_URL}/api/purchase-requests/${editingPurchaseRequestId}/items`,
+        payload
+      );
+    }
+
+    if (response.data.success) {
+      const savedItem = response.data.data;
+
+      setPurchaseRequestItems((prev) => {
+        if (editingPurchaseRequestItemId) {
+          return prev.map((item) =>
+            item.id === editingPurchaseRequestItemId
+              ? {
+                  ...item,
+                  ...savedItem,
+                  materialId: String(
+                    savedItem.materialId
+                  ),
+                  quantity:
+                    savedItem.quantity,
+                  unit:
+                    savedItem.unit,
+                  requiredDate:
+                    savedItem.requiredDate
+                      ? new Date(
+                          savedItem.requiredDate
+                        )
+                          .toISOString()
+                          .split("T")[0]
+                      : "",
+                  notes:
+                    savedItem.notes || "",
+                }
+              : item
+          );
+        }
+
+        return [
+          ...prev,
+          {
+            id: savedItem.id,
+            materialId: String(
+              savedItem.materialId
+            ),
+            quantity:
+              savedItem.quantity,
+            unit:
+              savedItem.unit,
+            requiredDate:
+              savedItem.requiredDate
+                ? new Date(
+                    savedItem.requiredDate
+                  )
+                    .toISOString()
+                    .split("T")[0]
+                : "",
+            notes:
+              savedItem.notes || "",
+          },
+        ];
+      });
+
+      setPurchaseRequestItemForm({
+        materialId: "",
+        quantity: "",
+        unit: "",
+        requiredDate: "",
+        notes: "",
+      });
+
+      const wasEditing =
+        Boolean(
+          editingPurchaseRequestItemId
+        );
+
+      setEditingPurchaseRequestItemId(null);
+
+      setPurchaseRequestMessage(
+        wasEditing
+          ? "✅ Purchase request item updated successfully"
+          : "✅ Purchase request item added successfully"
+      );
+
+      await loadPurchaseRequests();
+
+      setTimeout(() => {
+        setPurchaseRequestMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Save Purchase Request Item Error:",
+      error
+    );
+
+    setPurchaseRequestMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase request item save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingPurchaseRequestItem(false);
+  }
+};
+
+const handleDeletePurchaseRequestItem = async (itemId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this purchase request item?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setPurchaseRequestMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/purchase-request-items/${itemId}`
+    );
+
+    if (response.data.success) {
+      setPurchaseRequestItems((prev) =>
+        prev.filter((item) => item.id !== itemId)
+      );
+
+      setPurchaseRequestMessage(
+        "✅ Purchase request item deleted successfully"
+      );
+
+      await loadPurchaseRequests();
+
+      setTimeout(() => {
+        setPurchaseRequestMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete Purchase Request Item Error:",
+      error
+    );
+
+    setPurchaseRequestMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Purchase request item delete করা যায়নি!"
       }`
     );
   }
@@ -1301,8 +2203,6 @@ if (response.data.success) {
     setSavingPurchaseRequest(false);
   }
 };
-
-
 
 
   const [loadingPurchaseDetails, setLoadingPurchaseDetails] =
@@ -14105,6 +15005,20 @@ const renderPurchaseOrders = () => {
                           >
                             Delete
                           </button>
+
+                         {po.status === "COMPLETED" && !po.purchaseId && (
+                          <button
+                            type="button"
+                            className="convert-button"
+                            onClick={() => {
+                              handleConvertPurchaseOrder(po.id);
+                            }}
+                          >
+                            Convert
+                          </button>
+                        )}
+
+
                         </div>
 
                       </td>
@@ -14734,6 +15648,309 @@ const renderPurchaseRequestEditModal = () => {
               }
             />
           </div>
+
+
+        <div className="purchase-request-items-section">
+
+          <div className="purchase-request-section-header">
+            <div>
+              <h3>Request Items</h3>
+              <p>
+                Materials requested for this purchase request
+              </p>
+            </div>
+          </div>
+
+          {/* ==============================
+              ADD / EDIT ITEM FORM
+          ============================== */}
+
+          <div className="purchase-request-item-form">
+
+            <div className="form-grid">
+
+              <div className="form-group">
+                <label>Material *</label>
+
+                <select
+                  value={purchaseRequestItemForm.materialId}
+                  onChange={(e) =>
+                    setPurchaseRequestItemForm({
+                      ...purchaseRequestItemForm,
+                      materialId: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">
+                    Select Material
+                  </option>
+
+                  {materials.map((material) => (
+                    <option
+                      key={material.id}
+                      value={material.id}
+                    >
+                      {material.name} ({material.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Quantity *</label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={purchaseRequestItemForm.quantity}
+                  onChange={(e) =>
+                    setPurchaseRequestItemForm({
+                      ...purchaseRequestItemForm,
+                      quantity: e.target.value,
+                    })
+                  }
+                  placeholder="Enter quantity"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Unit *</label>
+
+                <input
+                  type="text"
+                  value={purchaseRequestItemForm.unit}
+                  onChange={(e) =>
+                    setPurchaseRequestItemForm({
+                      ...purchaseRequestItemForm,
+                      unit: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. SQFT, Sheet, Piece"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Required Date</label>
+
+                <input
+                  type="date"
+                  value={
+                    purchaseRequestItemForm.requiredDate
+                  }
+                  onChange={(e) =>
+                    setPurchaseRequestItemForm({
+                      ...purchaseRequestItemForm,
+                      requiredDate: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+            </div>
+
+            <div className="form-group">
+              <label>Item Notes</label>
+
+              <textarea
+                rows={3}
+                value={purchaseRequestItemForm.notes}
+                onChange={(e) =>
+                  setPurchaseRequestItemForm({
+                    ...purchaseRequestItemForm,
+                    notes: e.target.value,
+                  })
+                }
+                placeholder="Optional item notes..."
+              />
+            </div>
+
+            <div className="purchase-request-item-form-actions">
+
+              <button
+                type="button"
+                className="save-button"
+                onClick={savePurchaseRequestItem}
+                disabled={savingPurchaseRequestItem}
+              >
+                {savingPurchaseRequestItem
+                  ? "Saving..."
+                  : editingPurchaseRequestItemId
+                  ? "Update Item"
+                  : "Add Item"}
+              </button>
+
+              {editingPurchaseRequestItemId && (
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() => {
+                    setEditingPurchaseRequestItemId(null);
+
+                    setPurchaseRequestItemForm({
+                      materialId: "",
+                      quantity: "",
+                      unit: "",
+                      requiredDate: "",
+                      notes: "",
+                    });
+                  }}
+                >
+                  Cancel Edit
+                </button>
+              )}
+
+            </div>
+
+          </div>
+
+          {/* ==============================
+              ITEM LIST
+          ============================== */}
+
+          {purchaseRequestItems.length > 0 ? (
+
+            <div className="table-wrapper">
+
+              <table>
+
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Material</th>
+                    <th>Quantity</th>
+                    <th>Unit</th>
+                    <th>Required Date</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+
+                  {purchaseRequestItems.map((item) => {
+
+                    const material =
+                      materials.find(
+                        (m) =>
+                          Number(m.id) ===
+                          Number(item.materialId)
+                      );
+
+                    return (
+                      <tr key={item.id}>
+
+                        <td>
+                          #{item.id}
+                        </td>
+
+                        <td>
+                          <strong>
+                            {material?.name || "-"}
+                          </strong>
+
+                          <small>
+                            {material?.code || "-"}
+                          </small>
+                        </td>
+
+                        <td>
+                          {item.quantity}
+                        </td>
+
+                        <td>
+                          {item.unit}
+                        </td>
+
+                        <td>
+                          {item.requiredDate
+                            ? new Date(
+                                item.requiredDate
+                              ).toLocaleDateString(
+                                "en-GB"
+                              )
+                            : "-"}
+                        </td>
+
+                        <td>
+                          {item.notes || "-"}
+                        </td>
+
+                        <td>
+
+                          <div className="purchase-order-actions">
+
+                            <button
+                              type="button"
+                              className="edit-button"
+                              onClick={() => {
+                                setEditingPurchaseRequestItemId(
+                                  item.id
+                                );
+
+                                setPurchaseRequestItemForm({
+                                  materialId:
+                                    String(
+                                      item.materialId || ""
+                                    ),
+                                  quantity:
+                                    item.quantity ?? "",
+                                  unit:
+                                    item.unit || "",
+                                  requiredDate:
+                                    item.requiredDate || "",
+                                  notes:
+                                    item.notes || "",
+                                });
+                              }}
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              className="delete-button"
+                              onClick={() =>
+                                handleDeletePurchaseRequestItem(
+                                  item.id
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+
+                          </div>
+
+                        </td>
+
+                      </tr>
+                    );
+
+                  })}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          ) : (
+
+            <div className="purchase-request-empty-items">
+
+              <h4>No items added yet</h4>
+
+              <p>
+                Add at least one material item to this
+                purchase request.
+              </p>
+
+            </div>
+
+          )}
+
+        </div>
+
 
         </div>
 
@@ -15974,6 +17191,171 @@ const renderRFQModal = () => {
     </div>
   );
 };
+
+{/* =========================================
+    PRICE COMPARISON
+========================================= */}
+
+{rfqPriceComparison && (
+  <div className="rfq-price-comparison-section">
+
+    <div className="rfq-section-header">
+      <div>
+        <h3>Price Comparison</h3>
+        <p>
+          Compare vendor quotations for this RFQ
+        </p>
+      </div>
+    </div>
+
+    {loadingRFQPriceComparison ? (
+
+      <div className="rfq-price-loading">
+        Loading price comparison...
+      </div>
+
+    ) : (
+
+      <>
+        {/* ==============================
+            SUMMARY
+        ============================== */}
+
+        <div className="rfq-price-summary">
+
+          <div>
+            <span>Total Vendors</span>
+            <strong>
+              {rfqPriceComparison.vendors?.length || 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Lowest Quote</span>
+            <strong>
+              ৳
+              {Number(
+              
+                rfqPriceComparison.lowestQuote
+              ).toLocaleString("en-BD")}
+            </strong>
+          </div>
+
+          <div>
+            <span>Highest Quote</span>
+            <strong>
+              ৳
+              {Number(
+               rfqPriceComparison.highestQuote
+
+              ).toLocaleString("en-BD")}
+            </strong>
+          </div>
+
+          <div>
+            <span>Saving</span>
+            <strong>
+              ৳
+              {Number(
+              rfqPriceComparison.savingAmount
+              ).toLocaleString("en-BD")}
+            </strong>
+          </div>
+
+        </div>
+
+        {/* ==============================
+            BEST VENDOR
+        ============================== */}
+
+        {rfqPriceComparison.bestVendor && (
+          <div className="rfq-best-vendor">
+
+            <span>Best Vendor</span>
+
+            <strong>
+              {rfqPriceComparison.bestVendor.vendorName}
+            </strong>
+
+            <small>
+              {rfqPriceComparison.bestVendor.companyName}
+            </small>
+
+            <b>
+              ৳
+              {Number(
+                rfqPriceComparison.bestVendor.quotedTotal || 0
+              ).toLocaleString("en-BD")}
+            </b>
+
+          </div>
+        )}
+
+        {/* ==============================
+            VENDOR COMPARISON TABLE
+        ============================== */}
+
+        {rfqPriceComparison.vendors?.length > 0 && (
+          <div className="table-wrapper">
+
+            <table>
+
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Vendor</th>
+                  <th>Company</th>
+                  <th>Quoted Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
+
+                {rfqPriceComparison.vendors.map(
+                  (vendor) => (
+
+                    <tr key={vendor.rfqVendorId}>
+
+                      <td>
+                        #{vendor.rank}
+                      </td>
+
+                      <td>
+                        <strong>
+                          {vendor.vendorName}
+                        </strong>
+                      </td>
+
+                      <td>
+                        {vendor.companyName || "-"}
+                      </td>
+
+                      <td>
+                        ৳
+                        {Number(
+                          vendor.quotedTotal || 0
+                        ).toLocaleString("en-BD")}
+                      </td>
+
+                    </tr>
+
+                  )
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+        )}
+
+      </>
+    )}
+
+  </div>
+)}
+
+
 const renderRFQViewModal = () => {
   if (
     !showRFQViewModal ||
@@ -16100,6 +17482,7 @@ const renderRFQViewModal = () => {
                       <th>Quantity</th>
                       <th>Unit</th>
                       <th>Notes</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
 
@@ -16135,6 +17518,7 @@ const renderRFQViewModal = () => {
                           <td>
                             {item.notes || "-"}
                           </td>
+                 
 
                         </tr>
                       )
@@ -16216,6 +17600,30 @@ const renderRFQViewModal = () => {
                             {item.notes || "-"}
                           </td>
 
+                        <td>
+                          <button
+                            type="button"
+                            className="save-button"
+                            onClick={() =>
+                              awardRFQ(
+                                rfq.id,
+                                item.id
+                              )
+                            }
+                            disabled={
+                                rfq.status === "AWARDED" &&
+                                rfqPriceComparison?.bestVendor?.rfqVendorId === item.id
+                              }
+                           >
+
+                           {rfq.status === "AWARDED" &&
+                            rfqPriceComparison?.bestVendor?.rfqVendorId === item.id
+                              ? "Awarded"
+                              : "Award"}
+
+                          </button>
+                        </td>
+
                         </tr>
                       )
                     )}
@@ -16233,6 +17641,186 @@ const renderRFQViewModal = () => {
             )}
 
           </div>
+
+        {/* =========================================
+            PRICE COMPARISON
+        ========================================= */}
+
+        <div className="rfq-detail-section">
+
+          <div className="rfq-section-header">
+            <h3>
+              Price Comparison
+            </h3>
+
+            <p>
+              Compare vendor quotations for this RFQ
+            </p>
+          </div>
+
+          {loadingRFQPriceComparison ? (
+
+            <div className="rfq-empty-section">
+              Loading price comparison...
+            </div>
+
+          ) : rfqPriceComparison ? (
+
+            <>
+
+              {/* SUMMARY */}
+
+              <div className="rfq-info-grid">
+
+                <div className="rfq-info-card">
+                  <span>Total Vendors</span>
+                  <strong>
+                    {rfqPriceComparison.vendors?.length || 0}
+                  </strong>
+                </div>
+
+                <div className="rfq-info-card">
+                  <span>Lowest Quote</span>
+                  <strong>
+                    ৳{" "}
+                    {Number(
+                      rfqPriceComparison.lowestQuote
+                    ).toLocaleString("en-BD")}
+                  </strong>
+                </div>
+
+                <div className="rfq-info-card">
+                  <span>Highest Quote</span>
+                  <strong>
+                    ৳{" "}
+                    {Number(
+                     rfqPriceComparison.highestQuote
+                    ).toLocaleString("en-BD")}
+                  </strong>
+                </div>
+
+                <div className="rfq-info-card">
+                  <span>Saving</span>
+                  <strong>
+                    ৳{" "}
+                    {Number(
+                      rfqPriceComparison.savingAmount || 0
+                    ).toLocaleString("en-BD")}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              {/* BEST VENDOR */}
+
+              {rfqPriceComparison.bestVendor && (
+
+                <div className="rfq-notes-section">
+
+                  <span>
+                    Best Vendor
+                  </span>
+
+                  <div className="rfq-notes-box">
+
+                    <strong>
+                      {rfqPriceComparison.bestVendor.vendorName}
+                    </strong>
+
+                    <br />
+
+                    <span>
+                      {rfqPriceComparison.bestVendor.companyName}
+                    </span>
+
+                    <br />
+
+                    <strong>
+                      ৳{" "}
+                      {Number(
+                        rfqPriceComparison.bestVendor.quotedTotal || 0
+                      ).toLocaleString("en-BD")}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+              )}
+
+
+              {/* VENDOR COMPARISON TABLE */}
+
+              {rfqPriceComparison.vendors?.length > 0 && (
+
+                <div className="table-wrapper">
+
+                  <table>
+
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Vendor</th>
+                        <th>Company</th>
+                        <th>Quoted Total</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+
+                      {rfqPriceComparison.vendors.map(
+                        (vendor) => (
+
+                          <tr key={vendor.rfqVendorId}>
+
+                            <td>
+                              #{vendor.rank}
+                            </td>
+
+                            <td>
+                              <strong>
+                                {vendor.vendorName}
+                              </strong>
+                            </td>
+
+                            <td>
+                              {vendor.companyName || "-"}
+                            </td>
+
+                            <td>
+                              ৳{" "}
+                              {Number(
+                                vendor.quotedTotal || 0
+                              ).toLocaleString(
+                                "en-BD"
+                              )}
+                            </td>
+
+                          </tr>
+
+                        )
+                      )}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              )}
+
+            </>
+
+          ) : (
+
+            <div className="rfq-empty-section">
+              No price comparison available
+            </div>
+
+          )}
+
+        </div>
 
           {/* NOTES */}
           <div className="rfq-notes-section">
@@ -16269,6 +17857,7 @@ const renderRFQViewModal = () => {
     </div>
   );
 };
+
 
 const renderRFQEditModal = () => {
   if (!showRFQEditModal) {
@@ -16436,6 +18025,462 @@ const renderRFQEditModal = () => {
             />
           </div>
 
+            {/* =========================================
+                RFQ ITEMS
+            ========================================= */}
+
+            <div className="rfq-items-section">
+
+              <div className="rfq-section-header">
+                <div>
+                  <h3>RFQ Items</h3>
+                  <p>
+                    Materials requested in this RFQ
+                  </p>
+                </div>
+              </div>
+
+              {/* ==============================
+                  ITEM FORM
+              ============================== */}
+
+              <div className="rfq-item-form">
+
+                <div className="form-grid">
+
+                  <div className="form-group">
+                    <label>Material *</label>
+
+                    <select
+                      value={rfqItemForm.materialId}
+                      onChange={(e) =>
+                        setRfqItemForm({
+                          ...rfqItemForm,
+                          materialId: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">
+                        Select Material
+                      </option>
+
+                      {materials.map((material) => (
+                        <option
+                          key={material.id}
+                          value={material.id}
+                        >
+                          {material.name} ({material.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Quantity *</label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rfqItemForm.quantity}
+                      onChange={(e) =>
+                        setRfqItemForm({
+                          ...rfqItemForm,
+                          quantity: e.target.value,
+                        })
+                      }
+                      placeholder="Enter quantity"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Unit *</label>
+
+                    <input
+                      type="text"
+                      value={rfqItemForm.unit}
+                      onChange={(e) =>
+                        setRfqItemForm({
+                          ...rfqItemForm,
+                          unit: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. SQFT, Sheet, Piece"
+                    />
+                  </div>
+
+                </div>
+
+                <div className="form-group">
+                  <label>Item Notes</label>
+
+                  <textarea
+                    rows={3}
+                    value={rfqItemForm.notes}
+                    onChange={(e) =>
+                      setRfqItemForm({
+                        ...rfqItemForm,
+                        notes: e.target.value,
+                      })
+                    }
+                    placeholder="Optional item notes..."
+                  />
+                </div>
+
+                <div className="rfq-item-form-actions">
+
+              <button
+                type="button"
+                className="save-button"
+                onClick={
+                  editingRFQItemId
+                    ? updateRFQItem
+                    : addRFQItem
+                }
+                disabled={savingRFQItem}
+              >
+                {savingRFQItem
+                  ? "Saving..."
+                  : editingRFQItemId
+                  ? "Update Item"
+                  : "Add Item"}
+              </button>
+
+                </div>
+
+              </div>
+
+              {/* ==============================
+                  ITEM LIST
+              ============================== */}
+
+              {rfqItems.length > 0 ? (
+
+                <div className="table-wrapper">
+
+                  <table>
+
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Material</th>
+                        <th>Quantity</th>
+                        <th>Unit</th>
+                        <th>Notes</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+
+                      {rfqItems.map((item) => {
+
+                        const material =
+                          materials.find(
+                            (m) =>
+                              Number(m.id) ===
+                              Number(item.materialId)
+                          );
+
+                        return (
+                          <tr key={item.id}>
+
+                            <td>
+                              #{item.id}
+                            </td>
+
+                            <td>
+                              <strong>
+                                {material?.name || "-"}
+                              </strong>
+
+                              <small>
+                                {material?.code || "-"}
+                              </small>
+                            </td>
+
+                            <td>
+                              {item.quantity}
+                            </td>
+
+                            <td>
+                              {item.unit}
+                            </td>
+
+                            <td>
+                              {item.notes || "-"}
+                            </td>
+
+                            <td>
+                              <button
+                                type="button"
+                                className="edit-button"
+                                onClick={() =>
+                                  editRFQItem(item)
+                                }
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-button"
+                                onClick={() =>
+                                  handleDeleteRFQItem(item.id)
+                                }
+                              >
+                                Delete
+                              </button>
+
+                            </td>
+
+                          </tr>
+                        );
+                      })}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              ) : (
+
+                <div className="rfq-empty-items">
+                  <h4>No items added yet</h4>
+                  <p>
+                    Add material items to this RFQ.
+                  </p>
+                </div>
+
+              )}
+
+            </div>
+
+
+
+            {/* =========================================
+                RFQ VENDORS / QUOTATIONS
+            ========================================= */}
+
+            <div className="rfq-vendors-section">
+
+              <div className="rfq-section-header">
+                <div>
+                  <h3>Vendors & Quotations</h3>
+                  <p>
+                    Vendors invited to this RFQ and their quotations
+                  </p>
+                </div>
+              </div>
+
+              {/* ==============================
+                  ADD VENDOR FORM
+              ============================== */}
+
+              <div className="rfq-vendor-form">
+
+                <div className="form-grid">
+
+                  <div className="form-group">
+                    <label>Vendor *</label>
+
+                    <select
+                      value={rfqVendorForm.vendorId}
+                      onChange={(e) =>
+                        setRfqVendorForm({
+                          ...rfqVendorForm,
+                          vendorId: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">
+                        Select Vendor
+                      </option>
+
+                      {vendors.map((vendor) => (
+                        <option
+                          key={vendor.id}
+                          value={vendor.id}
+                        >
+                          {vendor.companyName ||
+                            vendor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Quoted Total</label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rfqVendorForm.quotedTotal}
+                      onChange={(e) =>
+                        setRfqVendorForm({
+                          ...rfqVendorForm,
+                          quotedTotal: e.target.value,
+                        })
+                      }
+                      placeholder="Enter quotation amount"
+                    />
+                  </div>
+
+                </div>
+
+                <div className="form-group">
+                  <label>Vendor Notes</label>
+
+                  <textarea
+                    rows={3}
+                    value={rfqVendorForm.notes}
+                    onChange={(e) =>
+                      setRfqVendorForm({
+                        ...rfqVendorForm,
+                        notes: e.target.value,
+                      })
+                    }
+                    placeholder="Optional vendor notes..."
+                  />
+                </div>
+
+                <div className="rfq-vendor-form-actions">
+
+                 <button
+                      type="button"
+                      className="save-button"
+                      onClick={
+                        editingRFQVendorId
+                          ? updateRFQVendor
+                          : addRFQVendor
+                      }
+                      disabled={savingRFQVendor}
+                    >
+                      {savingRFQVendor
+                        ? "Saving..."
+                        : editingRFQVendorId
+                        ? "Update Vendor"
+                        : "Add Vendor"}
+                    </button>
+
+              </div>
+
+              </div>
+
+              {/* ==============================
+                  VENDOR LIST
+              ============================== */}
+
+              {rfqVendors.length > 0 ? (
+
+                <div className="table-wrapper">
+
+                  <table>
+
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Vendor</th>
+                        <th>Company</th>
+                        <th>Quoted Total</th>
+                        <th>Notes</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+
+                      {rfqVendors.map((item) => {
+
+                        const vendor =
+                          vendors.find(
+                            (v) =>
+                              Number(v.id) ===
+                              Number(item.vendorId)
+                          );
+
+                        return (
+                          <tr key={item.id}>
+
+                            <td>
+                              #{item.id}
+                            </td>
+
+                            <td>
+                              {vendor?.name || "-"}
+                            </td>
+
+                            <td>
+                              {vendor?.companyName || "-"}
+                            </td>
+
+                            <td className="money">
+                              {item.quotedTotal !== null &&
+                              item.quotedTotal !== ""
+                                ? `৳ ${Number(
+                                    item.quotedTotal
+                                  ).toLocaleString(
+                                    "en-BD"
+                                  )}`
+                                : "-"}
+                            </td>
+
+                            <td>
+                              {item.notes || "-"}
+                            </td>
+
+                            <td>
+
+                              <div className="purchase-order-actions">
+                                    <button
+                                      type="button"
+                                      className="edit-button"
+                                      onClick={() =>
+                                        editRFQVendor(item)
+                                      }
+                                    >
+                                      Edit
+                                    </button>
+                                <button
+                                  type="button"
+                                  className="delete-button"
+                                  onClick={() =>
+                                    handleDeleteRFQVendor(
+                                      item.id
+                                    )
+                                  }
+                                >
+                                  Delete
+                                </button>
+
+                              </div>
+
+                            </td>
+
+                          </tr>
+                        );
+                      })}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              ) : (
+
+                <div className="rfq-empty-items">
+                  <h4>No vendors added yet</h4>
+                  <p>
+                    Add vendors and their quotations to this RFQ.
+                  </p>
+                </div>
+
+              )}
+
+            </div>
+
         </div>
 
         <div className="modal-footer">
@@ -16466,7 +18511,6 @@ const renderRFQEditModal = () => {
     </div>
   );
 };
-
   const renderWorkers = () => {
     return (
       <section className="dashboard">
@@ -16742,9 +18786,6 @@ const renderRFQEditModal = () => {
     );
   };
 
-
-
-
   const renderVendors = () => {
     return (
       <section className="dashboard">
@@ -17017,8 +19058,6 @@ const renderRFQEditModal = () => {
       </section>
     );
   };
-
-
 
   // =========================================
   // RENDER CATEGORIES
@@ -17991,8 +20030,6 @@ const renderRFQEditModal = () => {
   // RENDER TRANSACTIONS
   // =========================================
 
-
-
   const renderTransactions = () => {
     const filteredTransactions = transactions.filter((item) => {
       const search = transactionSearch.toLowerCase().trim();
@@ -18489,26 +20526,6 @@ const renderRFQEditModal = () => {
       </section>
     );
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   return (
     <div className="app">

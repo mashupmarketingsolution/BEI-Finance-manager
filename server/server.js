@@ -4009,7 +4009,179 @@ app.post(
   }
 );
 
+// =========================================
+// ADD RFQ ITEM
+// =========================================
 
+app.post(
+  "/api/rfqs/:id/items",
+  async (req, res) => {
+    try {
+      const rfqId = Number(req.params.id);
+
+      const {
+        materialId,
+        quantity,
+        unit,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // VALIDATE RFQ ID
+      // ==============================
+
+      if (!Number.isInteger(rfqId) || rfqId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid RFQ ID",
+        });
+      }
+
+      // ==============================
+      // VALIDATE MATERIAL
+      // ==============================
+
+      if (!materialId) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      const cleanMaterialId = Number(materialId);
+
+      if (
+        !Number.isInteger(cleanMaterialId) ||
+        cleanMaterialId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid material ID",
+        });
+      }
+
+      // ==============================
+      // VALIDATE QUANTITY
+      // ==============================
+
+      const qty = Number(quantity);
+
+      if (
+        Number.isNaN(qty) ||
+        qty <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      // ==============================
+      // VALIDATE UNIT
+      // ==============================
+
+      if (!unit || !unit.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Unit is required",
+        });
+      }
+
+      // ==============================
+      // CHECK RFQ
+      // ==============================
+
+      const rfq =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: rfqId,
+          },
+        });
+
+      if (!rfq) {
+        return res.status(404).json({
+          success: false,
+          message: "RFQ not found",
+        });
+      }
+
+      // ==============================
+      // CHECK MATERIAL
+      // ==============================
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: cleanMaterialId,
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      // ==============================
+      // CREATE RFQ ITEM
+      // ==============================
+
+      const rfqItem =
+        await prisma.rFQItem.create({
+          data: {
+            rfqId,
+
+            materialId:
+              cleanMaterialId,
+
+            quantity:
+              qty,
+
+            unit:
+              unit.trim(),
+
+            notes:
+              notes?.trim() || null,
+          },
+
+          include: {
+            material: true,
+
+            rfq: {
+              include: {
+                project: true,
+              },
+            },
+          },
+        });
+
+      // ==============================
+      // SUCCESS
+      // ==============================
+
+      res.status(201).json({
+        success: true,
+        message:
+          "RFQ item added successfully",
+        data: rfqItem,
+      });
+
+    } catch (error) {
+      console.error(
+        "Add RFQ Item Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "RFQ item add করা যায়নি!",
+      });
+    }
+  }
+);
 
 // =========================================
 // UPDATE RFQ ITEM
@@ -5486,6 +5658,7 @@ app.get("/api/purchase-orders", async (req, res) => {
           vendor: true,
           project: true,
           rfq: true,
+          purchase: true,
           items: {
             include: {
               material: true,
@@ -6287,7 +6460,7 @@ app.post(
             vendor: true,
             project: true,
             rfq: true,
-
+            purchase: true,   // ✅ এইটা নতুন
             items: {
               include: {
                 material: true,
@@ -6552,7 +6725,11 @@ app.post(
               },
             });
 
-            return purchase;
+                      return purchase;
+          },
+          {
+            maxWait: 10000,
+            timeout: 20000,
           }
         );
 
@@ -7019,10 +7196,13 @@ for (const item of preparedItems) {
 
 
 
-        return purchase;
+           return purchase;
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
       }
     );
-
     // -----------------------------
     // SUCCESS RESPONSE
     // -----------------------------
@@ -7556,25 +7736,54 @@ app.put("/api/purchases/:id", async (req, res) => {
         });
       }
 
-      // 5. Find automatic purchase expense
-      const expense =
-        await tx.transaction.findFirst({
-          where: {
-            type: "EXPENSE",
-            description: {
-              startsWith:
-                "Material Purchase - ",
-            },
-            vendorId:
-              Number(
-                existingPurchase.vendorId
-              ),
-          },
+// 5. Find automatic purchase expense(s)
+const purchaseExpenseDescription =
+  `Material Purchase - ${purchaseNo.trim()}`;
 
-          orderBy: {
-            id: "desc",
-          },
-        });
+const expenses =
+  await tx.transaction.findMany({
+    where: {
+      type: "EXPENSE",
+
+      description:
+        purchaseExpenseDescription,
+
+      vendorId:
+        Number(vendorId),
+
+      ...(projectId
+        ? {
+            projectId:
+              Number(projectId),
+          }
+        : {
+            projectId: null,
+          }),
+    },
+
+    orderBy: {
+      id: "asc",
+    },
+  });
+
+// Keep only ONE automatic purchase expense
+const expense = expenses[0] || null;
+
+// Remove duplicate automatic expenses
+if (expenses.length > 1) {
+  await tx.transaction.deleteMany({
+    where: {
+      id: {
+        in: expenses
+          .slice(1)
+          .map((item) => item.id),
+      },
+    },
+  });
+}
+
+
+
 
       // 6. Materials expense category
       let materialCategory =
@@ -7672,7 +7881,14 @@ app.put("/api/purchases/:id", async (req, res) => {
           },
         });
       }
-    });
+
+
+         },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
+    );
 
     const updatedPurchase =
       await prisma.purchase.findUnique({
