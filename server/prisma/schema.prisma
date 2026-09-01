@@ -201,6 +201,7 @@ model PurchaseItem {
   purchaseId Int
   materialId Int
   quantity   Decimal  @db.Decimal(15, 3)
+  receivedQuantity Decimal @default(0) @db.Decimal(15, 3)
   unit       String   @db.VarChar(30)
   unitPrice  Decimal  @db.Decimal(15, 2)
   total      Decimal  @db.Decimal(15, 2)
