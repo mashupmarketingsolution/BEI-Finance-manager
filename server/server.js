@@ -22,6 +22,21 @@ const PORT = process.env.PORT || 5000;
 //});  
 
 
+//const dbUrl = new URL(process.env.DATABASE_URL);
+
+//const adapter = new PrismaMariaDb({
+  //host: dbUrl.hostname,
+  //port: Number(dbUrl.port || 3306),
+  //user: decodeURIComponent(dbUrl.username),
+  //password: decodeURIComponent(dbUrl.password),
+  //database: dbUrl.pathname.replace("/", ""),
+  //connectionLimit: 5,
+//});
+
+//const prisma = new PrismaClient({ adapter });
+
+
+
 const dbUrl = new URL(process.env.DATABASE_URL);
 
 const adapter = new PrismaMariaDb({
@@ -29,11 +44,24 @@ const adapter = new PrismaMariaDb({
   port: Number(dbUrl.port || 3306),
   user: decodeURIComponent(dbUrl.username),
   password: decodeURIComponent(dbUrl.password),
-  database: dbUrl.pathname.replace("/", ""),
+  database: dbUrl.pathname.replace(/^\/+/, ""),
+
   connectionLimit: 5,
+  connectTimeout: 5000,
+  acquireTimeout: 15000,
+  idleTimeout: 300,
 });
 
 const prisma = new PrismaClient({ adapter });
+
+
+
+
+
+
+
+
+
 
 // =========================================
 // MIDDLEWARE
@@ -299,9 +327,14 @@ app.get("/api/projects/:id", async (req, res) => {
         totalIncome += amount;
       }
 
-      if (transaction.type === "EXPENSE") {
-        totalExpenses += amount;
-      }
+     if (
+      transaction.type === "EXPENSE" &&
+      transaction.source !== "PURCHASE_PAYMENT"
+          ) {
+            totalExpenses += amount;
+          }
+
+
     }
 
     const balance =
@@ -555,14 +588,17 @@ app.get("/api/dashboard", async (req, res) => {
       },
     });
 
-    const expenseResult = await prisma.transaction.aggregate({
-      where: {
-        type: "EXPENSE",
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+      const expenseResult = await prisma.transaction.aggregate({
+        where: {
+          type: "EXPENSE",
+          source: {
+            in: ["MANUAL", "PURCHASE"],
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      });
 
     const totalIncome = Number(
       incomeResult._sum.amount || 0
@@ -5518,31 +5554,7 @@ app.post("/api/purchase-orders", async (req, res) => {
       }
     }
 
-    if (rfq.awardedVendorId !== Number(vendorId)) {
-  return res.status(400).json({
-    success: false,
-    message:
-      "PO vendor must match the awarded RFQ vendor",
-  });
-}
-// ==============================
-// PREVENT DUPLICATE PO FROM RFQ
-// ==============================
-
-const existingRFQPO =
-  await prisma.purchaseOrder.findFirst({
-    where: {
-      rfqId: Number(rfqId),
-    },
-  });
-
-if (existingRFQPO) {
-  return res.status(400).json({
-    success: false,
-    message:
-      `A purchase order already exists for RFQ ${rfq.rfqNo}`,
-  });
-}
+    
     // ==============================
     // DUPLICATE PO NUMBER
     // ==============================
@@ -5927,10 +5939,8 @@ app.put(
         rfqId,
         discount,
         transportCost,
-        paidAmount,
         notes,
         items,
-
       } = req.body;
 
       // ==============================
@@ -5958,10 +5968,7 @@ app.put(
         });
       }
 
-      if (
-        !Array.isArray(items) ||
-        items.length === 0
-      ) {
+      if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({
           success: false,
           message:
@@ -5983,8 +5990,7 @@ app.put(
       if (!existingPO) {
         return res.status(404).json({
           success: false,
-          message:
-            "Purchase order not found",
+          message: "Purchase order not found",
         });
       }
 
@@ -5996,7 +6002,6 @@ app.put(
         await prisma.purchaseOrder.findFirst({
           where: {
             poNo: poNo.trim(),
-
             NOT: {
               id,
             },
@@ -6208,40 +6213,6 @@ app.put(
         discountAmount +
         transportAmount;
 
-
-        // ==============================
-      // CALCULATE PAID / DUE
-      // ==============================
-
-      const cleanPaidAmount =
-        Number(paidAmount) || 0;
-
-      if (cleanPaidAmount < 0) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Paid amount cannot be negative",
-        });
-      }
-
-      if (cleanPaidAmount > grandTotal) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Paid amount cannot be greater than grand total",
-        });
-      }
-
-      const dueAmount =
-        grandTotal - cleanPaidAmount;
-
-      let paymentStatus = "UNPAID";
-
-      if (cleanPaidAmount === grandTotal) {
-        paymentStatus = "PAID";
-      } else if (cleanPaidAmount > 0) {
-        paymentStatus = "PARTIAL";
-      }
       // ==============================
       // UPDATE PO + ITEMS
       // ==============================
@@ -6255,36 +6226,36 @@ app.put(
               },
 
               data: {
-                poNo:
-                  poNo.trim(),
+                poNo: poNo.trim(),
 
                 poDate:
                   new Date(poDate),
-                  vendor: {
-                    connect: {
-                      id: Number(vendorId),
-                    },
+
+                vendor: {
+                  connect: {
+                    id: Number(vendorId),
                   },
+                },
 
-                  project: projectId
-                    ? {
-                        connect: {
-                          id: Number(projectId),
-                        },
-                      }
-                    : {
-                        disconnect: true,
+                project: projectId
+                  ? {
+                      connect: {
+                        id: Number(projectId),
                       },
+                    }
+                  : {
+                      disconnect: true,
+                    },
 
-                  rfq: rfqId
-                    ? {
-                        connect: {
-                          id: Number(rfqId),
-                        },
-                      }
-                    : {
-                        disconnect: true,
+                rfq: rfqId
+                  ? {
+                      connect: {
+                        id: Number(rfqId),
                       },
+                    }
+                  : {
+                      disconnect: true,
+                    },
 
                 subtotal,
 
@@ -6296,19 +6267,14 @@ app.put(
 
                 grandTotal,
 
-                paidAmount: cleanPaidAmount,
-
-                dueAmount,
-
-                paymentStatus,
-
-
-
-
                 notes:
                   notes?.trim() || null,
               },
             });
+
+            // ------------------------------
+            // DELETE OLD PO ITEMS
+            // ------------------------------
 
             await tx.purchaseOrderItem.deleteMany({
               where: {
@@ -6316,11 +6282,14 @@ app.put(
               },
             });
 
+            // ------------------------------
+            // CREATE UPDATED PO ITEMS
+            // ------------------------------
+
             for (const item of preparedItems) {
               await tx.purchaseOrderItem.create({
                 data: {
-                  purchaseOrderId:
-                    id,
+                  purchaseOrderId: id,
 
                   materialId:
                     item.materialId,
@@ -6342,6 +6311,10 @@ app.put(
                 },
               });
             }
+
+            // ------------------------------
+            // RETURN COMPLETE UPDATED PO
+            // ------------------------------
 
             return tx.purchaseOrder.findUnique({
               where: {
@@ -6392,7 +6365,6 @@ app.put(
     }
   }
 );
-
 
 
 // =========================================
@@ -6769,14 +6741,11 @@ app.post(
                   grandTotal:
                     purchaseOrder.grandTotal,
 
-                  paymentStatus:
-                    purchaseOrder.paymentStatus || "UNPAID",
+                 paymentStatus: "UNPAID",
 
-                  paidAmount:
-                    purchaseOrder.paidAmount || 0,
+                  paidAmount: 0,
 
                   dueAmount:
-                    purchaseOrder.dueAmount ??
                     purchaseOrder.grandTotal,
 
                   notes:
@@ -6889,6 +6858,8 @@ app.post(
 
                 type:
                   "EXPENSE",
+
+                source: "PURCHASE",
 
                 amount:
                   purchaseOrder.grandTotal,
@@ -7207,39 +7178,8 @@ app.post("/api/purchases", async (req, res) => {
       discountAmount +
       transportAmount;
 
-    const finalPaidAmount =
-      Number(paidAmount) || 0;
 
-    if (finalPaidAmount < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Paid amount cannot be negative",
-      });
-    }
-
-    if (finalPaidAmount > grandTotal) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Paid amount cannot be greater than grand total",
-      });
-    }
-
-    const dueAmount =
-      grandTotal - finalPaidAmount;
-
-    let finalPaymentStatus =
-      paymentStatus || "UNPAID";
-
-    if (finalPaidAmount === 0) {
-      finalPaymentStatus = "UNPAID";
-    } else if (
-      finalPaidAmount >= grandTotal
-    ) {
-      finalPaymentStatus = "PAID";
-    } else {
-      finalPaymentStatus = "PARTIAL";
-    }
+     
 
     // -----------------------------
     // DATABASE TRANSACTION
@@ -7278,14 +7218,11 @@ app.post("/api/purchases", async (req, res) => {
               grandTotal:
                 grandTotal,
 
-              paymentStatus:
-                finalPaymentStatus,
+            paymentStatus: "UNPAID",
 
-              paidAmount:
-                finalPaidAmount,
+              paidAmount: 0,
 
-              dueAmount:
-                dueAmount,
+              dueAmount: grandTotal,
 
               notes:
                 notes?.trim() || null,
@@ -7375,6 +7312,7 @@ for (const item of preparedItems) {
             type: "EXPENSE",
 
             // FULL PURCHASE GRAND TOTAL
+            source: "PURCHASE",
             amount: grandTotal,
 
             paymentMethod: "OTHER",
@@ -7506,8 +7444,6 @@ app.get("/api/purchases/:id", async (req, res) => {
   }
 });
 
-
-
 // =====================================================
 // DELETE PURCHASE
 // =====================================================
@@ -7638,7 +7574,7 @@ app.put("/api/purchases/:id", async (req, res) => {
       projectId,
       discount,
       transportCost,
-      paidAmount,
+     
       notes,
       items,
     } = req.body;
@@ -7813,15 +7749,6 @@ app.put("/api/purchases/:id", async (req, res) => {
       });
     }
 
-    const dueAmount =
-      grandTotal - finalPaidAmount;
-
-    const paymentStatus =
-      finalPaidAmount === 0
-        ? "UNPAID"
-        : finalPaidAmount >= grandTotal
-        ? "PAID"
-        : "PARTIAL";
 
     // -----------------------------------------
     // DATABASE TRANSACTION
@@ -7861,7 +7788,7 @@ app.put("/api/purchases/:id", async (req, res) => {
           paymentStatus,
 
           paidAmount:
-            finalPaidAmount,
+                totalPaid,
 
           dueAmount,
 
@@ -8058,6 +7985,7 @@ if (expenses.length > 1) {
 
             type:
               "EXPENSE",
+            source: "PURCHASE",
 
             amount:
               grandTotal,
@@ -8093,6 +8021,39 @@ if (expenses.length > 1) {
         timeout: 20000,
       }
     );
+
+// -----------------------------------------
+// CALCULATE PAYMENT SUMMARY FROM HISTORY
+// -----------------------------------------
+
+const paymentSummary =
+  await tx.purchasePayment.aggregate({
+    where: {
+      purchaseId: id,
+    },
+    _sum: {
+      amount: true,
+    },
+  });
+
+const totalPaid =
+  Number(paymentSummary._sum.amount) || 0;
+
+if (totalPaid > grandTotal) {
+  throw new Error(
+    "Purchase total cannot be less than the total amount already paid"
+  );
+}
+
+const dueAmount =
+  grandTotal - totalPaid;
+
+const paymentStatus =
+  totalPaid === 0
+    ? "UNPAID"
+    : totalPaid >= grandTotal
+    ? "PAID"
+    : "PARTIAL";
 
     const updatedPurchase =
       await prisma.purchase.findUnique({
@@ -8131,6 +8092,416 @@ if (expenses.length > 1) {
   }
 });
 
+
+// =====================================================
+// GET PURCHASE PAYMENT HISTORY
+// =====================================================
+
+app.get(
+  "/api/purchases/:id/payments",
+  async (req, res) => {
+    try {
+      const purchaseId =
+        Number(req.params.id);
+
+      if (
+        !Number.isInteger(purchaseId) ||
+        purchaseId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase ID",
+        });
+      }
+
+      const purchase =
+        await prisma.purchase.findUnique({
+          where: {
+            id: purchaseId,
+          },
+        });
+
+      if (!purchase) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase not found",
+        });
+      }
+
+      const payments =
+        await prisma.purchasePayment.findMany({
+          where: {
+            purchaseId,
+          },
+
+          orderBy: {
+            paymentDate: "desc",
+          },
+        });
+
+      const totalPaid =
+        payments.reduce(
+          (sum, payment) =>
+            sum +
+            (Number(payment.amount) || 0),
+          0
+        );
+
+      const dueAmount =
+        Math.max(
+          Number(purchase.grandTotal) -
+            totalPaid,
+          0
+        );
+
+      const paymentStatus =
+        totalPaid === 0
+          ? "UNPAID"
+          : totalPaid >=
+            Number(purchase.grandTotal)
+          ? "PAID"
+          : "PARTIAL";
+
+      res.json({
+        success: true,
+
+        data: {
+          purchaseId:
+            purchase.id,
+
+          grandTotal:
+            Number(purchase.grandTotal),
+
+          totalPaid,
+
+          dueAmount,
+
+          paymentStatus,
+
+          payments,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Get Purchase Payments Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// CREATE PURCHASE PAYMENT
+// =====================================================
+
+app.post(
+  "/api/purchases/:id/payments",
+  async (req, res) => {
+    try {
+      const purchaseId =
+        Number(req.params.id);
+
+      if (
+        !Number.isInteger(purchaseId) ||
+        purchaseId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid purchase ID",
+        });
+      }
+
+      const {
+        paymentDate,
+        amount,
+        paymentMethod,
+        referenceNo,
+        notes,
+      } = req.body;
+
+      // -----------------------------------------
+      // BASIC VALIDATION
+      // -----------------------------------------
+
+      if (!paymentDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Payment date is required",
+        });
+      }
+
+      const paymentAmount =
+        Number(amount);
+
+      if (
+        Number.isNaN(paymentAmount) ||
+        paymentAmount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment amount must be greater than 0",
+        });
+      }
+
+      const allowedPaymentMethods = [
+        "CASH",
+        "BANK",
+        "MOBILE_BANKING",
+        "OTHER",
+      ];
+
+      const finalPaymentMethod =
+        paymentMethod || "CASH";
+
+      if (
+        !allowedPaymentMethods.includes(
+          finalPaymentMethod
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid payment method",
+        });
+      }
+
+      // -----------------------------------------
+      // FIND PURCHASE
+      // -----------------------------------------
+
+      const purchase =
+        await prisma.purchase.findUnique({
+          where: {
+            id: purchaseId,
+          },
+        });
+
+      if (!purchase) {
+        return res.status(404).json({
+          success: false,
+          message: "Purchase not found",
+        });
+      }
+
+      const grandTotal =
+        Number(purchase.grandTotal) || 0;
+
+      // -----------------------------------------
+      // GET EXISTING PAYMENTS
+      // -----------------------------------------
+
+      const paymentSummary =
+        await prisma.purchasePayment.aggregate({
+          where: {
+            purchaseId,
+          },
+          _sum: {
+            amount: true,
+          },
+        });
+
+      const alreadyPaid =
+        Number(
+          paymentSummary._sum.amount
+        ) || 0;
+
+      const currentDue =
+        grandTotal - alreadyPaid;
+
+      // -----------------------------------------
+      // PREVENT OVERPAYMENT
+      // -----------------------------------------
+
+      if (paymentAmount > currentDue) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Payment amount cannot be greater than due amount (${currentDue})`,
+        });
+      }
+
+      // -----------------------------------------
+      // CREATE PAYMENT + UPDATE PURCHASE
+      // -----------------------------------------
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            // -------------------------------
+            // 1. CREATE PAYMENT
+            // -------------------------------
+
+            const payment =
+              await tx.purchasePayment.create({
+                data: {
+                  purchaseId,
+
+                  paymentDate:
+                    new Date(paymentDate),
+
+                  amount:
+                    paymentAmount,
+
+                  paymentMethod:
+                    finalPaymentMethod,
+
+                  referenceNo:
+                    referenceNo?.trim() ||
+                    null,
+
+                  notes:
+                    notes?.trim() ||
+                    null,
+                },
+              });
+
+            // -------------------------------
+            // 2. CALCULATE NEW SUMMARY
+            // -------------------------------
+
+            const newPaidAmount =
+              alreadyPaid +
+              paymentAmount;
+
+            const newDueAmount =
+              grandTotal -
+              newPaidAmount;
+
+            const newPaymentStatus =
+              newPaidAmount === 0
+                ? "UNPAID"
+                : newPaidAmount >=
+                  grandTotal
+                ? "PAID"
+                : "PARTIAL";
+
+            // -------------------------------
+            // 3. UPDATE PURCHASE
+            // -------------------------------
+
+            const updatedPurchase =
+              await tx.purchase.update({
+                where: {
+                  id: purchaseId,
+                },
+
+                data: {
+                  paidAmount:
+                    newPaidAmount,
+
+                  dueAmount:
+                    newDueAmount,
+
+                  paymentStatus:
+                    newPaymentStatus,
+                },
+              });
+
+            // -------------------------------
+            // 4. FIND MATERIAL CATEGORY
+            // -------------------------------
+
+            let materialCategory =
+              await tx.category.findFirst({
+                where: {
+                  name: "Materials",
+                  type: "EXPENSE",
+                  status: "ACTIVE",
+                },
+              });
+
+            if (!materialCategory) {
+              materialCategory =
+                await tx.category.create({
+                  data: {
+                    name: "Materials",
+                    type: "EXPENSE",
+                    status: "ACTIVE",
+                  },
+                });
+            }
+
+            // -------------------------------
+            // 5. CREATE PAYMENT TRANSACTION
+            // -------------------------------
+
+            const transaction =
+              await tx.transaction.create({
+                data: {
+                  transactionDate:
+                    new Date(paymentDate),
+
+                  type: "EXPENSE",
+                  source: "PURCHASE_PAYMENT",
+
+                  amount:
+                    paymentAmount,
+
+                  paymentMethod:
+                    finalPaymentMethod,
+
+                  description:
+                    `Vendor Payment - ${purchase.purchaseNo}`,
+
+                  notes:
+                    notes?.trim() ||
+                    `Payment for Purchase ${purchase.purchaseNo}`,
+
+                  projectId:
+                    purchase.projectId,
+
+                  categoryId:
+                    materialCategory.id,
+
+                  vendorId:
+                    purchase.vendorId,
+                },
+              });
+
+            return {
+              payment,
+              updatedPurchase,
+              transaction,
+            };
+          },
+          {
+            maxWait: 10000,
+            timeout: 20000,
+          }
+        );
+
+      // -----------------------------------------
+      // SUCCESS RESPONSE
+      // -----------------------------------------
+
+      res.status(201).json({
+        success: true,
+
+        message:
+          "Purchase payment created successfully",
+
+        data: result,
+      });
+
+    } catch (error) {
+      console.error(
+        "Create Purchase Payment Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
 
 // GET STOCK MOVEMENTS
 app.get("/api/stock-movements", async (req, res) => {
@@ -9750,6 +10121,9 @@ app.get("/api/expenses", async (req, res) => {
       await prisma.transaction.count({
         where: {
           type: "EXPENSE",
+            source: {
+            in: ["MANUAL", "PURCHASE"],
+          },
         },
       });
 
@@ -9758,6 +10132,9 @@ app.get("/api/expenses", async (req, res) => {
       await prisma.transaction.findMany({
         where: {
           type: "EXPENSE",
+          source: {
+            in: ["MANUAL", "PURCHASE"],
+          },
         },
         include: {
           project: true,
@@ -9777,6 +10154,10 @@ app.get("/api/expenses", async (req, res) => {
       await prisma.transaction.aggregate({
         where: {
           type: "EXPENSE",
+            source: {
+              in: ["MANUAL", "PURCHASE"],
+            },
+
         },
         _sum: {
           amount: true,
@@ -9924,6 +10305,9 @@ app.get("/api/expenses/total", async (req, res) => {
         },
         where: {
           type: "EXPENSE",
+          source: {
+          in: ["MANUAL", "PURCHASE"],
+        },
         },
       });
 
@@ -11267,7 +11651,6 @@ app.get("/api/categories/paginated", async (req, res) => {
 
 
 
-
 // =========================================
 // 404 ROUTE
 // =========================================
@@ -11278,6 +11661,8 @@ app.use((req, res) => {
     message: "API route not found",
   });
 });
+
+
 
 // =========================================
 // START SERVER
@@ -11296,3 +11681,5 @@ app.listen(PORT, () => {
   );
   console.log("=================================");
 });
+
+
