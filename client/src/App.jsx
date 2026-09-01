@@ -296,6 +296,7 @@ const [purchaseOrderForm, setPurchaseOrderForm] =
     rfqId: "",
     discount: 0,
     transportCost: 0,
+    paidAmount: 0,
     notes: "",
   });
 
@@ -333,7 +334,11 @@ const [purchaseRequestEditForm, setPurchaseRequestEditForm] = useState({
   priority: "NORMAL",
   notes: "",
 });
+const [purchaseRequestEditItems, setPurchaseRequestEditItems] =
+  useState([]);
 
+const [originalPurchaseRequestItemIds, setOriginalPurchaseRequestItemIds] =
+  useState([]);
 const [savingPurchaseRequestEdit, setSavingPurchaseRequestEdit] = useState(false);
 const [purchaseRequestLoading, setPurchaseRequestLoading] = useState(false);
 const [purchaseRequestMessage, setPurchaseRequestMessage] = useState("");
@@ -480,6 +485,159 @@ const loadPurchaseOrders = async () => {
     setPurchaseOrderLoading(false);
   }
 };
+// =========================================
+// CREATE PURCHASE ORDER FROM AWARDED RFQ
+// =========================================
+
+const createPurchaseOrderFromRFQ = (rfq) => {
+  try {
+    if (!rfq) {
+      setRfqMessage(
+        "❌ RFQ data পাওয়া যায়নি"
+      );
+      return;
+    }
+
+    if (rfq.status !== "AWARDED") {
+      setRfqMessage(
+        "❌ Only awarded RFQ can be converted to Purchase Order"
+      );
+      return;
+    }
+
+    if (
+      !rfq.items ||
+      rfq.items.length === 0
+    ) {
+      setRfqMessage(
+        "❌ This RFQ has no items"
+      );
+      return;
+    }
+
+    // Find awarded vendor from RFQ vendors
+    const awardedVendor = rfq.vendors?.find(
+      (vendor) =>
+        Number(vendor.vendorId) ===
+        Number(rfq.awardedVendorId)
+    );
+
+    if (!awardedVendor) {
+      setRfqMessage(
+        "❌ Awarded vendor পাওয়া যায়নি"
+      );
+      return;
+    }
+
+    // Generate PO number
+    const poNo =
+      `PO-${String(Date.now()).slice(-6)}`;
+
+    // --------------------------------
+    // Prepare PO items
+    // --------------------------------
+    const totalQuoted =
+      Number(
+        awardedVendor.quotedTotal || 0
+      );
+
+    const preparedItems =
+      rfq.items.map((item) => {
+
+        let unitPrice = 0;
+
+        // Current RFQ quotation is a total quote.
+        // For a single-item RFQ we can safely
+        // calculate unit price.
+        if (
+          rfq.items.length === 1 &&
+          Number(item.quantity) > 0
+        ) {
+          unitPrice =
+            totalQuoted /
+            Number(item.quantity);
+        }
+
+     return {
+        materialId: String(
+          item.materialId ||
+          item.material?.id ||
+          ""
+        ),
+        material:
+          item.material || null,
+        
+        quantity:
+          Number(item.quantity || 0),
+
+        unit:
+          item.unit ||
+          item.material?.unit ||
+          "",
+
+        unitPrice,
+
+        notes:
+          item.notes || "",
+      };
+
+
+      });
+
+    // --------------------------------
+    // Fill PO form
+    // --------------------------------
+    setPurchaseOrderForm({
+      poNo,
+
+      poDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      vendorId:
+        String(awardedVendor.vendorId),
+
+      projectId:
+        String(rfq.projectId),
+
+      rfqId:
+        String(rfq.id),
+
+      discount: 0,
+
+      transportCost: 0,
+
+      notes:
+        `Created from ${rfq.rfqNo}`,
+    });
+
+    setPurchaseOrderItems(
+      preparedItems
+    );
+
+    setEditingPurchaseOrderId(null);
+
+    setPurchaseOrderMessage("");
+
+    // Close RFQ view
+    setShowRFQViewModal(false);
+
+    // Open PO modal
+    setShowPurchaseOrderModal(true);
+
+  } catch (error) {
+    console.error(
+      "Create PO From RFQ Error:",
+      error
+    );
+
+    setRfqMessage(
+      "❌ Purchase Order form load করা যায়নি!"
+    );
+  }
+};
+
 const savePurchaseOrder = async () => {
   if (savingPurchaseOrder) {
     return;
@@ -598,6 +756,8 @@ const savePurchaseOrder = async () => {
       rfqId,
       discount,
       transportCost,
+      paidAmount:
+      Number(purchaseOrderForm.paidAmount || 0),
       notes:
         purchaseOrderForm.notes.trim() || null,
 
@@ -666,6 +826,9 @@ const savePurchaseOrder = async () => {
     setSavingPurchaseOrder(false);
   }
 };
+
+
+
 const handleDeletePurchaseOrder = async (poId) => {
   const confirmed = window.confirm(
     "Are you sure you want to delete this Purchase Order?"
@@ -1726,54 +1889,190 @@ const viewPurchaseRequest = async (id) => {
   }
 };
 
+// =========================================
+// PURCHASE REQUEST EDIT ITEMS
+// =========================================
+
+const addPurchaseRequestEditItem = () => {
+  setPurchaseRequestEditItems((previous) => [
+    ...previous,
+    {
+      id: null,
+      materialId: "",
+      quantity: "",
+      unit: "",
+      requiredDate: "",
+      notes: "",
+    },
+  ]);
+};
+
+const removePurchaseRequestEditItem = (index) => {
+  setPurchaseRequestEditItems((previous) =>
+    previous.filter(
+      (_, itemIndex) =>
+        itemIndex !== index
+    )
+  );
+};
+
+const handlePurchaseRequestEditItemChange = (
+  index,
+  field,
+  value
+) => {
+  setPurchaseRequestEditItems((previous) =>
+    previous.map((item, itemIndex) => {
+
+      if (itemIndex !== index) {
+        return item;
+      }
+
+      const updatedItem = {
+        ...item,
+        [field]: value,
+      };
+
+      // Auto-fill unit from material
+      if (
+        field === "materialId" &&
+        value
+      ) {
+        const material =
+          materials.find(
+            (material) =>
+              Number(material.id) ===
+              Number(value)
+          );
+
+        if (material) {
+          updatedItem.unit =
+            material.unit || "";
+        }
+      }
+
+      return updatedItem;
+    })
+  );
+};
+
 const editPurchaseRequest = async (id) => {
   try {
-    await loadMaterials();
+
+    // Load materials for edit dropdown
+    await loadMaterials(
+      1,
+      materialLimit
+    );
+
     const response = await axios.get(
       `${API_URL}/api/purchase-requests/${id}`
     );
 
-    if (response.data.success) {
-      const request = response.data.data;
+    if (!response.data.success) {
+      setPurchaseRequestMessage(
+        "❌ Purchase request details load করা যায়নি!"
+      );
+      return;
+    }
 
-      setEditingPurchaseRequestId(request.id);
+    const request =
+      response.data.data;
 
-      setPurchaseRequestEditForm({
-        requestNo: request.requestNo || "",
-        requestDate: request.requestDate
-          ? new Date(request.requestDate)
+    setEditingPurchaseRequestId(
+      request.id
+    );
+
+    // ==============================
+    // HEADER
+    // ==============================
+
+    setPurchaseRequestEditForm({
+      requestNo:
+        request.requestNo || "",
+
+      requestDate:
+        request.requestDate
+          ? new Date(
+              request.requestDate
+            )
               .toISOString()
               .split("T")[0]
           : "",
-        projectId: request.projectId
+
+      projectId:
+        request.projectId
           ? String(request.projectId)
           : "",
-        status: request.status || "DRAFT",
-        priority: request.priority || "NORMAL",
-        notes: request.notes || "",
-      });
-      setPurchaseRequestItems(
-        (request.items || []).map((item) => ({
+
+      status:
+        request.status || "DRAFT",
+
+      priority:
+        request.priority || "NORMAL",
+
+      notes:
+        request.notes || "",
+    });
+
+
+    // ==============================
+    // ITEMS
+    // ==============================
+
+    const editItems =
+      (request.items || []).map(
+        (item) => ({
           id: item.id,
-          materialId: String(item.materialId || ""),
-          quantity: item.quantity ?? "",
-          unit: item.unit || "",
-          requiredDate: item.requiredDate
-            ? new Date(item.requiredDate)
-                .toISOString()
-                .split("T")[0]
-            : "",
-          notes: item.notes || "",
-        }))
+
+          materialId:
+            String(item.materialId),
+
+          quantity:
+            item.quantity ?? "",
+
+          unit:
+            item.unit || "",
+
+          requiredDate:
+            item.requiredDate
+              ? new Date(
+                  item.requiredDate
+                )
+                  .toISOString()
+                  .split("T")[0]
+              : "",
+
+          notes:
+            item.notes || "",
+        })
       );
 
-      setEditingPurchaseRequestItemId(null);
 
-      setPurchaseRequestMessage("");
+    setPurchaseRequestEditItems(
+      editItems
+    );
 
-      setShowPurchaseRequestEditModal(true);
-    }
+
+    setOriginalPurchaseRequestItemIds(
+      editItems
+        .filter(
+          (item) => item.id
+        )
+        .map(
+          (item) => item.id
+        )
+    );
+
+
+    setPurchaseRequestMessage("");
+
+    setShowPurchaseRequestEditModal(
+      true
+    );
+
   } catch (error) {
+
     console.error(
       "Edit Purchase Request Load Error:",
       error
@@ -1787,7 +2086,6 @@ const editPurchaseRequest = async (id) => {
     );
   }
 };
-
 
 
 const deletePurchaseRequest = async (id) => {
@@ -2048,8 +2346,11 @@ const handleDeletePurchaseRequestItem = async (itemId) => {
     );
   }
 };
+
+
 const savePurchaseRequestEdit = async () => {
   try {
+
     const {
       requestNo,
       requestDate,
@@ -2059,12 +2360,26 @@ const savePurchaseRequestEdit = async () => {
       notes,
     } = purchaseRequestEditForm;
 
+
+    // ==============================
+    // HEADER VALIDATION
+    // ==============================
+
     if (!requestNo.trim()) {
       setPurchaseRequestMessage(
         "❌ Purchase request number is required"
       );
       return;
     }
+
+
+    if (!requestDate) {
+      setPurchaseRequestMessage(
+        "❌ Request date is required"
+      );
+      return;
+    }
+
 
     if (!projectId) {
       setPurchaseRequestMessage(
@@ -2073,36 +2388,230 @@ const savePurchaseRequestEdit = async () => {
       return;
     }
 
-    setSavingPurchaseRequestEdit(true);
-    setPurchaseRequestMessage("");
 
-    const response = await axios.put(
-      `${API_URL}/api/purchase-requests/${editingPurchaseRequestId}`,
-      {
-        requestNo: requestNo.trim(),
-        requestDate,
-        projectId: Number(projectId),
-        status,
-        priority,
-        notes: notes.trim(),
-      }
+    // ==============================
+    // ITEM VALIDATION
+    // ==============================
+
+    if (
+      purchaseRequestEditItems.length === 0
+    ) {
+      setPurchaseRequestMessage(
+        "❌ Add at least one request item"
+      );
+      return;
+    }
+
+
+    const invalidItem =
+      purchaseRequestEditItems.find(
+        (item) =>
+          !item.materialId ||
+          Number(item.quantity) <= 0 ||
+          !item.unit?.trim()
+      );
+
+
+    if (invalidItem) {
+      setPurchaseRequestMessage(
+        "❌ Please complete all request item fields"
+      );
+      return;
+    }
+
+
+    setSavingPurchaseRequestEdit(
+      true
     );
 
- if (response.data.success) {
-  await loadPurchaseRequests();
-
-  setEditingPurchaseRequestId(null);
-  setShowPurchaseRequestEditModal(false);
-
-  setPurchaseRequestMessage(
-    "✅ Purchase request updated successfully"
-  );
-
-  setTimeout(() => {
     setPurchaseRequestMessage("");
-  }, 2000);
-}
+
+
+    // ==============================
+    // UPDATE REQUEST HEADER
+    // ==============================
+
+    const response =
+      await axios.put(
+        `${API_URL}/api/purchase-requests/${editingPurchaseRequestId}`,
+        {
+          requestNo:
+            requestNo.trim(),
+
+          requestDate,
+
+          projectId:
+            Number(projectId),
+
+          status,
+
+          priority,
+
+          notes:
+            notes?.trim() || null,
+        }
+      );
+
+
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message ||
+        "Purchase request update failed"
+      );
+    }
+
+
+    // ==============================
+    // EXISTING + NEW ITEMS
+    // ==============================
+
+    for (
+      const item of purchaseRequestEditItems
+    ) {
+
+      const payload = {
+        materialId:
+          Number(item.materialId),
+
+        quantity:
+          Number(item.quantity),
+
+        unit:
+          item.unit.trim(),
+
+        requiredDate:
+          item.requiredDate ||
+          null,
+
+        notes:
+          item.notes?.trim() ||
+          null,
+      };
+
+
+      // EXISTING ITEM → UPDATE
+      if (item.id) {
+
+        const itemResponse =
+          await axios.put(
+            `${API_URL}/api/purchase-request-items/${item.id}`,
+            payload
+          );
+
+
+        if (
+          !itemResponse.data.success
+        ) {
+          throw new Error(
+            itemResponse.data.message ||
+            "Purchase request item update failed"
+          );
+        }
+
+      }
+
+      // NEW ITEM → CREATE
+      else {
+
+        const itemResponse =
+          await axios.post(
+            `${API_URL}/api/purchase-requests/${editingPurchaseRequestId}/items`,
+            payload
+          );
+
+
+        if (
+          !itemResponse.data.success
+        ) {
+          throw new Error(
+            itemResponse.data.message ||
+            "Purchase request item create failed"
+          );
+        }
+      }
+    }
+
+
+    // ==============================
+    // DELETE REMOVED ITEMS
+    // ==============================
+
+    const currentItemIds =
+      purchaseRequestEditItems
+        .filter(
+          (item) => item.id
+        )
+        .map(
+          (item) => item.id
+        );
+
+
+    const deletedItemIds =
+      originalPurchaseRequestItemIds
+        .filter(
+          (id) =>
+            !currentItemIds.includes(id)
+        );
+
+
+    for (
+      const itemId of deletedItemIds
+    ) {
+
+      const deleteResponse =
+        await axios.delete(
+          `${API_URL}/api/purchase-request-items/${itemId}`
+        );
+
+
+      if (
+        !deleteResponse.data.success
+      ) {
+        throw new Error(
+          deleteResponse.data.message ||
+          "Purchase request item delete failed"
+        );
+      }
+    }
+
+
+    // ==============================
+    // SUCCESS
+    // ==============================
+
+    await loadPurchaseRequests();
+
+
+    setEditingPurchaseRequestId(
+      null
+    );
+
+    setShowPurchaseRequestEditModal(
+      false
+    );
+
+
+    setPurchaseRequestEditItems(
+      []
+    );
+
+    setOriginalPurchaseRequestItemIds(
+      []
+    );
+
+
+    setPurchaseRequestMessage(
+      "✅ Purchase request updated successfully"
+    );
+
+
+    setTimeout(() => {
+      setPurchaseRequestMessage("");
+    }, 2000);
+
+
   } catch (error) {
+
     console.error(
       "Save Purchase Request Edit Error:",
       error
@@ -2111,11 +2620,16 @@ const savePurchaseRequestEdit = async () => {
     setPurchaseRequestMessage(
       `❌ ${
         error.response?.data?.message ||
+        error.message ||
         "Purchase request update করা যায়নি!"
       }`
     );
+
   } finally {
-    setSavingPurchaseRequestEdit(false);
+
+    setSavingPurchaseRequestEdit(
+      false
+    );
   }
 };
 
@@ -3744,7 +4258,7 @@ const editPurchaseOrder = async (poId) => {
         materialId: item.materialId
           ? String(item.materialId)
           : "",
-
+        material: item.material || null,
         quantity:
           item.quantity ?? "",
 
@@ -14533,6 +15047,100 @@ const renderBOQItemViewModal = () => {
 
   };
 
+  const convertPurchaseRequestToRFQ = async (purchaseRequest) => {
+  try {
+    if (
+      !purchaseRequest?.id
+    ) {
+      setPurchaseRequestMessage(
+        "❌ Invalid purchase request"
+      );
+      return;
+    }
+
+    if (
+      !purchaseRequest.items ||
+      purchaseRequest.items.length === 0
+    ) {
+      setPurchaseRequestMessage(
+        "❌ Cannot convert because this purchase request has no items"
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Convert "${purchaseRequest.requestNo}" to RFQ?\n\n` +
+      `Project: ${
+        purchaseRequest.project?.name || "-"
+      }\n` +
+      `Items: ${
+        purchaseRequest.items.length
+      }`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPurchaseRequestMessage("");
+
+    const rfqNo =
+      `RFQ-${String(
+        Date.now()
+      ).slice(-6)}`;
+
+    const response =
+      await axios.post(
+        `${API_URL}/api/purchase-requests/${purchaseRequest.id}/convert-to-rfq`,
+        {
+          rfqNo,
+
+          rfqDate:
+            new Date()
+              .toISOString()
+              .split("T")[0],
+
+          status: "DRAFT",
+
+          notes:
+            `Created from Purchase Request ${purchaseRequest.requestNo}`,
+        }
+      );
+
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message ||
+        "RFQ conversion failed"
+      );
+    }
+
+    await loadPurchaseRequests();
+    await loadRFQs();
+
+    setPurchaseRequestMessage(
+      `✅ ${purchaseRequest.requestNo} converted to ${rfqNo} successfully`
+    );
+
+    setTimeout(() => {
+      setPurchaseRequestMessage("");
+    }, 3000);
+
+  } catch (error) {
+    console.error(
+      "Convert Purchase Request To RFQ Error:",
+      error
+    );
+
+    setPurchaseRequestMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        error.message ||
+        "Purchase request to RFQ conversion failed!"
+      }`
+    );
+  }
+};
+
 const renderPurchaseRequests = () => {
   return (
     <section className="dashboard">
@@ -14694,6 +15302,21 @@ const renderPurchaseRequests = () => {
                       >
                         Edit
                       </button>
+                      <button
+                        type="button"
+                        className="view-button"
+                        onClick={() => {
+                          convertPurchaseRequestToRFQ(item);
+                        }}
+                        disabled={
+                          !item.items ||
+                          item.items.length === 0 ||
+                          item.status === "CONVERTED"
+                        }
+                      >
+                        Convert to RFQ
+                      </button>
+
 
                           <button
                               type="button"
@@ -15443,6 +16066,8 @@ const renderPurchaseRequestViewModal = () => {
     </div>
   );
 };
+
+
 const renderPurchaseRequestEditModal = () => {
   if (!showPurchaseRequestEditModal) {
     return null;
@@ -15451,18 +16076,29 @@ const renderPurchaseRequestEditModal = () => {
   return (
     <div
       className="modal-overlay"
-      onClick={() =>
-        setShowPurchaseRequestEditModal(false)
-      }
+      onClick={() => {
+        if (!savingPurchaseRequestEdit) {
+          setShowPurchaseRequestEditModal(false);
+        }
+      }}
     >
+
       <div
         className="modal-container purchase-request-view-modal"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) =>
+          e.stopPropagation()
+        }
       >
 
+        {/* HEADER */}
+
         <div className="modal-header">
+
           <div>
-            <h2>Edit Purchase Request</h2>
+            <h2>
+              Edit Purchase Request
+            </h2>
+
             <p>
               Update purchase request information
             </p>
@@ -15471,13 +16107,23 @@ const renderPurchaseRequestEditModal = () => {
           <button
             type="button"
             className="modal-close-button"
-            onClick={() =>
-              setShowPurchaseRequestEditModal(false)
-            }
+            onClick={() => {
+              if (
+                !savingPurchaseRequestEdit
+              ) {
+                setShowPurchaseRequestEditModal(
+                  false
+                );
+              }
+            }}
           >
             ×
           </button>
+
         </div>
+
+
+        {/* BODY */}
 
         <div className="modal-body">
 
@@ -15487,9 +16133,13 @@ const renderPurchaseRequestEditModal = () => {
             </div>
           )}
 
+
+          {/* REQUEST INFORMATION */}
+
           <div className="form-grid">
 
             <div className="form-group">
+
               <label>
                 Request No *
               </label>
@@ -15502,13 +16152,17 @@ const renderPurchaseRequestEditModal = () => {
                 onChange={(e) =>
                   setPurchaseRequestEditForm({
                     ...purchaseRequestEditForm,
-                    requestNo: e.target.value,
+                    requestNo:
+                      e.target.value,
                   })
                 }
               />
+
             </div>
 
+
             <div className="form-group">
+
               <label>
                 Request Date *
               </label>
@@ -15521,13 +16175,17 @@ const renderPurchaseRequestEditModal = () => {
                 onChange={(e) =>
                   setPurchaseRequestEditForm({
                     ...purchaseRequestEditForm,
-                    requestDate: e.target.value,
+                    requestDate:
+                      e.target.value,
                   })
                 }
               />
+
             </div>
 
+
             <div className="form-group">
+
               <label>
                 Project *
               </label>
@@ -15539,27 +16197,37 @@ const renderPurchaseRequestEditModal = () => {
                 onChange={(e) =>
                   setPurchaseRequestEditForm({
                     ...purchaseRequestEditForm,
-                    projectId: e.target.value,
+                    projectId:
+                      e.target.value,
                   })
                 }
               >
+
                 <option value="">
                   Select Project
                 </option>
 
-                {projects.map((project) => (
-                  <option
-                    key={project.id}
-                    value={project.id}
-                  >
-                    {project.name}
-                  </option>
-                ))}
+                {projects.map(
+                  (project) => (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                    >
+                      {project.name}
+                    </option>
+                  )
+                )}
+
               </select>
+
             </div>
 
+
             <div className="form-group">
-              <label>Status</label>
+
+              <label>
+                Status
+              </label>
 
               <select
                 value={
@@ -15568,10 +16236,12 @@ const renderPurchaseRequestEditModal = () => {
                 onChange={(e) =>
                   setPurchaseRequestEditForm({
                     ...purchaseRequestEditForm,
-                    status: e.target.value,
+                    status:
+                      e.target.value,
                   })
                 }
               >
+
                 <option value="DRAFT">
                   DRAFT
                 </option>
@@ -15595,11 +16265,17 @@ const renderPurchaseRequestEditModal = () => {
                 <option value="CANCELLED">
                   CANCELLED
                 </option>
+
               </select>
+
             </div>
 
+
             <div className="form-group">
-              <label>Priority</label>
+
+              <label>
+                Priority
+              </label>
 
               <select
                 value={
@@ -15608,10 +16284,12 @@ const renderPurchaseRequestEditModal = () => {
                 onChange={(e) =>
                   setPurchaseRequestEditForm({
                     ...purchaseRequestEditForm,
-                    priority: e.target.value,
+                    priority:
+                      e.target.value,
                   })
                 }
               >
+
                 <option value="LOW">
                   LOW
                 </option>
@@ -15627,13 +16305,21 @@ const renderPurchaseRequestEditModal = () => {
                 <option value="URGENT">
                   URGENT
                 </option>
+
               </select>
+
             </div>
 
           </div>
 
+
+          {/* NOTES */}
+
           <div className="form-group">
-            <label>Notes</label>
+
+            <label>
+              Notes
+            </label>
 
             <textarea
               rows={4}
@@ -15643,334 +16329,302 @@ const renderPurchaseRequestEditModal = () => {
               onChange={(e) =>
                 setPurchaseRequestEditForm({
                   ...purchaseRequestEditForm,
-                  notes: e.target.value,
+                  notes:
+                    e.target.value,
                 })
               }
+              placeholder="Additional purchase request information..."
             />
+
           </div>
 
 
-        <div className="purchase-request-items-section">
+          {/* REQUEST ITEMS */}
 
-          <div className="purchase-request-section-header">
-            <div>
-              <h3>Request Items</h3>
-              <p>
-                Materials requested for this purchase request
-              </p>
-            </div>
-          </div>
+          <div className="purchase-request-items-section">
 
-          {/* ==============================
-              ADD / EDIT ITEM FORM
-          ============================== */}
+            <div className="purchase-request-section-header">
 
-          <div className="purchase-request-item-form">
+              <div>
+                <h3>
+                  Request Items
+                </h3>
 
-            <div className="form-grid">
-
-              <div className="form-group">
-                <label>Material *</label>
-
-                <select
-                  value={purchaseRequestItemForm.materialId}
-                  onChange={(e) =>
-                    setPurchaseRequestItemForm({
-                      ...purchaseRequestItemForm,
-                      materialId: e.target.value,
-                    })
-                  }
-                >
-                  <option value="">
-                    Select Material
-                  </option>
-
-                  {materials.map((material) => (
-                    <option
-                      key={material.id}
-                      value={material.id}
-                    >
-                      {material.name} ({material.code})
-                    </option>
-                  ))}
-                </select>
+                <p>
+                  Materials required for this purchase request
+                </p>
               </div>
-
-              <div className="form-group">
-                <label>Quantity *</label>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={purchaseRequestItemForm.quantity}
-                  onChange={(e) =>
-                    setPurchaseRequestItemForm({
-                      ...purchaseRequestItemForm,
-                      quantity: e.target.value,
-                    })
-                  }
-                  placeholder="Enter quantity"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Unit *</label>
-
-                <input
-                  type="text"
-                  value={purchaseRequestItemForm.unit}
-                  onChange={(e) =>
-                    setPurchaseRequestItemForm({
-                      ...purchaseRequestItemForm,
-                      unit: e.target.value,
-                    })
-                  }
-                  placeholder="e.g. SQFT, Sheet, Piece"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Required Date</label>
-
-                <input
-                  type="date"
-                  value={
-                    purchaseRequestItemForm.requiredDate
-                  }
-                  onChange={(e) =>
-                    setPurchaseRequestItemForm({
-                      ...purchaseRequestItemForm,
-                      requiredDate: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-            </div>
-
-            <div className="form-group">
-              <label>Item Notes</label>
-
-              <textarea
-                rows={3}
-                value={purchaseRequestItemForm.notes}
-                onChange={(e) =>
-                  setPurchaseRequestItemForm({
-                    ...purchaseRequestItemForm,
-                    notes: e.target.value,
-                  })
-                }
-                placeholder="Optional item notes..."
-              />
-            </div>
-
-            <div className="purchase-request-item-form-actions">
 
               <button
                 type="button"
-                className="save-button"
-                onClick={savePurchaseRequestItem}
-                disabled={savingPurchaseRequestItem}
+                className="add-button"
+                onClick={
+                  addPurchaseRequestEditItem
+                }
               >
-                {savingPurchaseRequestItem
-                  ? "Saving..."
-                  : editingPurchaseRequestItemId
-                  ? "Update Item"
-                  : "Add Item"}
+                + Add Item
               </button>
 
-              {editingPurchaseRequestItemId && (
-                <button
-                  type="button"
-                  className="cancel-button"
-                  onClick={() => {
-                    setEditingPurchaseRequestItemId(null);
-
-                    setPurchaseRequestItemForm({
-                      materialId: "",
-                      quantity: "",
-                      unit: "",
-                      requiredDate: "",
-                      notes: "",
-                    });
-                  }}
-                >
-                  Cancel Edit
-                </button>
-              )}
-
             </div>
+
+
+            {purchaseRequestEditItems.length ===
+            0 ? (
+
+              <div className="purchase-request-empty-items">
+                <h4>
+                  No items added yet
+                </h4>
+
+                <p>
+                  Add at least one material item.
+                </p>
+              </div>
+
+            ) : (
+
+              purchaseRequestEditItems.map(
+                (item, index) => (
+
+                  <div
+                    key={
+                      item.id ||
+                      `new-${index}`
+                    }
+                    style={{
+                      border:
+                        "1px solid #e2e8f0",
+                      borderRadius:
+                        "10px",
+                      padding:
+                        "16px",
+                      marginBottom:
+                        "16px",
+                    }}
+                  >
+
+                    <div className="form-grid">
+
+                      {/* MATERIAL */}
+
+                      <div className="form-group">
+
+                        <label>
+                          Material *
+                        </label>
+
+                        <select
+                          value={
+                            item.materialId
+                          }
+                          onChange={(e) =>
+                            handlePurchaseRequestEditItemChange(
+                              index,
+                              "materialId",
+                              e.target.value
+                            )
+                          }
+                        >
+
+                          <option value="">
+                            Select Material
+                          </option>
+
+                          {materials.map(
+                            (material) => (
+
+                              <option
+                                key={
+                                  material.id
+                                }
+                                value={
+                                  material.id
+                                }
+                              >
+                                {
+                                  material.name
+                                }{" "}
+                                (
+                                {
+                                  material.code
+                                }
+                                )
+                              </option>
+
+                            )
+                          )}
+
+                        </select>
+
+                      </div>
+
+
+                      {/* QUANTITY */}
+
+                      <div className="form-group">
+
+                        <label>
+                          Quantity *
+                        </label>
+
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="any"
+                          value={
+                            item.quantity
+                          }
+                          onChange={(e) =>
+                            handlePurchaseRequestEditItemChange(
+                              index,
+                              "quantity",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Enter quantity"
+                        />
+
+                      </div>
+
+
+                      {/* UNIT */}
+
+                      <div className="form-group">
+
+                        <label>
+                          Unit *
+                        </label>
+
+                        <input
+                          type="text"
+                          value={
+                            item.unit
+                          }
+                          onChange={(e) =>
+                            handlePurchaseRequestEditItemChange(
+                              index,
+                              "unit",
+                              e.target.value
+                            )
+                          }
+                          placeholder="e.g. Sheet, SQFT, Piece"
+                        />
+
+                      </div>
+
+
+                      {/* REQUIRED DATE */}
+
+                      <div className="form-group">
+
+                        <label>
+                          Required Date
+                        </label>
+
+                        <input
+                          type="date"
+                          value={
+                            item.requiredDate
+                          }
+                          onChange={(e) =>
+                            handlePurchaseRequestEditItemChange(
+                              index,
+                              "requiredDate",
+                              e.target.value
+                            )
+                          }
+                        />
+
+                      </div>
+
+                    </div>
+
+
+                    {/* ITEM NOTES */}
+
+                    <div className="form-group">
+
+                      <label>
+                        Item Notes
+                      </label>
+
+                      <textarea
+                        rows={3}
+                        value={
+                          item.notes
+                        }
+                        onChange={(e) =>
+                          handlePurchaseRequestEditItemChange(
+                            index,
+                            "notes",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Optional item notes..."
+                      />
+
+                    </div>
+
+
+                    {/* DELETE */}
+
+                    <button
+                      type="button"
+                      className="delete-button"
+                      onClick={() =>
+                        removePurchaseRequestEditItem(
+                          index
+                        )
+                      }
+                    >
+                      Delete Item
+                    </button>
+
+                  </div>
+
+                )
+              )
+
+            )}
 
           </div>
 
-          {/* ==============================
-              ITEM LIST
-          ============================== */}
-
-          {purchaseRequestItems.length > 0 ? (
-
-            <div className="table-wrapper">
-
-              <table>
-
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Material</th>
-                    <th>Quantity</th>
-                    <th>Unit</th>
-                    <th>Required Date</th>
-                    <th>Notes</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-
-                  {purchaseRequestItems.map((item) => {
-
-                    const material =
-                      materials.find(
-                        (m) =>
-                          Number(m.id) ===
-                          Number(item.materialId)
-                      );
-
-                    return (
-                      <tr key={item.id}>
-
-                        <td>
-                          #{item.id}
-                        </td>
-
-                        <td>
-                          <strong>
-                            {material?.name || "-"}
-                          </strong>
-
-                          <small>
-                            {material?.code || "-"}
-                          </small>
-                        </td>
-
-                        <td>
-                          {item.quantity}
-                        </td>
-
-                        <td>
-                          {item.unit}
-                        </td>
-
-                        <td>
-                          {item.requiredDate
-                            ? new Date(
-                                item.requiredDate
-                              ).toLocaleDateString(
-                                "en-GB"
-                              )
-                            : "-"}
-                        </td>
-
-                        <td>
-                          {item.notes || "-"}
-                        </td>
-
-                        <td>
-
-                          <div className="purchase-order-actions">
-
-                            <button
-                              type="button"
-                              className="edit-button"
-                              onClick={() => {
-                                setEditingPurchaseRequestItemId(
-                                  item.id
-                                );
-
-                                setPurchaseRequestItemForm({
-                                  materialId:
-                                    String(
-                                      item.materialId || ""
-                                    ),
-                                  quantity:
-                                    item.quantity ?? "",
-                                  unit:
-                                    item.unit || "",
-                                  requiredDate:
-                                    item.requiredDate || "",
-                                  notes:
-                                    item.notes || "",
-                                });
-                              }}
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              className="delete-button"
-                              onClick={() =>
-                                handleDeletePurchaseRequestItem(
-                                  item.id
-                                )
-                              }
-                            >
-                              Delete
-                            </button>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-                    );
-
-                  })}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          ) : (
-
-            <div className="purchase-request-empty-items">
-
-              <h4>No items added yet</h4>
-
-              <p>
-                Add at least one material item to this
-                purchase request.
-              </p>
-
-            </div>
-
-          )}
-
         </div>
 
 
-        </div>
+        {/* FOOTER */}
 
         <div className="modal-footer">
 
           <button
             type="button"
             className="cancel-button"
-            onClick={() =>
-              setShowPurchaseRequestEditModal(false)
+            onClick={() => {
+              if (
+                !savingPurchaseRequestEdit
+              ) {
+                setShowPurchaseRequestEditModal(
+                  false
+                );
+              }
+            }}
+            disabled={
+              savingPurchaseRequestEdit
             }
           >
             Cancel
           </button>
 
+
           <button
             type="button"
             className="save-button"
-            onClick={savePurchaseRequestEdit}
-            disabled={savingPurchaseRequestEdit}
+            onClick={
+              savePurchaseRequestEdit
+            }
+            disabled={
+              savingPurchaseRequestEdit
+            }
           >
             {savingPurchaseRequestEdit
               ? "Updating..."
@@ -15980,9 +16634,11 @@ const renderPurchaseRequestEditModal = () => {
         </div>
 
       </div>
+
     </div>
   );
 };
+
 const renderPurchaseRequestModal = () => {
   if (!showPurchaseRequestModal) {
     return null;
@@ -16579,9 +17235,8 @@ const renderPurchaseOrderModal = () => {
 
                             <td>
                               <select
-                                value={
-                                  item.materialId
-                                }
+                                value={String(item.materialId || "")}
+
                                 onChange={(e) => {
                                   const materialId =
                                     e.target.value;
@@ -16622,20 +17277,27 @@ const renderPurchaseOrderModal = () => {
                                   Select Material
                                 </option>
 
-                                {materials.map(
-                                  (material) => (
-                                    <option
-                                      key={
-                                        material.id
-                                      }
-                                      value={
-                                        material.id
-                                      }
-                                    >
-                                      {material.name}
-                                    </option>
-                                  )
-                                )}
+
+                                    {[
+                                      ...(item.material
+                                        ? [item.material]
+                                        : []),
+
+                                      ...materials.filter(
+                                        (material) =>
+                                          String(material.id) !==
+                                          String(item.materialId)
+                                      ),
+                                    ].map((material) => (
+                                      <option
+                                        key={material.id}
+                                        value={String(material.id)}
+                                      >
+                                        {material.name}
+                                      </option>
+                                    ))}
+
+
 
                               </select>
                             </td>
@@ -16867,6 +17529,31 @@ const renderPurchaseOrderModal = () => {
                 />
               </div>
 
+              <div className="form-group">
+                <label>
+                  Paid Amount
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    purchaseOrderForm.paidAmount
+                  }
+                  onChange={(e) =>
+                    setPurchaseOrderForm(
+                      (prev) => ({
+                        ...prev,
+                        paidAmount:
+                          e.target.value,
+                      })
+                    )
+                  }
+                  placeholder="0"
+                />
+              </div>
+
             </div>
 
             <div className="purchase-order-total-summary">
@@ -16914,6 +17601,37 @@ const renderPurchaseOrderModal = () => {
                   )}
                 </strong>
               </div>
+
+
+              <div>
+                <span>Paid</span>
+
+                <strong>
+                  ৳{" "}
+                  {(
+                    Number(
+                      purchaseOrderForm.paidAmount
+                    ) || 0
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+              <div>
+                <span>Due</span>
+
+                <strong>
+                  ৳{" "}
+                  {Math.max(
+                    0,
+                    grandTotal -
+                      (Number(
+                        purchaseOrderForm.paidAmount
+                      ) || 0)
+                  ).toLocaleString("en-BD")}
+                </strong>
+              </div>
+
+
 
             </div>
 
@@ -17841,15 +18559,31 @@ const renderRFQViewModal = () => {
         {/* FOOTER */}
         <div className="modal-footer">
 
-          <button
-            type="button"
-            className="cancel-button"
-            onClick={() =>
-              setShowRFQViewModal(false)
-            }
-          >
-            Close
-          </button>
+      <div className="modal-footer">
+
+                      {rfq.status === "AWARDED" && (
+                        <button
+                          type="button"
+                          className="save-button"
+                          onClick={() => {
+                            createPurchaseOrderFromRFQ(rfq);
+                          }}
+                        >
+                          Create Purchase Order
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="cancel-button"
+                        onClick={() =>
+                          setShowRFQViewModal(false)
+                        }
+                      >
+                        Close
+                      </button>
+
+              </div>
 
         </div>
 

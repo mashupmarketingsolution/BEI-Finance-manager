@@ -3570,6 +3570,299 @@ app.post("/api/rfqs", async (req, res) => {
     });
   }
 });
+// =========================================
+// CONVERT PURCHASE REQUEST TO RFQ
+// =========================================
+
+app.post(
+  "/api/purchase-requests/:id/convert-to-rfq",
+  async (req, res) => {
+    try {
+      const purchaseRequestId =
+        Number(req.params.id);
+
+      const {
+        rfqNo,
+        rfqDate,
+        status,
+        notes,
+      } = req.body;
+
+      // ==============================
+      // VALIDATION
+      // ==============================
+
+      if (
+        !Number.isInteger(
+          purchaseRequestId
+        ) ||
+        purchaseRequestId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid purchase request ID",
+        });
+      }
+
+      if (!rfqNo || !rfqNo.trim()) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "RFQ number is required",
+        });
+      }
+
+      const allowedStatuses = [
+        "DRAFT",
+        "SENT",
+        "QUOTED",
+        "EVALUATED",
+        "AWARDED",
+        "CANCELLED",
+      ];
+
+      const rfqStatus =
+        status || "DRAFT";
+
+      if (
+        !allowedStatuses.includes(
+          rfqStatus
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid RFQ status",
+        });
+      }
+
+      // ==============================
+      // CHECK PURCHASE REQUEST
+      // ==============================
+
+      const purchaseRequest =
+        await prisma.purchaseRequest.findUnique({
+          where: {
+            id: purchaseRequestId,
+          },
+
+          include: {
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        });
+
+      if (!purchaseRequest) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase request not found",
+        });
+      }
+
+      // ==============================
+      // CHECK ITEMS
+      // ==============================
+
+      if (
+        !purchaseRequest.items ||
+        purchaseRequest.items.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot create RFQ because this purchase request has no items",
+        });
+      }
+
+      // ==============================
+      // CHECK DUPLICATE RFQ NO
+      // ==============================
+
+      const existingRFQ =
+        await prisma.rFQ.findUnique({
+          where: {
+            rfqNo: rfqNo.trim(),
+          },
+        });
+
+      if (existingRFQ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "An RFQ with this number already exists",
+        });
+      }
+
+      // ==============================
+      // CREATE RFQ + ITEMS
+      // ==============================
+
+      const rfq =
+        await prisma.$transaction(
+          async (tx) => {
+
+            const createdRFQ =
+              await tx.rFQ.create({
+                data: {
+                  rfqNo:
+                    rfqNo.trim(),
+
+                  rfqDate:
+                    rfqDate
+                      ? new Date(
+                          rfqDate
+                        )
+                      : new Date(),
+
+                  projectId:
+                    purchaseRequest.projectId,
+
+                  status:
+                    rfqStatus,
+
+                  notes:
+                    notes?.trim() ||
+                    `Created from Purchase Request ${purchaseRequest.requestNo}`,
+                },
+              });
+
+
+            // ==========================
+            // COPY PR ITEMS TO RFQ
+            // ==========================
+
+            for (
+              const item
+              of purchaseRequest.items
+            ) {
+
+              await tx.rFQItem.create({
+                data: {
+                  rfqId:
+                    createdRFQ.id,
+
+                  materialId:
+                    item.materialId,
+
+                  quantity:
+                    Number(
+                      item.quantity
+                    ),
+
+                  unit:
+                    item.unit,
+
+                  notes:
+                    item.notes ||
+                    null,
+                },
+              });
+            }
+
+
+            // ==========================
+            // MARK PR AS CONVERTED
+            // ==========================
+
+            await tx.purchaseRequest.update({
+              where: {
+                id:
+                  purchaseRequestId,
+              },
+
+              data: {
+                status:
+                  "CONVERTED",
+              },
+            });
+
+
+            return createdRFQ;
+          }
+        );
+
+
+      // ==============================
+      // GET COMPLETE RFQ
+      // ==============================
+
+      const completeRFQ =
+        await prisma.rFQ.findUnique({
+          where: {
+            id: rfq.id,
+          },
+
+          include: {
+            project: true,
+
+            items: {
+              include: {
+                material: true,
+              },
+
+              orderBy: {
+                id: "asc",
+              },
+            },
+
+            vendors: {
+              include: {
+                vendor: true,
+              },
+            },
+          },
+        });
+
+
+      // ==============================
+      // SUCCESS
+      // ==============================
+
+      res.status(201).json({
+        success: true,
+
+        message:
+          "Purchase request converted to RFQ successfully",
+
+        data: completeRFQ,
+      });
+
+    } catch (error) {
+
+      console.error(
+        "Convert Purchase Request To RFQ Error:",
+        error
+      );
+
+      if (
+        error.code === "P2002"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "An RFQ with this number already exists",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Purchase request to RFQ conversion failed!",
+      });
+    }
+  }
+);
 
 // =========================================
 // UPDATE RFQ
@@ -4009,179 +4302,6 @@ app.post(
   }
 );
 
-// =========================================
-// ADD RFQ ITEM
-// =========================================
-
-app.post(
-  "/api/rfqs/:id/items",
-  async (req, res) => {
-    try {
-      const rfqId = Number(req.params.id);
-
-      const {
-        materialId,
-        quantity,
-        unit,
-        notes,
-      } = req.body;
-
-      // ==============================
-      // VALIDATE RFQ ID
-      // ==============================
-
-      if (!Number.isInteger(rfqId) || rfqId <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid RFQ ID",
-        });
-      }
-
-      // ==============================
-      // VALIDATE MATERIAL
-      // ==============================
-
-      if (!materialId) {
-        return res.status(400).json({
-          success: false,
-          message: "Material is required",
-        });
-      }
-
-      const cleanMaterialId = Number(materialId);
-
-      if (
-        !Number.isInteger(cleanMaterialId) ||
-        cleanMaterialId <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid material ID",
-        });
-      }
-
-      // ==============================
-      // VALIDATE QUANTITY
-      // ==============================
-
-      const qty = Number(quantity);
-
-      if (
-        Number.isNaN(qty) ||
-        qty <= 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Quantity must be greater than 0",
-        });
-      }
-
-      // ==============================
-      // VALIDATE UNIT
-      // ==============================
-
-      if (!unit || !unit.trim()) {
-        return res.status(400).json({
-          success: false,
-          message: "Unit is required",
-        });
-      }
-
-      // ==============================
-      // CHECK RFQ
-      // ==============================
-
-      const rfq =
-        await prisma.rFQ.findUnique({
-          where: {
-            id: rfqId,
-          },
-        });
-
-      if (!rfq) {
-        return res.status(404).json({
-          success: false,
-          message: "RFQ not found",
-        });
-      }
-
-      // ==============================
-      // CHECK MATERIAL
-      // ==============================
-
-      const material =
-        await prisma.material.findUnique({
-          where: {
-            id: cleanMaterialId,
-          },
-        });
-
-      if (!material) {
-        return res.status(400).json({
-          success: false,
-          message: "Material not found",
-        });
-      }
-
-      // ==============================
-      // CREATE RFQ ITEM
-      // ==============================
-
-      const rfqItem =
-        await prisma.rFQItem.create({
-          data: {
-            rfqId,
-
-            materialId:
-              cleanMaterialId,
-
-            quantity:
-              qty,
-
-            unit:
-              unit.trim(),
-
-            notes:
-              notes?.trim() || null,
-          },
-
-          include: {
-            material: true,
-
-            rfq: {
-              include: {
-                project: true,
-              },
-            },
-          },
-        });
-
-      // ==============================
-      // SUCCESS
-      // ==============================
-
-      res.status(201).json({
-        success: true,
-        message:
-          "RFQ item added successfully",
-        data: rfqItem,
-      });
-
-    } catch (error) {
-      console.error(
-        "Add RFQ Item Error:",
-        error
-      );
-
-      res.status(500).json({
-        success: false,
-        message:
-          "RFQ item add করা যায়নি!",
-      });
-    }
-  }
-);
 
 // =========================================
 // UPDATE RFQ ITEM
@@ -5398,6 +5518,31 @@ app.post("/api/purchase-orders", async (req, res) => {
       }
     }
 
+    if (rfq.awardedVendorId !== Number(vendorId)) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "PO vendor must match the awarded RFQ vendor",
+  });
+}
+// ==============================
+// PREVENT DUPLICATE PO FROM RFQ
+// ==============================
+
+const existingRFQPO =
+  await prisma.purchaseOrder.findFirst({
+    where: {
+      rfqId: Number(rfqId),
+    },
+  });
+
+if (existingRFQPO) {
+  return res.status(400).json({
+    success: false,
+    message:
+      `A purchase order already exists for RFQ ${rfq.rfqNo}`,
+  });
+}
     // ==============================
     // DUPLICATE PO NUMBER
     // ==============================
@@ -5782,8 +5927,10 @@ app.put(
         rfqId,
         discount,
         transportCost,
+        paidAmount,
         notes,
         items,
+
       } = req.body;
 
       // ==============================
@@ -6061,6 +6208,40 @@ app.put(
         discountAmount +
         transportAmount;
 
+
+        // ==============================
+      // CALCULATE PAID / DUE
+      // ==============================
+
+      const cleanPaidAmount =
+        Number(paidAmount) || 0;
+
+      if (cleanPaidAmount < 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Paid amount cannot be negative",
+        });
+      }
+
+      if (cleanPaidAmount > grandTotal) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Paid amount cannot be greater than grand total",
+        });
+      }
+
+      const dueAmount =
+        grandTotal - cleanPaidAmount;
+
+      let paymentStatus = "UNPAID";
+
+      if (cleanPaidAmount === grandTotal) {
+        paymentStatus = "PAID";
+      } else if (cleanPaidAmount > 0) {
+        paymentStatus = "PARTIAL";
+      }
       // ==============================
       // UPDATE PO + ITEMS
       // ==============================
@@ -6079,19 +6260,31 @@ app.put(
 
                 poDate:
                   new Date(poDate),
+                  vendor: {
+                    connect: {
+                      id: Number(vendorId),
+                    },
+                  },
 
-                vendorId:
-                  Number(vendorId),
+                  project: projectId
+                    ? {
+                        connect: {
+                          id: Number(projectId),
+                        },
+                      }
+                    : {
+                        disconnect: true,
+                      },
 
-                projectId:
-                  projectId
-                    ? Number(projectId)
-                    : null,
-
-                rfqId:
-                  rfqId
-                    ? Number(rfqId)
-                    : null,
+                  rfq: rfqId
+                    ? {
+                        connect: {
+                          id: Number(rfqId),
+                        },
+                      }
+                    : {
+                        disconnect: true,
+                      },
 
                 subtotal,
 
@@ -6102,6 +6295,15 @@ app.put(
                   transportAmount,
 
                 grandTotal,
+
+                paidAmount: cleanPaidAmount,
+
+                dueAmount,
+
+                paymentStatus,
+
+
+
 
                 notes:
                   notes?.trim() || null,
@@ -6568,11 +6770,13 @@ app.post(
                     purchaseOrder.grandTotal,
 
                   paymentStatus:
-                    "UNPAID",
+                    purchaseOrder.paymentStatus || "UNPAID",
 
-                  paidAmount: 0,
+                  paidAmount:
+                    purchaseOrder.paidAmount || 0,
 
                   dueAmount:
+                    purchaseOrder.dueAmount ??
                     purchaseOrder.grandTotal,
 
                   notes:
