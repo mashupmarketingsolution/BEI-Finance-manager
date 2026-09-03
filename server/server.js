@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 5000;
  // password: "",
  // database: "be_interior_finance",
  // connectionLimit: 5,
-//});  
+//});
 
 
 //const dbUrl = new URL(process.env.DATABASE_URL);
@@ -5554,7 +5554,7 @@ app.post("/api/purchase-orders", async (req, res) => {
       }
     }
 
-    
+
     // ==============================
     // DUPLICATE PO NUMBER
     // ==============================
@@ -6787,40 +6787,7 @@ app.post(
                 },
               });
 
-              // -------------------------------
-              // CREATE STOCK MOVEMENT
-              // -------------------------------
 
-              await tx.stockMovement.create({
-                data: {
-                  materialId:
-                    item.materialId,
-
-                  movementType:
-                    "PURCHASE",
-
-                  quantity:
-                    item.quantity,
-
-                  unit:
-                    item.unit,
-
-                  referenceType:
-                    "PURCHASE",
-
-                  referenceId:
-                    purchase.id,
-
-                  projectId:
-                    purchaseOrder.projectId,
-
-                  unitCost:
-                    item.unitPrice,
-
-                  notes:
-                    `Purchase ${purchase.purchaseNo}`,
-                },
-              });
             }
 
             // ---------------------------------
@@ -7179,7 +7146,7 @@ app.post("/api/purchases", async (req, res) => {
       transportAmount;
 
 
-     
+
 
     // -----------------------------
     // DATABASE TRANSACTION
@@ -7229,50 +7196,17 @@ app.post("/api/purchases", async (req, res) => {
             },
           });
 
-      // CREATE ITEMS + STOCK MOVEMENTS
+// CREATE PURCHASE ITEMS
 for (const item of preparedItems) {
-
   await tx.purchaseItem.create({
     data: {
       purchaseId: purchase.id,
-
       materialId: item.materialId,
-
       quantity: item.quantity,
-
       unit: item.unit,
-
       unitPrice: item.unitPrice,
-
       total: item.total,
-
       notes: item.notes,
-    },
-  });
-
-
-  await tx.stockMovement.create({
-    data: {
-      materialId: item.materialId,
-
-      movementType: "PURCHASE",
-
-      quantity: item.quantity,
-
-      unit: item.unit,
-
-      referenceType: "PURCHASE",
-
-      referenceId: purchase.id,
-
-      projectId: projectId
-        ? Number(projectId)
-        : null,
-
-      unitCost: item.unitPrice,
-
-      notes:
-        `Purchase ${purchase.purchaseNo}`,
     },
   });
 }
@@ -7483,69 +7417,136 @@ app.delete("/api/purchases/:id", async (req, res) => {
     }
 
     // -----------------------------------------
-    // DELETE EVERYTHING IN ONE TRANSACTION
+    // PROTECT RECEIVED PURCHASE
     // -----------------------------------------
 
-    await prisma.$transaction(async (tx) => {
+    const hasReceivedItems =
+      existingPurchase.items.some(
+        (item) =>
+          Number(item.receivedQuantity) > 0
+      );
 
-      // 1. Find automatic purchase expense
-      const automaticExpense =
-        await tx.transaction.findFirst({
-          where: {
-            type: "EXPENSE",
-            description:
-              `Material Purchase - ${existingPurchase.purchaseNo}`,
-            vendorId:
-              existingPurchase.vendorId,
-          },
-        });
-
-      // 2. Delete automatic expense
-      if (automaticExpense) {
-        await tx.transaction.delete({
-          where: {
-            id: automaticExpense.id,
-          },
-        });
-      }
-
-      // 3. Delete purchase stock movements
-      await tx.stockMovement.deleteMany({
-        where: {
-          referenceType: "PURCHASE",
-          referenceId: id,
-        },
+    if (hasReceivedItems) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This purchase cannot be deleted because material has already been received",
       });
+    }
 
-      // 4. Delete purchase items
-      await tx.purchaseItem.deleteMany({
+
+
+
+        // -----------------------------------------
+    // PROTECT PAID PURCHASE
+    // -----------------------------------------
+
+    const paymentCount =
+      await prisma.purchasePayment.count({
         where: {
           purchaseId: id,
         },
       });
 
-      // 5. Delete purchase
-      await tx.purchase.delete({
-        where: {
-          id,
-        },
+    if (paymentCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This purchase cannot be deleted because payment has already been made",
       });
-    });
+    }
+    // -----------------------------------------
+    // DELETE EVERYTHING IN ONE TRANSACTION
+    // -----------------------------------------
+
+    await prisma.$transaction(
+      async (tx) => {
+
+        // -----------------------------------------
+        // 1. FIND AUTOMATIC PURCHASE EXPENSE
+        // -----------------------------------------
+
+        const automaticExpense =
+          await tx.transaction.findFirst({
+            where: {
+              type: "EXPENSE",
+              source: "PURCHASE",
+              description:
+                `Material Purchase - ${existingPurchase.purchaseNo}`,
+              vendorId:
+                existingPurchase.vendorId,
+              ...(existingPurchase.projectId
+                ? {
+                    projectId:
+                      existingPurchase.projectId,
+                  }
+                : {
+                    projectId: null,
+                  }),
+            },
+
+            orderBy: {
+              id: "asc",
+            },
+          });
+
+        // -----------------------------------------
+        // 2. DELETE AUTOMATIC PURCHASE EXPENSE
+        // -----------------------------------------
+
+        if (automaticExpense) {
+          await tx.transaction.delete({
+            where: {
+              id: automaticExpense.id,
+            },
+          });
+        }
+
+        // -----------------------------------------
+        // 3. DELETE LEGACY PURCHASE STOCK
+        // -----------------------------------------
+
+        await tx.stockMovement.deleteMany({
+          where: {
+            referenceType: "PURCHASE",
+            referenceId: id,
+          },
+        });
+
+        // -----------------------------------------
+        // 4. DELETE PURCHASE ITEMS
+        // -----------------------------------------
+
+        await tx.purchaseItem.deleteMany({
+          where: {
+            purchaseId: id,
+          },
+        });
+
+        // -----------------------------------------
+        // 5. DELETE PURCHASE
+        // -----------------------------------------
+
+        await tx.purchase.delete({
+          where: {
+            id,
+          },
+        });
+      }
+    );
 
     res.json({
       success: true,
-      message:
-        "Purchase deleted successfully",
+      message: "Purchase deleted successfully",
     });
 
   } catch (error) {
-
     console.error(
       "Delete Purchase Error:",
       error
     );
 
-    res.status(500).json({
+    res.status(400).json({
       success: false,
       message: error.message,
     });
@@ -7574,10 +7575,13 @@ app.put("/api/purchases/:id", async (req, res) => {
       projectId,
       discount,
       transportCost,
-     
       notes,
       items,
     } = req.body;
+
+    // -----------------------------------------
+    // BASIC VALIDATION
+    // -----------------------------------------
 
     if (!purchaseNo?.trim()) {
       return res.status(400).json({
@@ -7607,9 +7611,18 @@ app.put("/api/purchases/:id", async (req, res) => {
       });
     }
 
+    // -----------------------------------------
+    // FIND EXISTING PURCHASE
+    // -----------------------------------------
+
     const existingPurchase =
       await prisma.purchase.findUnique({
-        where: { id },
+        where: {
+          id,
+        },
+        include: {
+          items: true,
+        },
       });
 
     if (!existingPurchase) {
@@ -7618,6 +7631,28 @@ app.put("/api/purchases/:id", async (req, res) => {
         message: "Purchase not found",
       });
     }
+
+    // -----------------------------------------
+    // PROTECT RECEIVED PURCHASE
+    // -----------------------------------------
+
+    const hasReceivedItems =
+      existingPurchase.items.some(
+        (item) =>
+          Number(item.receivedQuantity) > 0
+      );
+
+    if (hasReceivedItems) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This purchase cannot be updated because material has already been received",
+      });
+    }
+
+    // -----------------------------------------
+    // VERIFY VENDOR
+    // -----------------------------------------
 
     const vendor =
       await prisma.vendor.findUnique({
@@ -7632,6 +7667,10 @@ app.put("/api/purchases/:id", async (req, res) => {
         message: "Vendor not found",
       });
     }
+
+    // -----------------------------------------
+    // VERIFY PROJECT
+    // -----------------------------------------
 
     if (projectId) {
       const project =
@@ -7668,7 +7707,10 @@ app.put("/api/purchases/:id", async (req, res) => {
         });
       }
 
-      if (!quantity || quantity <= 0) {
+      if (
+        !Number.isFinite(quantity) ||
+        quantity <= 0
+      ) {
         return res.status(400).json({
           success: false,
           message:
@@ -7677,7 +7719,7 @@ app.put("/api/purchases/:id", async (req, res) => {
       }
 
       if (
-        Number.isNaN(unitPrice) ||
+        !Number.isFinite(unitPrice) ||
         unitPrice < 0
       ) {
         return res.status(400).json({
@@ -7719,6 +7761,10 @@ app.put("/api/purchases/:id", async (req, res) => {
       });
     }
 
+    // -----------------------------------------
+    // CALCULATE TOTALS
+    // -----------------------------------------
+
     const discountAmount =
       Number(discount) || 0;
 
@@ -7730,334 +7776,331 @@ app.put("/api/purchases/:id", async (req, res) => {
       discountAmount +
       transportAmount;
 
-    const finalPaidAmount =
-      Number(paidAmount) || 0;
-
-    if (finalPaidAmount < 0) {
+    if (grandTotal < 0) {
       return res.status(400).json({
         success: false,
         message:
-          "Paid amount cannot be negative",
+          "Grand total cannot be negative",
       });
     }
-
-    if (finalPaidAmount > grandTotal) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Paid amount cannot be greater than grand total",
-      });
-    }
-
 
     // -----------------------------------------
     // DATABASE TRANSACTION
     // -----------------------------------------
 
-    await prisma.$transaction(async (tx) => {
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
 
-      // 1. Update purchase
-      await tx.purchase.update({
-        where: { id },
+          // -----------------------------------------
+          // 1. CALCULATE PAYMENT SUMMARY FROM HISTORY
+          // -----------------------------------------
 
-        data: {
-          purchaseNo:
-            purchaseNo.trim(),
+          const paymentSummary =
+            await tx.purchasePayment.aggregate({
+              where: {
+                purchaseId: id,
+              },
+              _sum: {
+                amount: true,
+              },
+            });
 
-          purchaseDate:
-            new Date(purchaseDate),
+          const totalPaid =
+            Number(
+              paymentSummary._sum.amount
+            ) || 0;
 
-          vendorId:
-            Number(vendorId),
+          // -----------------------------------------
+          // 2. PREVENT TOTAL < ALREADY PAID
+          // -----------------------------------------
 
-          projectId:
-            projectId
-              ? Number(projectId)
-              : null,
+          if (totalPaid > grandTotal) {
+            throw new Error(
+              "Purchase total cannot be less than the total amount already paid"
+            );
+          }
 
-          subtotal,
+          const dueAmount =
+            grandTotal - totalPaid;
 
-          discount:
-            discountAmount,
+          const paymentStatus =
+            totalPaid === 0
+              ? "UNPAID"
+              : totalPaid >= grandTotal
+              ? "PAID"
+              : "PARTIAL";
 
-          transportCost:
-            transportAmount,
+          // -----------------------------------------
+          // 3. UPDATE PURCHASE
+          // -----------------------------------------
 
-          grandTotal,
+          await tx.purchase.update({
+            where: {
+              id,
+            },
+            data: {
+              purchaseNo:
+                purchaseNo.trim(),
 
-          paymentStatus,
+              purchaseDate:
+                new Date(purchaseDate),
 
-          paidAmount:
+              vendorId:
+                Number(vendorId),
+
+              projectId:
+                projectId
+                  ? Number(projectId)
+                  : null,
+
+              subtotal,
+
+              discount:
+                discountAmount,
+
+              transportCost:
+                transportAmount,
+
+              grandTotal,
+
+              paymentStatus,
+
+              paidAmount:
                 totalPaid,
 
-          dueAmount,
+              dueAmount,
 
-          notes:
-            notes?.trim() || null,
-        },
-      });
-
-      // 2. Remove old purchase items
-      await tx.purchaseItem.deleteMany({
-        where: {
-          purchaseId: id,
-        },
-      });
-
-      // 3. Remove old PURCHASE stock movements
-      await tx.stockMovement.deleteMany({
-        where: {
-          referenceType: "PURCHASE",
-          referenceId: id,
-        },
-      });
-
-      // 4. Re-create purchase items + stock
-      for (const item of preparedItems) {
-
-        await tx.purchaseItem.create({
-          data: {
-            purchaseId: id,
-            materialId:
-              item.materialId,
-            quantity:
-              item.quantity,
-            unit:
-              item.unit,
-            unitPrice:
-              item.unitPrice,
-            total:
-              item.total,
-            notes:
-              item.notes,
-          },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            materialId:
-              item.materialId,
-
-            movementType:
-              "PURCHASE",
-
-            quantity:
-              item.quantity,
-
-            unit:
-              item.unit,
-
-            referenceType:
-              "PURCHASE",
-
-            referenceId:
-              id,
-
-            projectId:
-              projectId
-                ? Number(projectId)
-                : null,
-
-            unitCost:
-              item.unitPrice,
-
-            notes:
-              `Purchase ${purchaseNo.trim()}`,
-          },
-        });
-      }
-
-// 5. Find automatic purchase expense(s)
-const purchaseExpenseDescription =
-  `Material Purchase - ${purchaseNo.trim()}`;
-
-const expenses =
-  await tx.transaction.findMany({
-    where: {
-      type: "EXPENSE",
-
-      description:
-        purchaseExpenseDescription,
-
-      vendorId:
-        Number(vendorId),
-
-      ...(projectId
-        ? {
-            projectId:
-              Number(projectId),
-          }
-        : {
-            projectId: null,
-          }),
-    },
-
-    orderBy: {
-      id: "asc",
-    },
-  });
-
-// Keep only ONE automatic purchase expense
-const expense = expenses[0] || null;
-
-// Remove duplicate automatic expenses
-if (expenses.length > 1) {
-  await tx.transaction.deleteMany({
-    where: {
-      id: {
-        in: expenses
-          .slice(1)
-          .map((item) => item.id),
-      },
-    },
-  });
-}
-
-
-
-
-      // 6. Materials expense category
-      let materialCategory =
-        await tx.category.findFirst({
-          where: {
-            name: "Materials",
-            type: "EXPENSE",
-            status: "ACTIVE",
-          },
-        });
-
-      if (!materialCategory) {
-        materialCategory =
-          await tx.category.create({
-            data: {
-              name: "Materials",
-              type: "EXPENSE",
-              status: "ACTIVE",
+              notes:
+                notes?.trim() || null,
             },
           });
-      }
 
-      // 7. Update automatic expense
-      if (expense) {
+          // -----------------------------------------
+          // 4. REMOVE OLD UNRECEIVED ITEMS
+          // -----------------------------------------
 
-        await tx.transaction.update({
-          where: {
-            id: expense.id,
-          },
+          await tx.purchaseItem.deleteMany({
+            where: {
+              purchaseId: id,
+            },
+          });
 
-          data: {
-            transactionDate:
-              new Date(purchaseDate),
+          // -----------------------------------------
+          // 5. REMOVE LEGACY AUTO STOCK
+          //
+          // Safe because receivedQuantity = 0
+          // was already verified above.
+          // -----------------------------------------
 
-            amount:
-              grandTotal,
+          await tx.stockMovement.deleteMany({
+            where: {
+              referenceType: "PURCHASE",
+              referenceId: id,
+            },
+          });
 
-            paymentMethod:
-              "OTHER",
+          // -----------------------------------------
+          // 6. CREATE UPDATED PURCHASE ITEMS
+          // -----------------------------------------
 
-            description:
-              `Material Purchase - ${purchaseNo.trim()}`,
+          for (const item of preparedItems) {
+            await tx.purchaseItem.create({
+              data: {
+                purchaseId: id,
+                materialId:
+                  item.materialId,
+                quantity:
+                  item.quantity,
+                unit:
+                  item.unit,
+                unitPrice:
+                  item.unitPrice,
+                total:
+                  item.total,
+                notes:
+                  item.notes,
+              },
+            });
+          }
 
-            notes:
-              notes?.trim() ||
-              `Purchase ${purchaseNo.trim()}`,
+          // -----------------------------------------
+          // 7. FIND AUTOMATIC PURCHASE EXPENSE
+          // -----------------------------------------
 
-            projectId:
-              projectId
-                ? Number(projectId)
-                : null,
+          const purchaseExpenseDescription =
+            `Material Purchase - ${purchaseNo.trim()}`;
 
-            categoryId:
-              materialCategory.id,
+          const expenses =
+            await tx.transaction.findMany({
+              where: {
+                type: "EXPENSE",
 
-            vendorId:
-              Number(vendorId),
-          },
-        });
+                source: "PURCHASE",
 
-      } else {
+                description:
+                  purchaseExpenseDescription,
 
-        // Safety fallback
-        await tx.transaction.create({
-          data: {
-            transactionDate:
-              new Date(purchaseDate),
+                vendorId:
+                  Number(vendorId),
 
-            type:
-              "EXPENSE",
-            source: "PURCHASE",
+                ...(projectId
+                  ? {
+                      projectId:
+                        Number(projectId),
+                    }
+                  : {
+                      projectId: null,
+                    }),
+              },
 
-            amount:
-              grandTotal,
+              orderBy: {
+                id: "asc",
+              },
+            });
 
-            paymentMethod:
-              "OTHER",
+          const expense =
+            expenses[0] || null;
 
-            description:
-              `Material Purchase - ${purchaseNo.trim()}`,
+          // -----------------------------------------
+          // 8. REMOVE DUPLICATE PURCHASE EXPENSES
+          // -----------------------------------------
 
-            notes:
-              notes?.trim() ||
-              `Purchase ${purchaseNo.trim()}`,
+          if (expenses.length > 1) {
+            await tx.transaction.deleteMany({
+              where: {
+                id: {
+                  in: expenses
+                    .slice(1)
+                    .map((item) => item.id),
+                },
+              },
+            });
+          }
 
-            projectId:
-              projectId
-                ? Number(projectId)
-                : null,
+          // -----------------------------------------
+          // 9. FIND / CREATE MATERIAL CATEGORY
+          // -----------------------------------------
 
-            categoryId:
-              materialCategory.id,
+          let materialCategory =
+            await tx.category.findFirst({
+              where: {
+                name: "Materials",
+                type: "EXPENSE",
+                status: "ACTIVE",
+              },
+            });
 
-            vendorId:
-              Number(vendorId),
-          },
-        });
-      }
+          if (!materialCategory) {
+            materialCategory =
+              await tx.category.create({
+                data: {
+                  name: "Materials",
+                  type: "EXPENSE",
+                  status: "ACTIVE",
+                },
+              });
+          }
 
+          // -----------------------------------------
+          // 10. UPDATE OR CREATE PURCHASE EXPENSE
+          // -----------------------------------------
 
-         },
-      {
-        maxWait: 10000,
-        timeout: 20000,
-      }
-    );
+          if (expense) {
+            await tx.transaction.update({
+              where: {
+                id: expense.id,
+              },
 
-// -----------------------------------------
-// CALCULATE PAYMENT SUMMARY FROM HISTORY
-// -----------------------------------------
+              data: {
+                transactionDate:
+                  new Date(purchaseDate),
 
-const paymentSummary =
-  await tx.purchasePayment.aggregate({
-    where: {
-      purchaseId: id,
-    },
-    _sum: {
-      amount: true,
-    },
-  });
+                amount:
+                  grandTotal,
 
-const totalPaid =
-  Number(paymentSummary._sum.amount) || 0;
+                paymentMethod:
+                  "OTHER",
 
-if (totalPaid > grandTotal) {
-  throw new Error(
-    "Purchase total cannot be less than the total amount already paid"
-  );
-}
+                description:
+                  `Material Purchase - ${purchaseNo.trim()}`,
 
-const dueAmount =
-  grandTotal - totalPaid;
+                notes:
+                  notes?.trim() ||
+                  `Purchase ${purchaseNo.trim()}`,
 
-const paymentStatus =
-  totalPaid === 0
-    ? "UNPAID"
-    : totalPaid >= grandTotal
-    ? "PAID"
-    : "PARTIAL";
+                projectId:
+                  projectId
+                    ? Number(projectId)
+                    : null,
+
+                categoryId:
+                  materialCategory.id,
+
+                vendorId:
+                  Number(vendorId),
+
+                source: "PURCHASE",
+              },
+            });
+          } else {
+            await tx.transaction.create({
+              data: {
+                transactionDate:
+                  new Date(purchaseDate),
+
+                type: "EXPENSE",
+
+                source: "PURCHASE",
+
+                amount:
+                  grandTotal,
+
+                paymentMethod:
+                  "OTHER",
+
+                description:
+                  `Material Purchase - ${purchaseNo.trim()}`,
+
+                notes:
+                  notes?.trim() ||
+                  `Purchase ${purchaseNo.trim()}`,
+
+                projectId:
+                  projectId
+                    ? Number(projectId)
+                    : null,
+
+                categoryId:
+                  materialCategory.id,
+
+                vendorId:
+                  Number(vendorId),
+              },
+            });
+          }
+
+          return {
+            totalPaid,
+            dueAmount,
+            paymentStatus,
+          };
+        },
+        {
+          maxWait: 10000,
+          timeout: 20000,
+        }
+      );
+
+    // -----------------------------------------
+    // GET UPDATED PURCHASE
+    // -----------------------------------------
 
     const updatedPurchase =
       await prisma.purchase.findUnique({
-        where: { id },
+        where: {
+          id,
+        },
 
         include: {
           vendor: true,
@@ -8073,25 +8116,25 @@ const paymentStatus =
 
     res.json({
       success: true,
-      message:
-        "Purchase updated successfully",
-      data: updatedPurchase,
+      message: "Purchase updated successfully",
+      data: {
+        ...updatedPurchase,
+        paymentSummary: result,
+      },
     });
 
   } catch (error) {
-
     console.error(
       "Update Purchase Error:",
       error
     );
 
-    res.status(500).json({
+    res.status(400).json({
       success: false,
       message: error.message,
     });
   }
 });
-
 
 // =====================================================
 // GET PURCHASE PAYMENT HISTORY
@@ -8502,6 +8545,160 @@ app.post(
     }
   }
 );
+// =====================================================
+// RECEIVE PURCHASE MATERIAL
+// =====================================================
+
+app.post("/api/purchases/:id/receive", async (req, res) => {
+  try {
+    const purchaseId = Number(req.params.id);
+
+    if (!purchaseId || purchaseId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid purchase ID",
+      });
+    }
+
+    const { receiveDate, items } = req.body;
+
+    if (!receiveDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Receive date is required",
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one receive item is required",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const purchase = await tx.purchase.findUnique({
+        where: {
+          id: purchaseId,
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      if (!purchase) {
+        throw new Error("Purchase not found");
+      }
+
+      const purchaseItemsById = new Map(
+        purchase.items.map((item) => [item.id, item])
+      );
+
+      const receiveResults = [];
+
+      for (const receiveItem of items) {
+        const purchaseItemId = Number(receiveItem.purchaseItemId);
+        const receiveQuantity = Number(receiveItem.quantity);
+
+        if (!purchaseItemId || purchaseItemId <= 0) {
+          throw new Error("Invalid purchase item ID");
+        }
+
+        if (
+          !Number.isFinite(receiveQuantity) ||
+          receiveQuantity <= 0
+        ) {
+          throw new Error(
+            `Receive quantity must be greater than 0 for PurchaseItem ${purchaseItemId}`
+          );
+        }
+
+        const purchaseItem =
+          purchaseItemsById.get(purchaseItemId);
+
+        if (!purchaseItem) {
+          throw new Error(
+            `PurchaseItem ${purchaseItemId} does not belong to Purchase ${purchaseId}`
+          );
+        }
+
+        const orderedQuantity =
+          Number(purchaseItem.quantity) || 0;
+
+        const alreadyReceived =
+          Number(purchaseItem.receivedQuantity) || 0;
+
+        const newReceivedQuantity =
+          alreadyReceived + receiveQuantity;
+
+        if (newReceivedQuantity > orderedQuantity) {
+          throw new Error(
+            `Cannot receive ${receiveQuantity} for PurchaseItem ${purchaseItemId}. ` +
+              `Ordered: ${orderedQuantity}, already received: ${alreadyReceived}, ` +
+              `remaining: ${orderedQuantity - alreadyReceived}`
+          );
+        }
+
+        const updatedPurchaseItem =
+          await tx.purchaseItem.update({
+            where: {
+              id: purchaseItemId,
+            },
+            data: {
+              receivedQuantity: newReceivedQuantity,
+            },
+          });
+
+        const stockMovement =
+          await tx.stockMovement.create({
+            data: {
+              materialId: purchaseItem.materialId,
+              movementType: "PURCHASE",
+              quantity: receiveQuantity,
+              unit: purchaseItem.unit,
+              referenceType: "PURCHASE_RECEIVE",
+              referenceId: purchase.id,
+              projectId: purchase.projectId,
+              unitCost: purchaseItem.unitPrice,
+              notes:
+                receiveItem.notes?.trim() ||
+                `Material Receive - ${purchase.purchaseNo}`,
+              movementDate: new Date(receiveDate),
+            },
+          });
+
+        receiveResults.push({
+          purchaseItem: updatedPurchaseItem,
+          stockMovement,
+        });
+      }
+
+      return {
+        purchaseId: purchase.id,
+        purchaseNo: purchase.purchaseNo,
+        receiveDate: new Date(receiveDate),
+        items: receiveResults,
+      };
+    });
+
+    res.json({
+      success: true,
+      message: "Purchase material received successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error(
+      "Receive Purchase Material Error:",
+      error
+    );
+
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
 // GET STOCK MOVEMENTS
 app.get("/api/stock-movements", async (req, res) => {
