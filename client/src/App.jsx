@@ -283,8 +283,84 @@ const [editingPurchaseId, setEditingPurchaseId] =
 
   const [selectedPurchase, setSelectedPurchase] =
     useState(null);
+const [showReceiveModal, setShowReceiveModal] =
+  useState(false);
 
+const [receiveItem, setReceiveItem] =
+  useState(null);
 
+const [receiveQuantity, setReceiveQuantity] =
+  useState("");
+
+const [receiveDate, setReceiveDate] =
+  useState(
+    new Date().toISOString().split("T")[0]
+  );
+const handleReceiveMaterial = async () => {
+  if (!selectedPurchase || !receiveItem) {
+    return;
+  }
+
+  const quantity = Number(receiveQuantity);
+  const remaining =
+    Number(receiveItem.quantity || 0) -
+    Number(receiveItem.receivedQuantity || 0);
+
+  if (!quantity || quantity <= 0) {
+    setMessage("❌ Receive quantity must be greater than 0");
+    return;
+  }
+
+  if (quantity > remaining) {
+    setMessage(
+      `❌ Maximum receive quantity: ${remaining}`
+    );
+    return;
+  }
+
+  try {
+    setMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/purchases/${selectedPurchase.id}/receive`,
+      {
+        receiveDate,
+        items: [
+          {
+            purchaseItemId: receiveItem.id,
+            quantity,
+          },
+        ],
+      }
+    );
+
+    if (response.data.success) {
+      setMessage(
+        "✅ Material received successfully!"
+      );
+
+      setShowReceiveModal(false);
+      setReceiveItem(null);
+      setReceiveQuantity("");
+
+      await openPurchaseDetails(
+        selectedPurchase.id
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Receive Material Error:",
+      error
+    );
+
+    setMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Material receive failed"
+      }`
+    );
+  }
+};
 const [purchaseOrderForm, setPurchaseOrderForm] =
   useState({
     poNo: "",
@@ -406,6 +482,8 @@ const [showProjectViewModal, setShowProjectViewModal] = useState(false);
 
 
 const [selectedPurchaseRequest, setSelectedPurchaseRequest] = useState(null);
+
+
 const [showPurchaseRequestViewModal, setShowPurchaseRequestViewModal] = useState(false);
 const [showPurchaseRequestModal, setShowPurchaseRequestModal] = useState(false);
 
@@ -566,7 +644,7 @@ const createPurchaseOrderFromRFQ = (rfq) => {
         ),
         material:
           item.material || null,
-        
+
         quantity:
           Number(item.quantity || 0),
 
@@ -1225,7 +1303,7 @@ const loadRFQPriceComparison = async (rfqId) => {
     );
 
     if (response.data.success) {
-     
+
       setRfqPriceComparison(
       response.data.data || null
     );
@@ -1239,7 +1317,7 @@ const loadRFQPriceComparison = async (rfqId) => {
       error
     );
     setRfqPriceComparison(null);
-   
+
   } finally {
     setLoadingRFQPriceComparison(false);
   }
@@ -4140,7 +4218,7 @@ const openPurchaseModal = async () => {
                   `${API_URL}/api/purchases`,
                   payload
                 );
-                
+
 
       if (response.data.success) {
         setMessage(
@@ -6042,7 +6120,7 @@ setMaterialPriceFormMessage("");
 
 
   // =========================================
-  // TRANSACTION PAGE CHANGE 
+  // TRANSACTION PAGE CHANGE
   // =========================================
 
   const handleTransactionPageChange = (
@@ -6756,7 +6834,7 @@ const viewProject = async (id) => {
       setIncomeMessage(
         `❌ ${errorMessage}`
       );
-      
+
     } finally {
       setSavingIncome(false);
     }
@@ -9275,7 +9353,7 @@ const renderBOQs = () => {
                       >
                         Delete
                       </button>
-                 
+
 
                       </div>
 
@@ -9965,7 +10043,7 @@ const renderBOQDetailsModal = () => {
 
                         </div>
                       </td>
-                      
+
                       </tr>
 
                     ))}
@@ -11779,7 +11857,7 @@ const renderBOQItemViewModal = () => {
                   />
 
                 </div>
-                
+
                 {/* ERROR */}
 
                 {materialFormError && (
@@ -12611,6 +12689,12 @@ const renderBOQItemViewModal = () => {
             </div>
           </div>
         )}
+
+
+
+
+
+
 {/* =========================================
     STOCK RETURN MODAL
 ========================================= */}
@@ -14190,7 +14274,7 @@ const renderBOQItemViewModal = () => {
 
                           </td>
 
-                         
+
 
                               <td>
 
@@ -15283,14 +15367,14 @@ const renderPurchaseRequests = () => {
                       <td>
                         <div className="purchase-request-actions">
 
-                        <button 
-                          type="button" 
-                          className="view-button" 
-                          onClick={() => { 
-                            viewPurchaseRequest(item.id); 
-                          }} 
+                        <button
+                          type="button"
+                          className="view-button"
+                          onClick={() => {
+                            viewPurchaseRequest(item.id);
+                          }}
                         >
-                          View 
+                          View
                         </button>
 
                        <button
@@ -15390,7 +15474,7 @@ const renderPurchaseOrders = () => {
             <button
               type="button"
               className="add-button"
-            
+
              onClick={async () => {
               setEditingPurchaseOrderId(null);
 
@@ -15418,7 +15502,7 @@ const renderPurchaseOrders = () => {
 
               setShowPurchaseOrderModal(true);
             }}
-              
+
             >
               <Plus size={18} />
               Add Purchase Order
@@ -15473,7 +15557,7 @@ const renderPurchaseOrders = () => {
 
                 setShowPurchaseOrderModal(true);
               }}
-              
+
             >
               <Plus size={18} />
               Add Your First Purchase Order
@@ -15598,7 +15682,7 @@ const renderPurchaseOrders = () => {
                       <td>
 
                         <div className="purchase-order-actions">
-                          
+
                           <button
                             type="button"
                             className="view-button"
@@ -17953,7 +18037,7 @@ const renderRFQModal = () => {
             <strong>
               ৳
               {Number(
-              
+
                 rfqPriceComparison.lowestQuote
               ).toLocaleString("en-BD")}
             </strong>
@@ -18236,7 +18320,7 @@ const renderRFQViewModal = () => {
                           <td>
                             {item.notes || "-"}
                           </td>
-                 
+
 
                         </tr>
                       )
@@ -22243,7 +22327,7 @@ const renderRFQEditModal = () => {
         {activePage === "purchase-orders" && renderPurchaseOrders()}
         {activePage === "rfqs" && renderRFQs()}
 
-      
+
         {renderProjectViewModal()}
 
         {renderBOQModal()}
@@ -22413,6 +22497,7 @@ const renderRFQEditModal = () => {
                           <th>Unit</th>
                           <th>Unit Price</th>
                           <th>Total</th>
+                          <th>Action</th>
                         </tr>
 
                       </thead>
@@ -22485,6 +22570,31 @@ const renderRFQEditModal = () => {
                                 )}
                               </td>
 
+                                <td>
+                                  {Number(item.quantity) -
+                                    Number(item.receivedQuantity || 0) >
+                                  0 ? (
+                                    <button
+                                      type="button"
+                                     onClick={() => {
+                                      setShowPurchaseDetailsModal(false);
+                                      setShowPurchaseModal(false);
+
+                                      setReceiveItem(item);
+                                      setReceiveQuantity("");
+                                      setReceiveDate(
+                                        new Date().toISOString().split("T")[0]
+                                      );
+                                      setShowReceiveModal(true);
+                                    }}
+                                                                          >
+                                      Receive
+                                    </button>
+                                  ) : (
+                                    <span>Received</span>
+                                  )}
+                                </td>
+
                             </tr>
 
                           )
@@ -22493,6 +22603,7 @@ const renderRFQEditModal = () => {
                       </tbody>
 
                     </table>
+
 
                   </div>
 
@@ -22633,6 +22744,351 @@ const renderRFQEditModal = () => {
       )}
 
 
+   {/* =========================================
+          MATERIAL RECEIVE MODAL
+          ========================================= */}
+
+          {showReceiveModal && (
+            <div
+              className="modal-overlay"
+                style={{
+              zIndex: 9999,
+            }}
+              onClick={() => {
+                setShowReceiveModal(false);
+                setReceiveItem(null);
+                setReceiveQuantity("");
+              }}
+            >
+              <div
+                className="project-modal"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: "620px",
+                  width: "100%",
+                }}
+              >
+
+                {/* HEADER */}
+
+                <div className="modal-header">
+
+                  <div>
+                    <h2>
+                      Receive Material
+                    </h2>
+
+                    <p>
+                      Record received material from purchase
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="modal-close"
+                    onClick={() => {
+                      setShowReceiveModal(false);
+                      setReceiveItem(null);
+                      setReceiveQuantity("");
+                    }}
+                  >
+                    <X size={22} />
+                  </button>
+
+                </div>
+
+
+                {/* CONTENT */}
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleReceiveMaterial();
+                  }}
+                  style={{
+                    padding: "24px",
+                  }}
+                >
+
+                  {/* MATERIAL */}
+
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      marginBottom: "20px",
+                    }}
+                  >
+
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        color: "#64748b",
+                        marginBottom: "5px",
+                      }}
+                    >
+                      Material
+                    </span>
+
+                    <strong
+                      style={{
+                        fontSize: "20px",
+                      }}
+                    >
+                      {receiveItem?.material?.name || "-"}
+                    </strong>
+
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: "4px",
+                        color: "#64748b",
+                      }}
+                    >
+                      {receiveItem?.material?.code || "-"}
+                    </span>
+
+
+                    {/* QUANTITY SUMMARY */}
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(3, 1fr)",
+                        gap: "12px",
+                        marginTop: "16px",
+                      }}
+                    >
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            color: "#64748b",
+                          }}
+                        >
+                          Ordered
+                        </span>
+
+                        <strong>
+                          {Number(
+                            receiveItem?.quantity || 0
+                          )}{" "}
+                          {receiveItem?.unit || ""}
+                        </strong>
+                      </div>
+
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            color: "#64748b",
+                          }}
+                        >
+                          Already Received
+                        </span>
+
+                        <strong>
+                          {Number(
+                            receiveItem?.receivedQuantity || 0
+                          )}{" "}
+                          {receiveItem?.unit || ""}
+                        </strong>
+                      </div>
+
+
+                      <div>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "12px",
+                            color: "#64748b",
+                          }}
+                        >
+                          Remaining
+                        </span>
+
+                        <strong>
+                          {Math.max(
+                            Number(
+                              receiveItem?.quantity || 0
+                            ) -
+                              Number(
+                                receiveItem?.receivedQuantity ||
+                                  0
+                              ),
+                            0
+                          )}{" "}
+                          {receiveItem?.unit || ""}
+                        </strong>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* RECEIVE QUANTITY */}
+
+                  <div
+                    style={{
+                      marginBottom: "18px",
+                    }}
+                  >
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: "600",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Receive Quantity *
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.001"
+                      max={Math.max(
+                        Number(
+                          receiveItem?.quantity || 0
+                        ) -
+                          Number(
+                            receiveItem?.receivedQuantity ||
+                              0
+                          ),
+                        0
+                      )}
+                      value={receiveQuantity}
+                      onChange={(e) =>
+                        setReceiveQuantity(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Enter receive quantity"
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        border:
+                          "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: "6px",
+                        fontSize: "12px",
+                        color: "#64748b",
+                      }}
+                    >
+                      Maximum receive quantity:{" "}
+                      {Math.max(
+                        Number(
+                          receiveItem?.quantity || 0
+                        ) -
+                          Number(
+                            receiveItem?.receivedQuantity ||
+                              0
+                          ),
+                        0
+                      )}{" "}
+                      {receiveItem?.unit || ""}
+                    </span>
+
+                  </div>
+
+
+                  {/* RECEIVE DATE */}
+
+                  <div
+                    style={{
+                      marginBottom: "24px",
+                    }}
+                  >
+
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: "600",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      Receive Date *
+                    </label>
+
+                    <input
+                      type="date"
+                      value={receiveDate}
+                      onChange={(e) =>
+                        setReceiveDate(
+                          e.target.value
+                        )
+                      }
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        border:
+                          "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        boxSizing: "border-box",
+                      }}
+                    />
+
+                  </div>
+
+
+                  {/* FOOTER */}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: "10px",
+                      paddingTop: "18px",
+                      borderTop:
+                        "1px solid #e2e8f0",
+                    }}
+                  >
+
+                    <button
+                      type="button"
+                      className="cancel-button"
+                      onClick={() => {
+                        setShowReceiveModal(false);
+                        setReceiveItem(null);
+                        setReceiveQuantity("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="save-button"
+                    >
+                      Receive Material
+                    </button>
+
+                  </div>
+
+                </form>
+
+              </div>
+            </div>
+          )}
 
       {/* =========================================
           ADD PROJECT MODAL
@@ -22642,6 +23098,7 @@ const renderRFQEditModal = () => {
 
         <div
           className="modal-overlay"
+
           onClick={closeProjectModal}
         >
 
