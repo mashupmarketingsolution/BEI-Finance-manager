@@ -22408,6 +22408,8 @@ const renderRFQEditModal = () => {
                         <tr>
                           <th>Material</th>
                           <th>Quantity</th>
+                          <th>Received</th>
+                          <th>Remaining</th>
                           <th>Unit</th>
                           <th>Unit Price</th>
                           <th>Total</th>
@@ -22445,9 +22447,19 @@ const renderRFQEditModal = () => {
                                 </small>
                               </td>
 
+                             <td>
+                                {Number(item.quantity)}
+                              </td>
+
                               <td>
-                                {Number(
-                                  item.quantity
+                                {Number(item.receivedQuantity || 0)}
+                              </td>
+
+                              <td>
+                                {Math.max(
+                                  Number(item.quantity) -
+                                    Number(item.receivedQuantity || 0),
+                                  0
                                 )}
                               </td>
 
