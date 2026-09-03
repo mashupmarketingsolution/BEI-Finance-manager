@@ -60,7 +60,53 @@ const prisma = new PrismaClient({ adapter });
 
 
 
+// =========================================
+// STOCK CALCULATION HELPER
+// =========================================
 
+function calculateMaterialStock(movements) {
+  let currentStock = 0;
+  let totalStockIn = 0;
+  let totalStockOut = 0;
+
+  for (const movement of movements) {
+    const quantity = Number(movement.quantity) || 0;
+
+    switch (movement.movementType) {
+      case "PURCHASE":
+      case "RETURN":
+        currentStock += quantity;
+        totalStockIn += quantity;
+        break;
+
+      case "PROJECT_USAGE":
+      case "DAMAGE":
+        currentStock -= quantity;
+        totalStockOut += quantity;
+        break;
+
+      case "ADJUSTMENT":
+        currentStock += quantity;
+
+        if (quantity >= 0) {
+          totalStockIn += quantity;
+        } else {
+          totalStockOut += Math.abs(quantity);
+        }
+
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  return {
+    currentStock,
+    totalStockIn,
+    totalStockOut,
+  };
+}
 
 
 // =========================================
@@ -8770,42 +8816,13 @@ app.get("/api/materials/:id/stock", async (req, res) => {
       },
     });
 
-    let currentStock = 0;
-    let totalStockIn = 0;
-    let totalStockOut = 0;
 
-    for (const movement of movements) {
-      const quantity = Number(movement.quantity) || 0;
+    const {
+      currentStock,
+      totalStockIn,
+      totalStockOut,
+    } = calculateMaterialStock(movements);
 
-      switch (movement.movementType) {
-        case "PURCHASE":
-        case "RETURN":
-          currentStock += quantity;
-          totalStockIn += quantity;
-          break;
-
-        case "PROJECT_USAGE":
-        case "DAMAGE":
-          currentStock -= quantity;
-          totalStockOut += quantity;
-          break;
-
-        case "ADJUSTMENT":
-          // ADJUSTMENT is treated according to quantity sign
-          currentStock += quantity;
-
-          if (quantity >= 0) {
-            totalStockIn += quantity;
-          } else {
-            totalStockOut += Math.abs(quantity);
-          }
-
-          break;
-
-        default:
-          break;
-      }
-    }
 
     res.json({
   success: true,
@@ -8914,31 +8931,8 @@ app.post("/api/stock-movements/usage", async (req, res) => {
       },
     });
 
-    let currentStock = 0;
-
-    for (const movement of movements) {
-      const movementQty =
-        Number(movement.quantity) || 0;
-
-      switch (movement.movementType) {
-        case "PURCHASE":
-        case "RETURN":
-          currentStock += movementQty;
-          break;
-
-        case "PROJECT_USAGE":
-        case "DAMAGE":
-          currentStock -= movementQty;
-          break;
-
-        case "ADJUSTMENT":
-          currentStock += movementQty;
-          break;
-
-        default:
-          break;
-      }
-    }
+         const { currentStock } =
+      calculateMaterialStock(movements);
 
     // Prevent negative stock
     if (quantityNumber > currentStock) {
@@ -9187,29 +9181,8 @@ app.post("/api/stock-movements/damage", async (req, res) => {
         },
       });
 
-    let stockIn = 0;
-    let stockOut = 0;
-
-    for (const movement of stockMovements) {
-      const qty = Number(movement.quantity);
-
-      if (
-        movement.movementType === "PURCHASE" ||
-        movement.movementType === "RETURN" ||
-        movement.movementType === "ADJUSTMENT"
-      ) {
-        stockIn += qty;
-      }
-
-      if (
-        movement.movementType === "PROJECT_USAGE" ||
-        movement.movementType === "DAMAGE"
-      ) {
-        stockOut += qty;
-      }
-    }
-
-    const currentStock = stockIn - stockOut;
+         const { currentStock } =
+      calculateMaterialStock(stockMovements);
 
     if (quantityNumber > currentStock) {
       return res.status(400).json({
@@ -9320,44 +9293,8 @@ app.post("/api/stock-movements/adjustment", async (req, res) => {
           quantity: true,
         },
       });
-
-    let stockIn = 0;
-    let stockOut = 0;
-
-    for (const movement of stockMovements) {
-      const qty = Number(movement.quantity);
-
-      if (
-        movement.movementType === "PURCHASE" ||
-        movement.movementType === "RETURN"
-      ) {
-        stockIn += qty;
-      }
-
-      if (
-        movement.movementType === "PROJECT_USAGE" ||
-        movement.movementType === "DAMAGE"
-      ) {
-        stockOut += qty;
-      }
-
-      if (
-        movement.movementType === "ADJUSTMENT"
-      ) {
-        // Existing adjustment:
-        // positive = stock in
-        // negative = stock out
-        if (qty > 0) {
-          stockIn += qty;
-        } else {
-          stockOut += Math.abs(qty);
-        }
-      }
-    }
-
-    const currentStock =
-      stockIn - stockOut;
-
+    const { currentStock } =
+      calculateMaterialStock(stockMovements);
     // Negative adjustment cannot exceed stock
     if (
       quantityNumber < 0 &&
