@@ -19,15 +19,82 @@ model Customer {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  projects     Project[]
+  projects       Project[]
+  convertedLeads Lead[]    @relation("LeadConvertedCustomer")
 
   @@index([phone])
   @@index([status])
   @@map("customers")
 }
+
 enum CustomerType {
   INDIVIDUAL
   COMPANY
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  name         String       @db.VarChar(150)
+  username     String       @unique @db.VarChar(50)
+  email        String?      @db.VarChar(150)
+  phone        String?      @db.VarChar(30)
+  passwordHash String       @db.VarChar(255)
+  status       RecordStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  assignedLeads Lead[] @relation("LeadAssignedTo")
+
+  @@index([status])
+  @@index([phone])
+  @@map("users")
+}
+
+model Lead {
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(150)
+  phone       String? @db.VarChar(30)
+  email       String? @db.VarChar(150)
+  companyName String? @db.VarChar(150)
+  address     String? @db.Text
+
+  source LeadSource @default(OTHER)
+  status LeadStatus @default(NEW)
+  notes  String?    @db.Text
+
+  assignedToId        Int?
+  convertedCustomerId Int?
+  convertedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedTo        User?     @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  convertedCustomer Customer? @relation("LeadConvertedCustomer", fields: [convertedCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@index([status])
+  @@index([source])
+  @@index([assignedToId])
+  @@index([convertedCustomerId])
+  @@map("leads")
+}
+
+enum LeadSource {
+  FACEBOOK
+  WEBSITE
+  REFERRAL
+  PHONE
+  WALK_IN
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  LOST
+  CONVERTED
 }
 
 model Project {
@@ -47,7 +114,7 @@ model Project {
   rfqs             RFQ[]
   stockMovements   StockMovement[]
   transactions     Transaction[]
-  
+
   @@index([customerId])
   @@map("projects")
 }
@@ -97,8 +164,6 @@ model Category {
   @@map("categories")
 }
 
-
-
 enum TransactionSource {
   MANUAL
   PURCHASE
@@ -106,24 +171,24 @@ enum TransactionSource {
 }
 
 model Transaction {
-  id              Int             @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   transactionDate DateTime
   type            TransactionType
   source          TransactionSource @default(MANUAL)
-  amount          Decimal         @db.Decimal(15, 2)
-  paymentMethod   PaymentMethod   @default(CASH)
-  description     String?         @db.Text
-  notes           String?         @db.Text
+  amount          Decimal           @db.Decimal(15, 2)
+  paymentMethod   PaymentMethod     @default(CASH)
+  description     String?           @db.Text
+  notes           String?           @db.Text
   projectId       Int?
   categoryId      Int?
   workerId        Int?
   vendorId        Int?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  category        Category?       @relation(fields: [categoryId], references: [id])
-  project         Project?        @relation(fields: [projectId], references: [id])
-  vendor          Vendor?         @relation(fields: [vendorId], references: [id])
-  worker          Worker?         @relation(fields: [workerId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  category        Category?         @relation(fields: [categoryId], references: [id])
+  project         Project?          @relation(fields: [projectId], references: [id])
+  vendor          Vendor?           @relation(fields: [vendorId], references: [id])
+  worker          Worker?           @relation(fields: [workerId], references: [id])
 
   @@index([transactionDate])
   @@index([type])
@@ -224,19 +289,19 @@ model PurchasePayment {
 }
 
 model PurchaseItem {
-  id         Int      @id @default(autoincrement())
-  purchaseId Int
-  materialId Int
-  quantity   Decimal  @db.Decimal(15, 3)
-  receivedQuantity Decimal @default(0) @db.Decimal(15, 3)
-  unit       String   @db.VarChar(30)
-  unitPrice  Decimal  @db.Decimal(15, 2)
-  total      Decimal  @db.Decimal(15, 2)
-  notes      String?  @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  material   Material @relation(fields: [materialId], references: [id])
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  purchaseId       Int
+  materialId       Int
+  quantity         Decimal  @db.Decimal(15, 3)
+  receivedQuantity Decimal  @default(0) @db.Decimal(15, 3)
+  unit             String   @db.VarChar(30)
+  unitPrice        Decimal  @db.Decimal(15, 2)
+  total            Decimal  @db.Decimal(15, 2)
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  material         Material @relation(fields: [materialId], references: [id])
+  purchase         Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
   @@index([materialId])

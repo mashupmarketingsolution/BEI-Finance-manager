@@ -221,6 +221,9 @@ app.get("/api/projects", async (req, res) => {
     // Projects for current page
     const projects =
       await prisma.project.findMany({
+        include: {
+          customer: true,
+        },
         orderBy: {
           createdAt: "desc",
         },
@@ -283,6 +286,7 @@ app.get("/api/projects/:id", async (req, res) => {
       },
 
       include: {
+        customer: true,
         // -----------------------------
         // TRANSACTIONS
         // -----------------------------
@@ -503,6 +507,7 @@ app.post("/api/projects", async (req, res) => {
   try {
     const {
       name,
+      customerId,
       contractValue,
       notes,
       status,
@@ -515,9 +520,40 @@ app.post("/api/projects", async (req, res) => {
       });
     }
 
+    let projectCustomerId = null;
+
+if (
+  customerId !== undefined &&
+  customerId !== null &&
+  customerId !== ""
+) {
+  projectCustomerId = Number(customerId);
+
+  if (
+    !Number.isInteger(projectCustomerId) ||
+    projectCustomerId <= 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid customer ID",
+    });
+  }
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: projectCustomerId },
+  });
+
+  if (!customer) {
+    return res.status(400).json({
+      success: false,
+      message: "Customer not found",
+    });
+  }
+}
     const project = await prisma.project.create({
       data: {
         name: name.trim(),
+        customerId: projectCustomerId,
         contractValue: contractValue
           ? Number(contractValue)
           : 0,
@@ -555,6 +591,7 @@ app.put("/api/projects/:id", async (req, res) => {
 
     const {
       name,
+      customerId,
       contractValue,
       notes,
       status,
@@ -572,13 +609,43 @@ app.put("/api/projects/:id", async (req, res) => {
         message: "Project not found",
       });
     }
+      let projectCustomerId = null;
 
+      if (
+        customerId !== undefined &&
+        customerId !== null &&
+        customerId !== ""
+      ) {
+        projectCustomerId = Number(customerId);
+
+        if (
+          !Number.isInteger(projectCustomerId) ||
+          projectCustomerId <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid customer ID",
+          });
+        }
+
+        const customer = await prisma.customer.findUnique({
+          where: { id: projectCustomerId },
+        });
+
+        if (!customer) {
+          return res.status(400).json({
+            success: false,
+            message: "Customer not found",
+          });
+        }
+      }
     const project = await prisma.project.update({
       where: {
         id,
       },
       data: {
         name: name ? name.trim() : existingProject.name,
+        customerId: projectCustomerId,
         contractValue:
           contractValue !== undefined
             ? Number(contractValue)
@@ -1066,6 +1133,30 @@ app.delete("/api/customers/:id", async (req, res) => {
 app.get("/api/dashboard", async (req, res) => {
   try {
     const totalProjects = await prisma.project.count();
+    const totalCustomers = await prisma.customer.count();
+
+const activeCustomers = await prisma.customer.count({
+  where: {
+    status: "ACTIVE",
+  },
+});
+
+const inactiveCustomers = await prisma.customer.count({
+  where: {
+    status: "INACTIVE",
+  },
+});
+
+const customersWithProjects = await prisma.customer.count({
+  where: {
+    projects: {
+      some: {},
+    },
+  },
+});
+
+const customersWithoutProjects =
+  totalCustomers - customersWithProjects;
 
     const incomeResult = await prisma.transaction.aggregate({
       where: {
@@ -1105,11 +1196,18 @@ app.get("/api/dashboard", async (req, res) => {
 
     res.json({
       success: true,
-      data: {
+     data: {
         totalProjects,
         totalIncome,
         totalExpenses,
         currentBalance: totalIncome - totalExpenses,
+
+        totalCustomers,
+        activeCustomers,
+        inactiveCustomers,
+        customersWithProjects,
+        customersWithoutProjects,
+
         recentProjects,
       },
     });

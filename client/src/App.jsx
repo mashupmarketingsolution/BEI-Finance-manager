@@ -83,12 +83,18 @@ function App() {
     totalPages: 1,
   });
 
-  const [dashboardData, setDashboardData] = useState({
-    totalProjects: 0,
-    totalIncome: 0,
-    totalExpenses: 0,
-    currentBalance: 0,
-  });
+const [dashboardData, setDashboardData] = useState({
+  totalProjects: 0,
+  totalIncome: 0,
+  totalExpenses: 0,
+  currentBalance: 0,
+
+  totalCustomers: 0,
+  activeCustomers: 0,
+  inactiveCustomers: 0,
+  customersWithProjects: 0,
+  customersWithoutProjects: 0,
+});
 
   const [activePage, setActivePage] = useState("dashboard");
 
@@ -3063,7 +3069,40 @@ const handleDeletePurchase = async (purchase) => {
 
 
 
+// =========================================
+// CUSTOMER STATE
+// =========================================
 
+const [customers, setCustomers] = useState([]);
+const [customerPage, setCustomerPage] = useState(1);
+const [customerLimit, setCustomerLimit] = useState(10);
+
+const [customerPagination, setCustomerPagination] = useState({
+  page: 1,
+  limit: 10,
+  totalCustomers: 0,
+  totalPages: 1,
+});
+
+const [showCustomerModal, setShowCustomerModal] = useState(false);
+const [savingCustomer, setSavingCustomer] = useState(false);
+const [editingCustomerId, setEditingCustomerId] = useState(null);
+
+const [showCustomerDetailsModal, setShowCustomerDetailsModal] =
+  useState(false);
+
+const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+const [customerForm, setCustomerForm] = useState({
+  name: "",
+  phone: "",
+  email: "",
+  companyName: "",
+  address: "",
+  customerType: "INDIVIDUAL",
+  status: "ACTIVE",
+  notes: "",
+});
 
   const [vendors, setVendors] = useState([]);
   const [vendorPage, setVendorPage] = useState(1);
@@ -3252,12 +3291,13 @@ const [
   const [incomeMessage, setIncomeMessage] = useState("");
   const [expenseMessage, setExpenseMessage] = useState("");
 
-  const [projectForm, setProjectForm] = useState({
-    name: "",
-    contractValue: "",
-    status: "ONGOING",
-    notes: "",
-  });
+ const [projectForm, setProjectForm] = useState({
+  name: "",
+  customerId: "",
+  contractValue: "",
+  status: "ONGOING",
+  notes: "",
+});
 
 // =========================================
 // BOQ STATE
@@ -6049,7 +6089,52 @@ setMaterialPriceFormMessage("");
 
 
 
+// =========================================
+// LOAD CUSTOMERS
+// =========================================
 
+const loadCustomers = async (
+  page = customerPage,
+  limit = customerLimit
+) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/customers`,
+      {
+        params: {
+          page,
+          limit,
+        },
+      }
+    );
+
+    if (response.data.success) {
+      setCustomers(response.data.data);
+
+      setCustomerPagination(
+        response.data.pagination
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Load Customers Error:",
+      error
+    );
+
+    setMessage(
+      "❌ Customer data load করা যায়নি!"
+    );
+  }
+};
+
+const handleCustomerPageChange = (newPage) => {
+  setCustomerPage(newPage);
+
+  loadCustomers(
+    newPage,
+    customerLimit
+  );
+};
 
   const loadVendors = async (
     page = vendorPage,
@@ -6094,7 +6179,219 @@ setMaterialPriceFormMessage("");
     );
   };
 
+// =========================================
+// CUSTOMER FORM
+// =========================================
 
+const handleCustomerChange = (e) => {
+  const { name, value } = e.target;
+
+  setCustomerForm((previous) => ({
+    ...previous,
+    [name]: value,
+  }));
+};
+
+const openCustomerModal = () => {
+  setEditingCustomerId(null);
+
+  setCustomerForm({
+    name: "",
+    phone: "",
+    email: "",
+    companyName: "",
+    address: "",
+    customerType: "INDIVIDUAL",
+    status: "ACTIVE",
+    notes: "",
+  });
+
+  setMessage("");
+  setShowCustomerModal(true);
+};
+
+const closeCustomerModal = () => {
+  if (!savingCustomer) {
+    setShowCustomerModal(false);
+  }
+};
+
+const handleSaveCustomer = async (e) => {
+  e.preventDefault();
+
+  if (!customerForm.name.trim()) {
+    setMessage(
+      "❌ Customer name দেওয়া বাধ্যতামূলক!"
+    );
+    return;
+  }
+
+  try {
+    setSavingCustomer(true);
+    setMessage("");
+
+    const payload = {
+      name: customerForm.name.trim(),
+      phone: customerForm.phone.trim(),
+      email: customerForm.email.trim(),
+      companyName: customerForm.companyName.trim(),
+      address: customerForm.address.trim(),
+      customerType: customerForm.customerType,
+      status: customerForm.status,
+      notes: customerForm.notes.trim(),
+    };
+
+    let response;
+
+    if (editingCustomerId) {
+      response = await axios.put(
+        `${API_URL}/api/customers/${editingCustomerId}`,
+        payload
+      );
+    } else {
+      response = await axios.post(
+        `${API_URL}/api/customers`,
+        payload
+      );
+    }
+
+    if (response.data.success) {
+      await loadCustomers();
+
+      setShowCustomerModal(false);
+      setEditingCustomerId(null);
+
+      setCustomerForm({
+        name: "",
+        phone: "",
+        email: "",
+        companyName: "",
+        address: "",
+        customerType: "INDIVIDUAL",
+        status: "ACTIVE",
+        notes: "",
+      });
+
+      setMessage(
+        editingCustomerId
+          ? "✅ Customer successfully updated!"
+          : "✅ Customer successfully added!"
+      );
+
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+    }
+  } catch (error) {
+    console.error(
+      "Save Customer Error:",
+      error
+    );
+
+    setMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Customer save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingCustomer(false);
+  }
+};
+
+const handleEditCustomer = (customer) => {
+  setEditingCustomerId(customer.id);
+
+  setCustomerForm({
+    name: customer.name || "",
+    phone: customer.phone || "",
+    email: customer.email || "",
+    companyName: customer.companyName || "",
+    address: customer.address || "",
+    customerType:
+      customer.customerType || "INDIVIDUAL",
+    status: customer.status || "ACTIVE",
+    notes: customer.notes || "",
+  });
+
+  setMessage("");
+  setShowCustomerModal(true);
+};
+
+// =========================================
+// VIEW CUSTOMER DETAILS
+// =========================================
+
+const openCustomerDetails = async (customer) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/customers/${customer.id}`
+    );
+
+    if (response.data.success) {
+      setSelectedCustomer(response.data.data);
+      setShowCustomerDetailsModal(true);
+    }
+  } catch (error) {
+    console.error(
+      "Load Customer Details Error:",
+      error
+    );
+
+    setMessage(
+      "❌ Customer details load করা যায়নি!"
+    );
+  }
+};
+
+const closeCustomerDetails = () => {
+  setShowCustomerDetailsModal(false);
+  setSelectedCustomer(null);
+};
+
+// =========================================
+// DELETE CUSTOMER
+// =========================================
+
+const handleDeleteCustomer = async (id) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this customer?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await axios.delete(
+      `${API_URL}/api/customers/${id}`
+    );
+
+    if (response.data.success) {
+      await loadCustomers();
+
+      setMessage(
+        "✅ Customer successfully deleted!"
+      );
+
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete Customer Error:",
+      error
+    );
+
+    setMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Customer delete করা যায়নি!"
+      }`
+    );
+  }
+};
   const loadTransactions = async (
     page = transactionPage,
     limit = transactionLimit
@@ -6436,6 +6733,20 @@ setMaterialPriceFormMessage("");
     materialCategoryLimit,
   ]);
 
+    useEffect(() => {
+      if (activePage === "customers") {
+        setCustomerPage(1);
+
+        loadCustomers(
+          1,
+          customerLimit
+        );
+      }
+    }, [
+      activePage,
+      customerLimit,
+    ]);
+
   // =========================================
   // REFRESH
   // =========================================
@@ -6475,13 +6786,13 @@ setMaterialPriceFormMessage("");
   const openProjectModal = () => {
     setEditingProjectId(null);
 
-    setProjectForm({
+   setProjectForm({
       name: "",
+      customerId: "",
       contractValue: "",
       status: "ONGOING",
       notes: "",
     });
-
     setMessage("");
     setShowProjectModal(true);
   };
@@ -6516,14 +6827,16 @@ setMaterialPriceFormMessage("");
       setSavingProject(true);
       setMessage("");
 
-      const payload = {
+     const payload = {
         name: projectForm.name.trim(),
+        customerId: projectForm.customerId
+          ? Number(projectForm.customerId)
+          : null,
         contractValue:
           projectForm.contractValue || 0,
         status: projectForm.status,
         notes: projectForm.notes.trim(),
       };
-
       let response;
 
       // EDIT
@@ -6551,12 +6864,13 @@ setMaterialPriceFormMessage("");
         setShowProjectModal(false);
         setEditingProjectId(null);
 
-        setProjectForm({
-          name: "",
-          contractValue: "",
-          status: "ONGOING",
-          notes: "",
-        });
+       setProjectForm({
+        name: "",
+        customerId: "",
+        contractValue: "",
+        status: "ONGOING",
+        notes: "",
+      });
 
         setMessage(
           editingProjectId
@@ -6631,14 +6945,17 @@ const viewProject = async (id) => {
   const handleEditProject = (project) => {
     setEditingProjectId(project.id);
 
-    setProjectForm({
-      name: project.name || "",
-      contractValue: project.contractValue
-        ? Number(project.contractValue)
-        : "",
-      status: project.status || "ONGOING",
-      notes: project.notes || "",
-    });
+  setProjectForm({
+    name: project.name || "",
+    customerId: project.customerId
+      ? String(project.customerId)
+      : "",
+    contractValue: project.contractValue
+      ? Number(project.contractValue)
+      : "",
+    status: project.status || "ONGOING",
+    notes: project.notes || "",
+  });
 
     setMessage("");
     setShowProjectModal(true);
@@ -7660,7 +7977,358 @@ const viewProject = async (id) => {
 
 
 
+// =========================================
+// RENDER CUSTOMERS
+// =========================================
 
+const renderCustomers = () => {
+  return (
+    <section className="dashboard">
+
+      {message && (
+        <div
+          className={`message-box ${
+            message.includes("❌")
+              ? "message-error"
+              : "message-success"
+          }`}
+        >
+          {message}
+        </div>
+      )}
+
+      <div className="content-card">
+
+        {/* HEADER */}
+        <div className="card-header">
+
+          <div>
+            <h2>Customers</h2>
+
+            <p>
+              Manage all BE Interior customers
+            </p>
+          </div>
+
+          <div className="header-actions">
+
+            <RefreshButton
+              onRefresh={loadCustomers}
+            />
+
+            <button
+              className="add-button"
+              onClick={openCustomerModal}
+            >
+              <Plus size={18} />
+              Add Customer
+            </button>
+
+          </div>
+
+        </div>
+
+
+        {/* PAGE SIZE */}
+        <div className="project-page-size">
+
+          <label>
+            Show:
+          </label>
+
+          <select
+            value={customerLimit}
+            onChange={(e) => {
+
+              const newLimit =
+                Number(e.target.value);
+
+              setCustomerLimit(newLimit);
+              setCustomerPage(1);
+
+              loadCustomers(
+                1,
+                newLimit
+              );
+
+            }}
+          >
+
+            <option value={10}>
+              10
+            </option>
+
+            <option value={20}>
+              20
+            </option>
+
+            <option value={50}>
+              50
+            </option>
+
+            <option value={100}>
+              100
+            </option>
+
+          </select>
+
+          <span>
+            customers per page
+          </span>
+
+        </div>
+
+
+        {/* EMPTY STATE */}
+        {customers.length === 0 ? (
+
+          <div className="empty-state">
+
+            <Users size={50} />
+
+            <h3>
+              No Customers Found
+            </h3>
+
+            <p>
+              Your customer list is currently empty.
+            </p>
+
+            <button
+              className="empty-add-button"
+              onClick={openCustomerModal}
+            >
+              <Plus size={18} />
+              Add Your First Customer
+            </button>
+
+          </div>
+
+        ) : (
+
+          /* CUSTOMER TABLE */
+          <div className="table-wrapper">
+
+            <table>
+
+              <thead>
+
+                <tr>
+
+                  <th>ID</th>
+
+                  <th>Customer Name</th>
+
+                  <th>Company</th>
+
+                  <th>Phone</th>
+
+                  <th>Email</th>
+
+                  <th>Type</th>
+
+                  <th>Status</th>
+
+                  <th>Action</th>
+
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                {customers.map((customer) => (
+
+                  <tr key={customer.id}>
+
+                    <td>
+                      #{customer.id}
+                    </td>
+
+
+                    <td>
+
+                      <strong>
+                        {customer.name}
+                      </strong>
+
+                      {customer.address && (
+                        <small className="project-notes">
+                          {customer.address}
+                        </small>
+                      )}
+
+                    </td>
+
+
+                    <td>
+                      {customer.companyName || "-"}
+                    </td>
+
+
+                    <td>
+                      {customer.phone || "-"}
+                    </td>
+
+
+                    <td>
+                      {customer.email || "-"}
+                    </td>
+
+
+                    <td>
+                      {customer.customerType === "COMPANY"
+                        ? "Company"
+                        : "Individual"}
+                    </td>
+
+
+                    <td>
+
+                      <span className="status ongoing">
+                        {customer.status}
+                      </span>
+
+                    </td>
+
+
+                    <td>
+
+                      <div className="income-actions">
+
+                        <button
+                          type="button"
+                          className="view-button"
+                          onClick={() =>
+                            openCustomerDetails(customer)
+                          }
+                        >
+                          View
+                        </button>
+
+
+                        <button
+                          type="button"
+                          className="edit-income-button"
+                          onClick={() =>
+                            handleEditCustomer(customer)
+                          }
+                        >
+                          Edit
+                        </button>
+
+
+                        <button
+                          type="button"
+                          className="delete-income-button"
+                          onClick={() =>
+                            handleDeleteCustomer(
+                              customer.id
+                            )
+                          }
+                        >
+                          Delete
+                        </button>
+
+                      </div>
+
+                    </td>
+
+                  </tr>
+
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
+
+
+        {/* PAGINATION */}
+        <div className="vendor-pagination">
+
+          <div className="pagination-info">
+
+            Showing{" "}
+
+            {customerPagination.totalCustomers === 0
+              ? 0
+              : (customerPagination.page - 1) *
+                  customerPagination.limit +
+                1}
+
+            {" - "}
+
+            {Math.min(
+              customerPagination.page *
+                customerPagination.limit,
+              customerPagination.totalCustomers
+            )}
+
+            {" of "}
+
+            {customerPagination.totalCustomers}
+
+            {" customers"}
+
+          </div>
+
+
+          <div className="pagination-buttons">
+
+            <button
+              type="button"
+              disabled={
+                customerPagination.page <= 1
+              }
+              onClick={() =>
+                handleCustomerPageChange(
+                  customerPagination.page - 1
+                )
+              }
+            >
+              Previous
+            </button>
+
+
+            <span className="pagination-current">
+
+              Page{" "}
+              {customerPagination.page}
+              {" of "}
+              {customerPagination.totalPages}
+
+            </span>
+
+
+            <button
+              type="button"
+              disabled={
+                customerPagination.page >=
+                customerPagination.totalPages
+              }
+              onClick={() =>
+                handleCustomerPageChange(
+                  customerPagination.page + 1
+                )
+              }
+            >
+              Next
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+  );
+};
   // =========================================
   // RENDER PROJECTS
   // =========================================
@@ -7779,6 +8447,7 @@ const viewProject = async (id) => {
                   <tr>
                     <th>ID</th>
                     <th>Project Name</th>
+                    <th>Customer</th>
                     <th>Contract Value</th>
                     <th>Status</th>
                     <th>Created Date</th>
@@ -7807,7 +8476,9 @@ const viewProject = async (id) => {
                           </small>
                         )}
                       </td>
-
+                      <td>
+                        {project.customer?.name || "—"}
+                      </td>
                       <td className="money">
                         ৳{" "}
                         {formatMoney(
@@ -8047,6 +8718,12 @@ const renderProjectViewModal = () => {
                 </strong>
               </div>
 
+            <div className="project-info-card">
+              <span>Customer</span>
+              <strong>
+                {project.customer?.name || "—"}
+              </strong>
+            </div>
 
               <div className="project-info-card">
                 <span>Contract Value</span>
@@ -21541,7 +22218,14 @@ const renderRFQEditModal = () => {
             <FolderKanban size={20} />
             <span>Projects</span>
           </a>
-
+          <a
+            href="#"
+            onClick={() => setActivePage("customers")}
+            className={activePage === "customers" ? "active" : ""}
+          >
+            <Users size={18} />
+            Customers
+          </a>
           <a
             href="#"
             className={
@@ -22170,7 +22854,156 @@ const renderRFQEditModal = () => {
 
             </div>
 
+            {/* =========================================
+    CUSTOMER OVERVIEW
+========================================= */}
 
+            <div className="content-card customer-overview-card">
+
+              <div className="card-header">
+
+                <div>
+                  <h2>Customer Overview</h2>
+
+                  <p>
+                    Current customer and CRM status
+                  </p>
+                </div>
+
+                <Users size={22} />
+
+              </div>
+
+
+              <div className="customer-overview-grid">
+
+                {/* TOTAL CUSTOMERS */}
+
+                <div className="customer-summary-item total-customer-summary">
+
+                  <div className="customer-summary-icon">
+                    <Users size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Total Customers
+                    </span>
+
+                    <strong>
+                      {dashboardData.totalCustomers}
+                    </strong>
+
+                    <small>
+                      All customers
+                    </small>
+                  </div>
+
+                </div>
+
+
+                {/* ACTIVE CUSTOMERS */}
+
+                <div className="customer-summary-item active-customer-summary">
+
+                  <div className="customer-summary-icon">
+                    <Users size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Active Customers
+                    </span>
+
+                    <strong>
+                      {dashboardData.activeCustomers}
+                    </strong>
+
+                    <small>
+                      Currently active
+                    </small>
+                  </div>
+
+                </div>
+
+
+                {/* INACTIVE CUSTOMERS */}
+
+                <div className="customer-summary-item inactive-customer-summary">
+
+                  <div className="customer-summary-icon">
+                    <Users size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Inactive Customers
+                    </span>
+
+                    <strong>
+                      {dashboardData.inactiveCustomers}
+                    </strong>
+
+                    <small>
+                      Currently inactive
+                    </small>
+                  </div>
+
+                </div>
+
+
+                {/* WITH PROJECTS */}
+
+                <div className="customer-summary-item customer-project-summary">
+
+                  <div className="customer-summary-icon">
+                    <FolderKanban size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      With Projects
+                    </span>
+
+                    <strong>
+                      {dashboardData.customersWithProjects}
+                    </strong>
+
+                    <small>
+                      Linked to projects
+                    </small>
+                  </div>
+
+                </div>
+
+
+                {/* WITHOUT PROJECTS */}
+
+                <div className="customer-summary-item customer-no-project-summary">
+
+                  <div className="customer-summary-icon">
+                    <Users size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Without Projects
+                    </span>
+
+                    <strong>
+                      {dashboardData.customersWithoutProjects}
+                    </strong>
+
+                    <small>
+                      No project linked
+                    </small>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
             {/* =========================================
     COMPANY CONDITION
 ========================================= */}
@@ -22455,6 +23288,7 @@ const renderRFQEditModal = () => {
           </section>
         )}
 
+        {activePage === "customers" && renderCustomers()}
         {activePage === "projects" && renderProjects()}
         {activePage === "boqs" && renderBOQs()}
         {activePage === "income" && renderIncome()}
@@ -23299,7 +24133,37 @@ const renderRFQEditModal = () => {
                 />
 
               </div>
+                <div className="form-group">
 
+                  <label>
+                    Customer
+                  </label>
+
+                  <select
+                    name="customerId"
+                    value={projectForm.customerId}
+                    onChange={handleProjectChange}
+                  >
+
+                    <option value="">
+                      Select Customer (Optional)
+                    </option>
+
+                    {customers.map((customer) => (
+                      <option
+                        key={customer.id}
+                        value={customer.id}
+                      >
+                        {customer.name}
+                        {customer.companyName
+                          ? ` — ${customer.companyName}`
+                          : ""}
+                      </option>
+                    ))}
+
+                  </select>
+
+                </div>
               <div className="form-group">
 
                 <label>
@@ -24962,7 +25826,254 @@ const renderRFQEditModal = () => {
         </div>
       )}
 
+{/* =========================================
+    CUSTOMER ADD / EDIT MODAL
+========================================= */}
 
+{showCustomerModal && (
+  <div
+    className="modal-overlay"
+    onClick={closeCustomerModal}
+  >
+    <div
+      className="project-modal"
+      onClick={(e) => e.stopPropagation()}
+    >
+
+      <div className="modal-header">
+
+        <div>
+          <h2>
+            {editingCustomerId
+              ? "Edit Customer"
+              : "Add New Customer"}
+          </h2>
+
+          <p>
+            Manage BE Interior customer
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="modal-close"
+          onClick={closeCustomerModal}
+          disabled={savingCustomer}
+        >
+          <X size={22} />
+        </button>
+
+      </div>
+
+
+      <form
+        onSubmit={handleSaveCustomer}
+        className="project-form"
+      >
+
+        {/* CUSTOMER NAME */}
+
+        <div className="form-group">
+
+          <label>
+            Customer Name *
+          </label>
+
+          <input
+            type="text"
+            name="name"
+            value={customerForm.name}
+            onChange={handleCustomerChange}
+            placeholder="Example: Hossain Al Mahmud"
+          />
+
+        </div>
+
+
+        {/* PHONE */}
+
+        <div className="form-group">
+
+          <label>
+            Phone
+          </label>
+
+          <input
+            type="text"
+            name="phone"
+            value={customerForm.phone}
+            onChange={handleCustomerChange}
+            placeholder="Example: 017XXXXXXXX"
+          />
+
+        </div>
+
+
+        {/* EMAIL */}
+
+        <div className="form-group">
+
+          <label>
+            Email
+          </label>
+
+          <input
+            type="email"
+            name="email"
+            value={customerForm.email}
+            onChange={handleCustomerChange}
+            placeholder="Example: customer@email.com"
+          />
+
+        </div>
+
+
+        {/* COMPANY NAME */}
+
+        <div className="form-group">
+
+          <label>
+            Company Name
+          </label>
+
+          <input
+            type="text"
+            name="companyName"
+            value={customerForm.companyName}
+            onChange={handleCustomerChange}
+            placeholder="Example: ABC Limited"
+          />
+
+        </div>
+
+
+        {/* CUSTOMER TYPE */}
+
+        <div className="form-group">
+
+          <label>
+            Customer Type
+          </label>
+
+          <select
+            name="customerType"
+            value={customerForm.customerType}
+            onChange={handleCustomerChange}
+          >
+
+            <option value="INDIVIDUAL">
+              Individual
+            </option>
+
+            <option value="COMPANY">
+              Company
+            </option>
+
+          </select>
+
+        </div>
+
+
+        {/* STATUS */}
+
+        <div className="form-group">
+
+          <label>
+            Status
+          </label>
+
+          <select
+            name="status"
+            value={customerForm.status}
+            onChange={handleCustomerChange}
+          >
+
+            <option value="ACTIVE">
+              Active
+            </option>
+
+            <option value="INACTIVE">
+              Inactive
+            </option>
+
+          </select>
+
+        </div>
+
+
+        {/* ADDRESS */}
+
+        <div className="form-group">
+
+          <label>
+            Address
+          </label>
+
+          <textarea
+            name="address"
+            value={customerForm.address}
+            onChange={handleCustomerChange}
+            placeholder="Customer address..."
+            rows="3"
+          />
+
+        </div>
+
+
+        {/* NOTES */}
+
+        <div className="form-group">
+
+          <label>
+            Notes
+          </label>
+
+          <textarea
+            name="notes"
+            value={customerForm.notes}
+            onChange={handleCustomerChange}
+            placeholder="Additional customer notes..."
+            rows="3"
+          />
+
+        </div>
+
+
+        {/* ACTIONS */}
+
+        <div className="modal-actions">
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={closeCustomerModal}
+            disabled={savingCustomer}
+          >
+            Cancel
+          </button>
+
+
+          <button
+            type="submit"
+            className="save-button"
+            disabled={savingCustomer}
+          >
+
+            {savingCustomer
+              ? "Saving..."
+              : editingCustomerId
+                ? "Update Customer"
+                : "Save Customer"}
+
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+)}
       {/* =========================================
     VENDOR MODAL
 ========================================= */}
@@ -25308,7 +26419,326 @@ const renderRFQEditModal = () => {
       )}
 
 
+{/* =========================================
+    CUSTOMER DETAILS MODAL
+========================================= */}
 
+{showCustomerDetailsModal && (
+  <div
+    className="modal-overlay"
+    onClick={closeCustomerDetails}
+  >
+    <div
+      className="project-modal customer-details-modal"
+      onClick={(e) => e.stopPropagation()}
+    >
+
+      {/* HEADER */}
+
+      <div className="modal-header">
+
+        <div>
+          <h2>
+            Customer Details
+          </h2>
+
+          <p>
+            Customer #{selectedCustomer?.id}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="modal-close"
+          onClick={closeCustomerDetails}
+        >
+          <X size={22} />
+        </button>
+
+      </div>
+
+
+      {selectedCustomer && (
+        <div className="purchase-details-content">
+
+          {/* BASIC INFORMATION */}
+
+          <div className="purchase-info-grid">
+
+            <div>
+              <strong>
+                Customer ID
+              </strong>
+
+              <span>
+                #{selectedCustomer.id}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Customer Name
+              </strong>
+
+              <span>
+                {selectedCustomer.name || "-"}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Phone
+              </strong>
+
+              <span>
+                {selectedCustomer.phone || "-"}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Email
+              </strong>
+
+              <span>
+                {selectedCustomer.email || "-"}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Company Name
+              </strong>
+
+              <span>
+                {selectedCustomer.companyName || "-"}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Customer Type
+              </strong>
+
+              <span>
+                {selectedCustomer.customerType === "COMPANY"
+                  ? "Company"
+                  : "Individual"}
+              </span>
+            </div>
+
+
+            <div>
+              <strong>
+                Status
+              </strong>
+
+              <span className="status-badge active">
+                {selectedCustomer.status || "ACTIVE"}
+              </span>
+            </div>
+
+          </div>
+
+
+          {/* ADDRESS */}
+
+          <div
+            className="purchase-notes"
+            style={{
+              marginTop: "24px",
+            }}
+          >
+
+            <strong>
+              Address
+            </strong>
+
+            <p>
+              {selectedCustomer.address || "-"}
+            </p>
+
+          </div>
+
+
+          {/* NOTES */}
+
+          <div
+            className="purchase-notes"
+            style={{
+              marginTop: "20px",
+            }}
+          >
+
+            <strong>
+              Notes
+            </strong>
+
+            <p>
+              {selectedCustomer.notes || "-"}
+            </p>
+
+          </div>
+
+
+          {/* PROJECTS */}
+
+          <div
+            style={{
+              marginTop: "28px",
+            }}
+          >
+
+            <h3
+              style={{
+                marginBottom: "14px",
+              }}
+            >
+              Linked Projects
+            </h3>
+
+
+            {selectedCustomer.projects &&
+            selectedCustomer.projects.length > 0 ? (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+
+                    <tr>
+
+                      <th>
+                        ID
+                      </th>
+
+                      <th>
+                        Project Name
+                      </th>
+
+                      <th>
+                        Contract Value
+                      </th>
+
+                      <th>
+                        Status
+                      </th>
+
+                      <th>
+                        Created Date
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+
+                  <tbody>
+
+                    {selectedCustomer.projects.map(
+                      (project) => (
+                        <tr key={project.id}>
+
+                          <td>
+                            #{project.id}
+                          </td>
+
+                          <td>
+                            <strong>
+                              {project.name}
+                            </strong>
+                          </td>
+
+                          <td className="money">
+                            ৳{" "}
+                            {formatMoney(
+                              project.contractValue
+                            )}
+                          </td>
+
+                          <td>
+                            <span
+                              className={getStatusClass(
+                                project.status
+                              )}
+                            >
+                              {project.status === "ON_HOLD"
+                                ? "ON HOLD"
+                                : project.status}
+                            </span>
+                          </td>
+
+                          <td>
+                            {new Date(
+                              project.createdAt
+                            ).toLocaleDateString(
+                              "en-GB"
+                            )}
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            ) : (
+
+              <div className="empty-state">
+
+                <FolderKanban size={40} />
+
+                <h3>
+                  No Projects Linked
+                </h3>
+
+                <p>
+                  No project is currently linked
+                  to this customer.
+                </p>
+
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* FOOTER */}
+
+          <div
+            className="modal-actions"
+            style={{
+              marginTop: "24px",
+            }}
+          >
+
+            <button
+              type="button"
+              className="cancel-button"
+              onClick={closeCustomerDetails}
+            >
+              Close
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  </div>
+)}
       {/* =========================================
     CATEGORY MODAL
 ========================================= */}
