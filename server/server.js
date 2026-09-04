@@ -108,7 +108,42 @@ function calculateMaterialStock(movements) {
   };
 }
 
+// =========================================
+// PROJECT RETURN AVAILABILITY HELPER
+// =========================================
 
+function calculateProjectReturnAvailability(
+  movements
+) {
+  let totalUsed = 0;
+  let totalReturned = 0;
+
+  for (const movement of movements) {
+    const quantity =
+      Number(movement.quantity) || 0;
+
+    if (
+      movement.movementType ===
+      "PROJECT_USAGE"
+    ) {
+      totalUsed += quantity;
+    }
+
+    if (
+      movement.movementType ===
+      "RETURN"
+    ) {
+      totalReturned += quantity;
+    }
+  }
+
+  return {
+    totalUsed,
+    totalReturned,
+    availableReturn:
+      totalUsed - totalReturned,
+  };
+}
 // =========================================
 // MIDDLEWARE
 // =========================================
@@ -8745,6 +8780,144 @@ app.post("/api/purchases/:id/receive", async (req, res) => {
   }
 });
 
+// =====================================================
+// GET PROJECT MATERIAL RETURN AVAILABILITY
+// =====================================================
+
+app.get(
+  "/api/stock-movements/return-availability",
+  async (req, res) => {
+    try {
+      const materialIdNumber =
+        Number(req.query.materialId);
+
+      const projectIdNumber =
+        Number(req.query.projectId);
+
+      // -----------------------------------------
+      // BASIC VALIDATION
+      // -----------------------------------------
+
+      if (
+        !materialIdNumber ||
+        materialIdNumber <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Material is required",
+        });
+      }
+
+      if (
+        !projectIdNumber ||
+        projectIdNumber <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Project is required",
+        });
+      }
+
+      // -----------------------------------------
+      // VERIFY MATERIAL
+      // -----------------------------------------
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: materialIdNumber,
+          },
+        });
+
+      if (!material) {
+        return res.status(404).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+
+      // -----------------------------------------
+      // VERIFY PROJECT
+      // -----------------------------------------
+
+      const project =
+        await prisma.project.findUnique({
+          where: {
+            id: projectIdNumber,
+          },
+        });
+
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+
+      // -----------------------------------------
+      // GET PROJECT MATERIAL MOVEMENTS
+      // -----------------------------------------
+
+      const projectMovements =
+        await prisma.stockMovement.findMany({
+          where: {
+            materialId: materialIdNumber,
+            projectId: projectIdNumber,
+            movementType: {
+              in: [
+                "PROJECT_USAGE",
+                "RETURN",
+              ],
+            },
+          },
+          select: {
+            movementType: true,
+            quantity: true,
+          },
+        });
+
+      // -----------------------------------------
+      // CALCULATE RETURN AVAILABILITY
+      // -----------------------------------------
+
+      const {
+        totalUsed,
+        totalReturned,
+        availableReturn,
+      } =
+        calculateProjectReturnAvailability(
+          projectMovements
+        );
+
+      // -----------------------------------------
+      // RESPONSE
+      // -----------------------------------------
+
+      res.json({
+        success: true,
+
+        data: {
+          materialId: material.id,
+          projectId: project.id,
+          totalUsed,
+          totalReturned,
+          availableReturn,
+          unit: material.unit,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Get Project Return Availability Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
 
 // GET STOCK MOVEMENTS
 app.get("/api/stock-movements", async (req, res) => {
@@ -9011,7 +9184,7 @@ app.post("/api/stock-movements/usage", async (req, res) => {
 });
 
 // =====================================================
-// CREATE STOCK RETURN
+// CREATE STOCK RETURN / PROJECT RETURN
 // =====================================================
 
 app.post("/api/stock-movements/return", async (req, res) => {
@@ -9026,6 +9199,11 @@ app.post("/api/stock-movements/return", async (req, res) => {
 
     const materialIdNumber = Number(materialId);
     const quantityNumber = Number(quantity);
+    const projectIdNumber = Number(projectId);
+
+    // -----------------------------------------
+    // BASIC VALIDATION
+    // -----------------------------------------
 
     if (!materialIdNumber || materialIdNumber <= 0) {
       return res.status(400).json({
@@ -9035,7 +9213,7 @@ app.post("/api/stock-movements/return", async (req, res) => {
     }
 
     if (
-      Number.isNaN(quantityNumber) ||
+      !Number.isFinite(quantityNumber) ||
       quantityNumber <= 0
     ) {
       return res.status(400).json({
@@ -9044,12 +9222,22 @@ app.post("/api/stock-movements/return", async (req, res) => {
       });
     }
 
-    const material =
-      await prisma.material.findUnique({
-        where: {
-          id: materialIdNumber,
-        },
+    if (!projectIdNumber || projectIdNumber <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required for material return",
       });
+    }
+
+    // -----------------------------------------
+    // VERIFY MATERIAL
+    // -----------------------------------------
+
+    const material = await prisma.material.findUnique({
+      where: {
+        id: materialIdNumber,
+      },
+    });
 
     if (!material) {
       return res.status(404).json({
@@ -9058,21 +9246,71 @@ app.post("/api/stock-movements/return", async (req, res) => {
       });
     }
 
-    if (projectId) {
-      const project =
-        await prisma.project.findUnique({
-          where: {
-            id: Number(projectId),
-          },
-        });
+    // -----------------------------------------
+    // VERIFY PROJECT
+    // -----------------------------------------
 
-      if (!project) {
-        return res.status(400).json({
-          success: false,
-          message: "Project not found",
-        });
-      }
+    const project = await prisma.project.findUnique({
+      where: {
+        id: projectIdNumber,
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
     }
+// -----------------------------------------
+// GET PROJECT MATERIAL MOVEMENTS
+// -----------------------------------------
+
+const projectMovements =
+  await prisma.stockMovement.findMany({
+    where: {
+      materialId: materialIdNumber,
+      projectId: projectIdNumber,
+      movementType: {
+        in: ["PROJECT_USAGE", "RETURN"],
+      },
+    },
+    select: {
+      movementType: true,
+      quantity: true,
+    },
+  });
+
+// -----------------------------------------
+// CALCULATE PROJECT RETURN AVAILABILITY
+// -----------------------------------------
+
+const {
+  totalUsed,
+  totalReturned,
+  availableReturn,
+} =
+  calculateProjectReturnAvailability(
+    projectMovements
+  );
+
+
+    // -----------------------------------------
+    // PREVENT INVALID RETURN
+    // -----------------------------------------
+
+    if (quantityNumber > availableReturn) {
+      return res.status(400).json({
+        success: false,
+        message:
+          `Return quantity cannot exceed available project material. ` +
+          `Available return: ${availableReturn} ${material.unit}`,
+      });
+    }
+
+    // -----------------------------------------
+    // CREATE PROJECT RETURN
+    // -----------------------------------------
 
     const movement =
       await prisma.stockMovement.create({
@@ -9088,9 +9326,7 @@ app.post("/api/stock-movements/return", async (req, res) => {
 
           referenceType: "STOCK_RETURN",
 
-          projectId: projectId
-            ? Number(projectId)
-            : null,
+          projectId: projectIdNumber,
 
           notes:
             notes?.trim() || null,
@@ -9102,16 +9338,29 @@ app.post("/api/stock-movements/return", async (req, res) => {
         },
       });
 
+    // -----------------------------------------
+    // RESPONSE
+    // -----------------------------------------
+
     res.status(201).json({
       success: true,
       message:
-        "Stock return recorded successfully",
+        "Project material return recorded successfully",
+
       data: movement,
+
+      summary: {
+        totalUsed,
+        totalReturned:
+          totalReturned + quantityNumber,
+        availableReturn:
+          availableReturn - quantityNumber,
+      },
     });
 
   } catch (error) {
     console.error(
-      "Create Stock Return Error:",
+      "Create Project Return Error:",
       error
     );
 
@@ -9121,7 +9370,6 @@ app.post("/api/stock-movements/return", async (req, res) => {
     });
   }
 });
-
 // =====================================================
 // CREATE STOCK DAMAGE
 // =====================================================

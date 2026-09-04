@@ -3380,10 +3380,18 @@ const [
   stockReturnForm,
   setStockReturnForm,
 ] = useState({
+  projectId: "",
   quantity: "",
   notes: "",
 });
-
+const [
+  stockReturnError,
+  setStockReturnError,
+] = useState("");
+const [
+  stockReturnAvailability,
+  setStockReturnAvailability,
+] = useState(null);
 
 // STOCK DAMAGE STATE
 const [
@@ -5256,10 +5264,11 @@ const editPurchaseOrder = async (poId) => {
 const openStockReturnModal = (material) => {
   setStockReturnMaterial(material);
 
-  setStockReturnForm({
-    quantity: "",
-    notes: "",
-  });
+    setStockReturnForm({
+      projectId: "",
+      quantity: "",
+      notes: "",
+    });
 
   setShowStockReturnModal(true);
 };
@@ -5269,10 +5278,11 @@ const closeStockReturnModal = () => {
 
   setStockReturnMaterial(null);
 
-  setStockReturnForm({
-    quantity: "",
-    notes: "",
-  });
+    setStockReturnForm({
+      projectId: "",
+      quantity: "",
+      notes: "",
+    });
 };
 const openStockDamageModal = (material) => {
   setStockDamageMaterial(material);
@@ -5388,15 +5398,24 @@ const closeStockAdjustmentModal = () => {
 
 const handleStockReturnSubmit = async (e) => {
   e.preventDefault();
-
+    setStockReturnError("");
   if (!stockReturnMaterial) return;
 
   const quantity = Number(
     stockReturnForm.quantity
   );
+  const projectId = Number(
+  stockReturnForm.projectId
+);
 
+if (!projectId || projectId <= 0) {
+  setStockReturnError(
+    "❌ Project is required for material return"
+  );
+  return;
+}
   if (!quantity || quantity <= 0) {
-    setMessage(
+    setStockReturnError(
       "❌ Return quantity must be greater than 0"
     );
     return;
@@ -5409,6 +5428,7 @@ const handleStockReturnSubmit = async (e) => {
         materialId: stockReturnMaterial.id,
         quantity,
         unit: stockReturnMaterial.unit,
+        projectId,
         notes:
           stockReturnForm.notes?.trim() || null,
       }
@@ -5432,12 +5452,12 @@ const handleStockReturnSubmit = async (e) => {
       error
     );
 
-    setMessage(
-      `❌ ${
-        error.response?.data?.message ||
-        "Stock return failed"
-      }`
-    );
+  setStockReturnError(
+  `❌ ${
+      error.response?.data?.message ||
+      "Stock return failed"
+    }`
+  );
   }
 
   setTimeout(() => {
@@ -10250,8 +10270,6 @@ const renderBOQItemModal = () => {
               />
 
             </div>
-
-
             {/* QUANTITY */}
 
             <div className="boq-form-group">
@@ -12556,8 +12574,6 @@ const renderBOQItemViewModal = () => {
                   </select>
 
                 </div>
-
-
                 {/* QUANTITY */}
 
                 <div
@@ -12704,8 +12720,8 @@ const renderBOQItemViewModal = () => {
             className="modal-overlay"
             onClick={closeStockReturnModal}
           >
-            <div
-              className="project-modal"
+                      <div
+              className="project-modal stock-return-modal"
               onClick={(e) =>
                 e.stopPropagation()
               }
@@ -12806,9 +12822,140 @@ const renderBOQItemViewModal = () => {
 
                 </div>
 
+                {/* PROJECT */}
 
+                <div
+                  style={{
+                    marginBottom: "18px",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Project *
+                  </label>
+
+                  <select
+                    value={
+                      stockReturnForm.projectId
+                    }
+
+                     onChange={async (e) => {
+                        const projectId =
+                          e.target.value;
+
+                        setStockReturnForm(
+                          (previous) => ({
+                            ...previous,
+                            projectId,
+                          })
+                        );
+
+                        setStockReturnError("");
+                        setStockReturnAvailability(null);
+
+                        if (!projectId) {
+                          return;
+                        }
+
+                        try {
+                          const response =
+                            await axios.get(
+                              `${API_URL}/api/stock-movements/return-availability`,
+                              {
+                                params: {
+                                  materialId:
+                                    stockReturnMaterial.id,
+                                  projectId: Number(projectId),
+                                },
+                              }
+                            );
+
+                          if (response.data.success) {
+                            setStockReturnAvailability(
+                              response.data.data
+                            );
+                          }
+                        } catch (error) {
+                          console.error(
+                            "Load Return Availability Error:",
+                            error
+                          );
+
+                          setStockReturnError(
+                            `❌ ${
+                              error.response?.data?.message ||
+                              "Failed to load return availability"
+                            }`
+                          );
+                        }
+                      }}
+
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border:
+                        "1px solid #cbd5e1",
+                      borderRadius: "8px",
+                      boxSizing: "border-box",
+                      background: "#fff",
+                    }}
+                  >
+                    <option value="">
+                      Select Project
+                    </option>
+
+                    {projects.map((project) => (
+                      <option
+                        key={project.id}
+                        value={project.id}
+                      >
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {stockReturnAvailability && (
+                  <div
+                    style={{
+                      marginBottom: "18px",
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      color: "#334155",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Available Return:{" "}
+                    {stockReturnAvailability.availableReturn}{" "}
+                    {stockReturnAvailability.unit}
+                  </div>
+                )}
+
+                {stockReturnError && (
+                  <div
+                    style={{
+                      marginBottom: "18px",
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {stockReturnError}
+                  </div>
+                )}
                 {/* QUANTITY */}
-
                 <div
                   style={{
                     marginBottom: "18px",
@@ -13049,8 +13196,6 @@ const renderBOQItemViewModal = () => {
                   </div>
 
                 </div>
-
-
                 {/* QUANTITY */}
 
                 <div
@@ -13340,7 +13485,6 @@ const renderBOQItemViewModal = () => {
             </option>
           </select>
         </div>
-
         {/* QUANTITY */}
 
         <div
@@ -14742,8 +14886,6 @@ const renderBOQItemViewModal = () => {
                                 </select>
 
                               </div>
-
-
                               {/* QUANTITY */}
 
                               <div className="form-group">
@@ -16541,8 +16683,6 @@ const renderPurchaseRequestEditModal = () => {
                         </select>
 
                       </div>
-
-
                       {/* QUANTITY */}
 
                       <div className="form-group">
@@ -17385,7 +17525,6 @@ const renderPurchaseOrderModal = () => {
 
                               </select>
                             </td>
-
                             {/* QUANTITY */}
 
                             <td>

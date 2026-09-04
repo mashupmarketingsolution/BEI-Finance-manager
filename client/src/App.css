@@ -5402,3 +5402,35 @@ tbody tr:hover {
   color: #b91c1c;
   border: 1px solid #fecaca;
 }
+
+/* =========================================
+   STOCK RETURN MODAL - SCROLL
+========================================= */
+
+.stock-return-modal {
+  max-height: calc(100vh - 40px);
+  overflow: hidden;
+}
+
+.stock-return-modal form {
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.stock-return-modal form::-webkit-scrollbar {
+  width: 7px;
+}
+
+.stock-return-modal form::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.stock-return-modal form::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.stock-return-modal form::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
