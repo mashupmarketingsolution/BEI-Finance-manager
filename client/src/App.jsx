@@ -5347,8 +5347,12 @@ const closeStockAdjustmentModal = () => {
       stockUsageForm.quantity
     );
 
-    if (!quantity || quantity <= 0) {
-      alert("Quantity must be greater than 0.");
+    const projectId = Number(
+      stockUsageForm.projectId
+    );
+
+    if (!projectId || projectId <= 0) {
+      alert("Project is required.");
       return;
     }
 
@@ -5359,10 +5363,9 @@ const closeStockAdjustmentModal = () => {
           materialId: stockUsageMaterial.id,
           quantity,
           unit: stockUsageMaterial.unit,
-          projectId:
-            stockUsageForm.projectId
-              ? Number(stockUsageForm.projectId)
-              : null,
+
+           projectId,
+
           notes:
             stockUsageForm.notes?.trim() || null,
         }

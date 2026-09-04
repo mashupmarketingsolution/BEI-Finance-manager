@@ -9104,8 +9104,8 @@ app.post("/api/stock-movements/usage", async (req, res) => {
       },
     });
 
-         const { currentStock } =
-      calculateMaterialStock(movements);
+       const { currentStock } =
+  calculateMaterialStock(movements);
 
     // Prevent negative stock
     if (quantityNumber > currentStock) {
@@ -9115,21 +9115,32 @@ app.post("/api/stock-movements/usage", async (req, res) => {
       });
     }
 
-    // Optional project verification
-    if (projectId) {
-      const project = await prisma.project.findUnique({
-        where: {
-          id: Number(projectId),
-        },
-      });
+// Project is mandatory for stock usage
+const projectIdNumber = Number(projectId);
 
-      if (!project) {
-        return res.status(400).json({
-          success: false,
-          message: "Project not found",
-        });
-      }
-    }
+if (!projectIdNumber || projectIdNumber <= 0) {
+  return res.status(400).json({
+    success: false,
+    message: "Project is required",
+  });
+}
+
+// Verify project
+const project = await prisma.project.findUnique({
+  where: {
+    id: projectIdNumber,
+  },
+});
+
+if (!project) {
+  return res.status(400).json({
+    success: false,
+    message: "Project not found",
+  });
+}
+
+
+
 
     const movement =
       await prisma.stockMovement.create({
@@ -9148,10 +9159,7 @@ app.post("/api/stock-movements/usage", async (req, res) => {
           referenceType:
             "PROJECT_USAGE",
 
-          projectId:
-            projectId
-              ? Number(projectId)
-              : null,
+         projectId: projectIdNumber,
 
           notes:
             notes?.trim() || null,
