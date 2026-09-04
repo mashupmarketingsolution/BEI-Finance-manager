@@ -6,6 +6,30 @@ datasource db {
   provider = "mysql"
 }
 
+model Customer {
+  id           Int          @id @default(autoincrement())
+  name         String       @db.VarChar(150)
+  phone        String?      @db.VarChar(30)
+  email        String?      @db.VarChar(150)
+  companyName  String?      @db.VarChar(150)
+  address      String?      @db.Text
+  customerType CustomerType @default(INDIVIDUAL)
+  status       RecordStatus @default(ACTIVE)
+  notes        String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  projects     Project[]
+
+  @@index([phone])
+  @@index([status])
+  @@map("customers")
+}
+enum CustomerType {
+  INDIVIDUAL
+  COMPANY
+}
+
 model Project {
   id               Int               @id @default(autoincrement())
   name             String            @unique @db.VarChar(150)
@@ -14,6 +38,8 @@ model Project {
   status           ProjectStatus     @default(ONGOING)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  customerId       Int?
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   boqs             BOQ[]
   purchaseOrders   PurchaseOrder[]
   purchaseRequests PurchaseRequest[]
@@ -21,7 +47,8 @@ model Project {
   rfqs             RFQ[]
   stockMovements   StockMovement[]
   transactions     Transaction[]
-
+  
+  @@index([customerId])
   @@map("projects")
 }
 
