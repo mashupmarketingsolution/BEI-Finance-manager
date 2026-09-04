@@ -653,6 +653,413 @@ app.delete("/api/projects/:id", async (req, res) => {
 });
 
 // =========================================
+// CUSTOMER API
+// =========================================
+
+// GET ALL CUSTOMERS WITH PAGINATION
+app.get("/api/customers", async (req, res) => {
+  try {
+    const page = Math.max(
+      Number(req.query.page) || 1,
+      1
+    );
+
+    const limitValue =
+      Number(req.query.limit) || 10;
+
+    const allowedLimits = [10, 20, 50, 100];
+
+    const limit = allowedLimits.includes(limitValue)
+      ? limitValue
+      : 10;
+
+    const skip = (page - 1) * limit;
+
+    const totalCustomers =
+      await prisma.customer.count();
+
+    const customers =
+      await prisma.customer.findMany({
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      });
+
+    const totalPages = Math.max(
+      Math.ceil(totalCustomers / limit),
+      1
+    );
+
+    res.json({
+      success: true,
+      count: customers.length,
+      data: customers,
+      pagination: {
+        page,
+        limit,
+        totalCustomers,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    console.error("Get Customers Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// GET SINGLE CUSTOMER WITH PROJECTS
+app.get("/api/customers/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID",
+      });
+    }
+
+    const customer =
+      await prisma.customer.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          projects: {
+            orderBy: {
+              createdAt: "desc",
+            },
+          },
+        },
+      });
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: customer,
+    });
+  } catch (error) {
+    console.error(
+      "Get Customer Details Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// CREATE CUSTOMER
+app.post("/api/customers", async (req, res) => {
+  try {
+    const {
+      name,
+      phone,
+      email,
+      companyName,
+      address,
+      customerType,
+      status,
+      notes,
+    } = req.body;
+
+    // Name is required
+    if (!name || name.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Customer name is required",
+      });
+    }
+
+    // Validate customer type
+    const validCustomerTypes = [
+      "INDIVIDUAL",
+      "COMPANY",
+    ];
+
+    if (
+      customerType !== undefined &&
+      !validCustomerTypes.includes(customerType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid customer type. Use INDIVIDUAL or COMPANY",
+      });
+    }
+
+    // Validate status
+    const validStatuses = [
+      "ACTIVE",
+      "INACTIVE",
+    ];
+
+    if (
+      status !== undefined &&
+      !validStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid customer status. Use ACTIVE or INACTIVE",
+      });
+    }
+
+    const customer =
+      await prisma.customer.create({
+        data: {
+          name: name.trim(),
+
+          phone:
+            phone?.trim() || null,
+
+          email:
+            email?.trim() || null,
+
+          companyName:
+            companyName?.trim() || null,
+
+          address:
+            address?.trim() || null,
+
+          customerType:
+            customerType || "INDIVIDUAL",
+
+          status:
+            status || "ACTIVE",
+
+          notes:
+            notes?.trim() || null,
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message: "Customer created successfully",
+      data: customer,
+    });
+  } catch (error) {
+    console.error(
+      "Create Customer Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// UPDATE CUSTOMER
+app.put("/api/customers/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID",
+      });
+    }
+
+    const {
+      name,
+      phone,
+      email,
+      companyName,
+      address,
+      customerType,
+      status,
+      notes,
+    } = req.body;
+
+    const existingCustomer =
+      await prisma.customer.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingCustomer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    if (!name || name.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Customer name is required",
+      });
+    }
+
+    const validCustomerTypes = [
+      "INDIVIDUAL",
+      "COMPANY",
+    ];
+
+    if (
+      customerType !== undefined &&
+      !validCustomerTypes.includes(customerType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid customer type. Use INDIVIDUAL or COMPANY",
+      });
+    }
+
+    const validStatuses = [
+      "ACTIVE",
+      "INACTIVE",
+    ];
+
+    if (
+      status !== undefined &&
+      !validStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid customer status. Use ACTIVE or INACTIVE",
+      });
+    }
+
+    const customer =
+      await prisma.customer.update({
+        where: {
+          id,
+        },
+        data: {
+          name: name.trim(),
+
+          phone:
+            phone?.trim() || null,
+
+          email:
+            email?.trim() || null,
+
+          companyName:
+            companyName?.trim() || null,
+
+          address:
+            address?.trim() || null,
+
+          customerType:
+            customerType ||
+            existingCustomer.customerType,
+
+          status:
+            status ||
+            existingCustomer.status,
+
+          notes:
+            notes?.trim() || null,
+        },
+      });
+
+    res.json({
+      success: true,
+      message: "Customer updated successfully",
+      data: customer,
+    });
+  } catch (error) {
+    console.error(
+      "Update Customer Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+// DELETE CUSTOMER
+app.delete("/api/customers/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID",
+      });
+    }
+
+    const existingCustomer =
+      await prisma.customer.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          projects: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+    if (!existingCustomer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Do not delete a customer with linked projects
+    if (existingCustomer.projects.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot delete customer because projects are linked to this customer.",
+      });
+    }
+
+    await prisma.customer.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Customer deleted successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Delete Customer Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// =========================================
 // DASHBOARD API
 // =========================================
 
