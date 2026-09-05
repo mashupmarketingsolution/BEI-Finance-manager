@@ -1,7 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
@@ -55,7 +56,15 @@ const adapter = new PrismaMariaDb({
 const prisma = new PrismaClient({ adapter });
 
 
+// =========================================
+// AUTHENTICATION CONFIGURATION
+// =========================================
 
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not configured");
+}
 
 
 
@@ -150,7 +159,180 @@ function calculateProjectReturnAvailability(
 
 app.use(cors());
 app.use(express.json());
+// =========================================
+// AUTHENTICATION ROUTES
+// =========================================
 
+// LOGIN
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (
+      typeof username !== "string" ||
+      typeof password !== "string" ||
+      !username.trim() ||
+      !password
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Username and password are required",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        username: username.trim(),
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid username or password",
+      });
+    }
+
+    if (user.status !== "ACTIVE") {
+      return res.status(403).json({
+        success: false,
+        message: "User account is inactive",
+      });
+    }
+
+    const passwordMatched = await bcrypt.compare(
+      password,
+      user.passwordHash
+    );
+
+    if (!passwordMatched) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid username or password",
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        username: user.username,
+      },
+      JWT_SECRET,
+      {
+        expiresIn: "8h",
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Login successful",
+      data: {
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          phone: user.phone,
+          status: user.status,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Login Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+    });
+  }
+});
+
+// CURRENT AUTHENTICATED USER
+app.get("/api/auth/me", authMiddleware, async (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      user: req.user,
+    },
+  });
+});
+// =========================================
+// AUTHENTICATION MIDDLEWARE
+// =========================================
+
+async function authMiddleware(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const token = authHeader.substring(7).trim();
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: decoded.userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        phone: true,
+        status: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (user.status !== "ACTIVE") {
+      return res.status(403).json({
+        success: false,
+        message: "User account is inactive",
+      });
+    }
+
+    req.user = user;
+
+    next();
+  } catch (error) {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired token",
+      });
+    }
+
+    console.error("Authentication Middleware Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Authentication error",
+    });
+  }
+}
 // =========================================
 // HOME ROUTE
 // =========================================
