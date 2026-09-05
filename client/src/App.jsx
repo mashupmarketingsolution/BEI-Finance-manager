@@ -26,6 +26,30 @@ import {
 import "./App.css";
 
 const API_URL = "http://localhost:5000";
+// =========================================
+// AUTHENTICATION STORAGE
+// =========================================
+
+const AUTH_TOKEN_KEY = "bei_auth_token";
+const AUTH_USER_KEY = "bei_auth_user";
+
+// =========================================
+// AXIOS AUTH INTERCEPTOR
+// =========================================
+
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 const RefreshButton = ({ onRefresh }) => {
   const [isRefreshing, setIsRefreshing] =
@@ -71,9 +95,166 @@ const RefreshButton = ({ onRefresh }) => {
 
 
 function App() {
+    // =========================================
+  // AUTHENTICATION STATE
+  // =========================================
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem(AUTH_USER_KEY);
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (error) {
+      console.error("Saved user parse error:", error);
+      localStorage.removeItem(AUTH_USER_KEY);
+      return null;
+    }
+  });
+
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [loginForm, setLoginForm] = useState({
+    username: "",
+    password: "",
+  });
+
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginMessage, setLoginMessage] = useState("");
+
   const [projects, setProjects] = useState([]);
   const [projectPage, setProjectPage] = useState(1);
+  // =========================================
+  // VERIFY AUTHENTICATION ON APP START
+  // =========================================
 
+  useEffect(() => {
+    const verifyAuthentication = async () => {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+      if (!token) {
+        setCurrentUser(null);
+        setAuthLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get(
+          `${API_URL}/api/auth/me`
+        );
+
+        if (response.data.success) {
+          const user = response.data.data.user;
+
+          setCurrentUser(user);
+          localStorage.setItem(
+            AUTH_USER_KEY,
+            JSON.stringify(user)
+          );
+        } else {
+          throw new Error("Authentication verification failed");
+        }
+      } catch (error) {
+        console.error(
+          "Authentication verification error:",
+          error
+        );
+
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        setCurrentUser(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    verifyAuthentication();
+  }, []);
+  // =========================================
+// LOGIN
+// =========================================
+
+const handleLogin = async (e) => {
+  e.preventDefault();
+
+  if (loginLoading) return;
+
+  setLoginMessage("");
+
+  if (
+    !loginForm.username.trim() ||
+    !loginForm.password
+  ) {
+    setLoginMessage(
+      "Username and password are required"
+    );
+    return;
+  }
+
+  setLoginLoading(true);
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/api/auth/login`,
+      {
+        username: loginForm.username.trim(),
+        password: loginForm.password,
+      }
+    );
+
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message || "Login failed"
+      );
+    }
+
+    const { token, user } = response.data.data;
+
+    localStorage.setItem(
+      AUTH_TOKEN_KEY,
+      token
+    );
+
+    localStorage.setItem(
+      AUTH_USER_KEY,
+      JSON.stringify(user)
+    );
+
+    setCurrentUser(user);
+
+    setLoginForm({
+      username: "",
+      password: "",
+    });
+
+    setLoginMessage("");
+  } catch (error) {
+    console.error("Login Error:", error);
+
+    const message =
+      error.response?.data?.message ||
+      "Login failed. Please try again.";
+
+    setLoginMessage(message);
+  } finally {
+    setLoginLoading(false);
+  }
+};
+// =========================================
+// LOGOUT
+// =========================================
+
+const handleLogout = () => {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+
+  setCurrentUser(null);
+
+  setLoginForm({
+    username: "",
+    password: "",
+  });
+
+  setLoginMessage("");
+};
   const [projectLimit, setProjectLimit] = useState(10);
 
   const [projectPagination, setProjectPagination] = useState({
@@ -22163,7 +22344,130 @@ const renderRFQEditModal = () => {
       </section>
     );
   };
+// =========================================
+// AUTHENTICATION LOADING
+// =========================================
 
+if (authLoading) {
+  return (
+    <div className="auth-loading-screen">
+      <div className="auth-loading-card">
+        <LoaderCircle
+          size={36}
+          className="spin"
+        />
+
+        <h2>BE Interior</h2>
+        <p>Checking authentication...</p>
+      </div>
+    </div>
+  );
+}
+
+// =========================================
+// LOGIN SCREEN
+// =========================================
+
+if (!currentUser) {
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+
+        <div className="login-logo">
+          <div className="logo-icon">BE</div>
+
+          <div>
+            <h1>BE Interior</h1>
+            <span>Finance Manager</span>
+          </div>
+        </div>
+
+        <div className="login-header">
+          <h2>Welcome Back</h2>
+          <p>
+            Sign in to access Finance Manager
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin}>
+
+          <div className="login-field">
+            <label htmlFor="login-username">
+              Username
+            </label>
+
+            <input
+              id="login-username"
+              type="text"
+              value={loginForm.username}
+              onChange={(e) =>
+                setLoginForm({
+                  ...loginForm,
+                  username: e.target.value,
+                })
+              }
+              placeholder="Enter username"
+              autoComplete="username"
+              disabled={loginLoading}
+              autoFocus
+            />
+          </div>
+
+          <div className="login-field">
+            <label htmlFor="login-password">
+              Password
+            </label>
+
+            <input
+              id="login-password"
+              type="password"
+              value={loginForm.password}
+              onChange={(e) =>
+                setLoginForm({
+                  ...loginForm,
+                  password: e.target.value,
+                })
+              }
+              placeholder="Enter password"
+              autoComplete="current-password"
+              disabled={loginLoading}
+            />
+          </div>
+
+          {loginMessage && (
+            <div className="login-message">
+              {loginMessage}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="login-button"
+            disabled={loginLoading}
+          >
+            {loginLoading ? (
+              <>
+                <LoaderCircle
+                  size={18}
+                  className="spin"
+                />
+                Signing in...
+              </>
+            ) : (
+              "Sign In"
+            )}
+          </button>
+
+        </form>
+
+        <div className="login-footer">
+          BE Interior Finance Manager
+        </div>
+
+      </div>
+    </div>
+  );
+}
   return (
     <div className="app">
       {/* =========================================
@@ -22452,6 +22756,33 @@ const renderRFQEditModal = () => {
 
 
 
+          <div className="sidebar-user">
+            <div className="sidebar-user-info">
+              <div className="sidebar-user-avatar">
+                {currentUser?.name
+                  ? currentUser.name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()
+                  : "U"}
+              </div>
+
+              <div className="sidebar-user-details">
+                <strong>{currentUser?.name || "User"}</strong>
+                <span>@{currentUser?.username || ""}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="logout-button"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
         <div className="sidebar-footer">
           © 2026 BE Interior
         </div>
@@ -22488,14 +22819,24 @@ const renderRFQEditModal = () => {
             </div>
           </div>
 
-          <div className="profile">
-            <div className="avatar">HM</div>
-
-            <div>
-              <strong>Hossain Al Mahmud</strong>
-              <span>Managing Director</span>
-            </div>
+        <div className="profile">
+          <div className="avatar">
+            {currentUser?.name
+              ? currentUser.name
+                  .split(" ")
+                  .map((part) => part[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()
+              : "U"}
           </div>
+
+          <div>
+            <strong>{currentUser?.name || "User"}</strong>
+            <span>{currentUser?.username || ""}</span>
+          </div>
+        </div>
+          
         </header>
 
 
