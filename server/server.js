@@ -902,6 +902,789 @@ app.delete("/api/projects/:id", async (req, res) => {
 });
 
 // =========================================
+// USER API
+// =========================================
+
+// GET ACTIVE USERS
+// Used for assigning leads to office staff
+app.get("/api/users", authMiddleware, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        phone: true,
+        status: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    res.json({
+      success: true,
+      count: users.length,
+      data: users,
+    });
+  } catch (error) {
+    console.error("Get Users Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// =========================================
+// LEAD API
+// =========================================
+
+// GET ALL LEADS WITH PAGINATION
+app.get("/api/leads", authMiddleware, async (req, res) => {
+  try {
+    const page = Math.max(
+      Number(req.query.page) || 1,
+      1
+    );
+
+    const limitValue =
+      Number(req.query.limit) || 10;
+
+    const allowedLimits = [10, 20, 50, 100];
+
+    const limit = allowedLimits.includes(limitValue)
+      ? limitValue
+      : 10;
+
+    const skip = (page - 1) * limit;
+
+    const totalLeads =
+      await prisma.lead.count();
+
+    const leads =
+      await prisma.lead.findMany({
+        include: {
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+          convertedCustomer: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      });
+
+    const totalPages =
+      Math.ceil(totalLeads / limit);
+
+    res.json({
+      success: true,
+      count: leads.length,
+      data: leads,
+      pagination: {
+        page,
+        limit,
+        totalLeads,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    console.error("Get Leads Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// GET SINGLE LEAD
+app.get("/api/leads/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead ID",
+      });
+    }
+
+    const lead =
+      await prisma.lead.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              email: true,
+              phone: true,
+              status: true,
+            },
+          },
+          convertedCustomer: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              companyName: true,
+            },
+          },
+        },
+      });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: lead,
+    });
+  } catch (error) {
+    console.error("Get Lead Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// CREATE LEAD
+app.post("/api/leads", authMiddleware, async (req, res) => {
+  try {
+    const {
+      name,
+      phone,
+      email,
+      companyName,
+      address,
+      source,
+      status,
+      notes,
+      assignedToId,
+    } = req.body;
+
+    // Required field
+    if (
+      typeof name !== "string" ||
+      !name.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Lead name is required",
+      });
+    }
+
+    // Validate source
+    const allowedSources = [
+      "FACEBOOK",
+      "WEBSITE",
+      "REFERRAL",
+      "PHONE",
+      "WALK_IN",
+      "OTHER",
+    ];
+
+    if (
+      source !== undefined &&
+      source !== null &&
+      !allowedSources.includes(source)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead source",
+      });
+    }
+
+    // Validate status
+    const allowedStatuses = [
+      "NEW",
+      "CONTACTED",
+      "QUALIFIED",
+      "LOST",
+      "CONVERTED",
+    ];
+
+    if (
+      status !== undefined &&
+      status !== null &&
+      !allowedStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead status",
+      });
+    }
+
+    // Converted lead must not be manually created
+    if (status === "CONVERTED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A lead can only become CONVERTED through the conversion process.",
+      });
+    }
+
+    // Validate assigned user
+    let validatedAssignedToId = null;
+
+    if (
+      assignedToId !== undefined &&
+      assignedToId !== null &&
+      assignedToId !== ""
+    ) {
+      const parsedAssignedToId =
+        Number(assignedToId);
+
+      if (
+        !Number.isInteger(parsedAssignedToId) ||
+        parsedAssignedToId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid assigned user ID",
+        });
+      }
+
+      const assignedUser =
+        await prisma.user.findUnique({
+          where: {
+            id: parsedAssignedToId,
+          },
+          select: {
+            id: true,
+            status: true,
+          },
+        });
+
+      if (!assignedUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Assigned user not found",
+        });
+      }
+
+      if (assignedUser.status !== "ACTIVE") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot assign lead to an inactive user",
+        });
+      }
+
+      validatedAssignedToId =
+        parsedAssignedToId;
+    }
+
+    const lead =
+      await prisma.lead.create({
+        data: {
+          name: name.trim(),
+          phone:
+            typeof phone === "string" &&
+            phone.trim()
+              ? phone.trim()
+              : null,
+          email:
+            typeof email === "string" &&
+            email.trim()
+              ? email.trim()
+              : null,
+          companyName:
+            typeof companyName === "string" &&
+            companyName.trim()
+              ? companyName.trim()
+              : null,
+          address:
+            typeof address === "string" &&
+            address.trim()
+              ? address.trim()
+              : null,
+          source: source || "OTHER",
+          status: status || "NEW",
+          notes:
+            typeof notes === "string" &&
+            notes.trim()
+              ? notes.trim()
+              : null,
+          assignedToId:
+            validatedAssignedToId,
+        },
+        include: {
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message: "Lead created successfully",
+      data: lead,
+    });
+  } catch (error) {
+    console.error("Create Lead Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// UPDATE LEAD
+app.put("/api/leads/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead ID",
+      });
+    }
+
+    const existingLead =
+      await prisma.lead.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingLead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found",
+      });
+    }
+
+    // Converted leads should remain historical records
+    if (existingLead.status === "CONVERTED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Converted lead cannot be edited.",
+      });
+    }
+
+    const {
+      name,
+      phone,
+      email,
+      companyName,
+      address,
+      source,
+      status,
+      notes,
+      assignedToId,
+    } = req.body;
+
+    if (
+      name !== undefined &&
+      (
+        typeof name !== "string" ||
+        !name.trim()
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Lead name is required",
+      });
+    }
+
+    const allowedSources = [
+      "FACEBOOK",
+      "WEBSITE",
+      "REFERRAL",
+      "PHONE",
+      "WALK_IN",
+      "OTHER",
+    ];
+
+    if (
+      source !== undefined &&
+      !allowedSources.includes(source)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead source",
+      });
+    }
+
+    const allowedStatuses = [
+      "NEW",
+      "CONTACTED",
+      "QUALIFIED",
+      "LOST",
+    ];
+
+    if (
+      status !== undefined &&
+      !allowedStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid lead status for manual update",
+      });
+    }
+
+    // Validate assigned user
+    let validatedAssignedToId =
+      existingLead.assignedToId;
+
+    if (
+      assignedToId !== undefined
+    ) {
+      if (
+        assignedToId === null ||
+        assignedToId === ""
+      ) {
+        validatedAssignedToId = null;
+      } else {
+        const parsedAssignedToId =
+          Number(assignedToId);
+
+        if (
+          !Number.isInteger(parsedAssignedToId) ||
+          parsedAssignedToId <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid assigned user ID",
+          });
+        }
+
+        const assignedUser =
+          await prisma.user.findUnique({
+            where: {
+              id: parsedAssignedToId,
+            },
+            select: {
+              id: true,
+              status: true,
+            },
+          });
+
+        if (!assignedUser) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Assigned user not found",
+          });
+        }
+
+        if (
+          assignedUser.status !== "ACTIVE"
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Cannot assign lead to an inactive user",
+          });
+        }
+
+        validatedAssignedToId =
+          parsedAssignedToId;
+      }
+    }
+
+    const lead =
+      await prisma.lead.update({
+        where: {
+          id,
+        },
+        data: {
+          ...(name !== undefined && {
+            name: name.trim(),
+          }),
+          ...(phone !== undefined && {
+            phone:
+              typeof phone === "string" &&
+              phone.trim()
+                ? phone.trim()
+                : null,
+          }),
+          ...(email !== undefined && {
+            email:
+              typeof email === "string" &&
+              email.trim()
+                ? email.trim()
+                : null,
+          }),
+          ...(companyName !== undefined && {
+            companyName:
+              typeof companyName === "string" &&
+              companyName.trim()
+                ? companyName.trim()
+                : null,
+          }),
+          ...(address !== undefined && {
+            address:
+              typeof address === "string" &&
+              address.trim()
+                ? address.trim()
+                : null,
+          }),
+          ...(source !== undefined && {
+            source,
+          }),
+          ...(status !== undefined && {
+            status,
+          }),
+          ...(notes !== undefined && {
+            notes:
+              typeof notes === "string" &&
+              notes.trim()
+                ? notes.trim()
+                : null,
+          }),
+          assignedToId:
+            validatedAssignedToId,
+        },
+        include: {
+          assignedTo: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+    res.json({
+      success: true,
+      message: "Lead updated successfully",
+      data: lead,
+    });
+  } catch (error) {
+    console.error("Update Lead Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// DELETE LEAD
+app.delete("/api/leads/:id", authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead ID",
+      });
+    }
+
+    const existingLead =
+      await prisma.lead.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingLead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found",
+      });
+    }
+
+    if (existingLead.status === "CONVERTED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Converted lead cannot be deleted.",
+      });
+    }
+
+    await prisma.lead.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Lead deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Lead Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// CONVERT LEAD TO CUSTOMER
+app.post(
+  "/api/leads/:id/convert",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid lead ID",
+        });
+      }
+
+      const existingLead =
+        await prisma.lead.findUnique({
+          where: {
+            id,
+          },
+        });
+
+      if (!existingLead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      if (
+        existingLead.status === "CONVERTED" ||
+        existingLead.convertedCustomerId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This lead has already been converted.",
+        });
+      }
+
+      if (existingLead.status === "LOST") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A lost lead cannot be converted.",
+        });
+      }
+
+      const customerType =
+        existingLead.companyName &&
+        existingLead.companyName.trim()
+          ? "COMPANY"
+          : "INDIVIDUAL";
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const customer =
+              await tx.customer.create({
+                data: {
+                  name: existingLead.name,
+                  phone: existingLead.phone,
+                  email: existingLead.email,
+                  companyName:
+                    existingLead.companyName,
+                  address: existingLead.address,
+                  customerType,
+                  status: "ACTIVE",
+                  notes: existingLead.notes,
+                },
+              });
+
+            const updatedLead =
+              await tx.lead.update({
+                where: {
+                  id,
+                },
+                data: {
+                  status: "CONVERTED",
+                  convertedCustomerId:
+                    customer.id,
+                  convertedAt: new Date(),
+                },
+                include: {
+                  assignedTo: {
+                    select: {
+                      id: true,
+                      name: true,
+                      username: true,
+                    },
+                  },
+                  convertedCustomer: {
+                    select: {
+                      id: true,
+                      name: true,
+                      phone: true,
+                      email: true,
+                      companyName: true,
+                    },
+                  },
+                },
+              });
+
+            return {
+              customer,
+              lead: updatedLead,
+            };
+          }
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Lead converted to customer successfully",
+        data: result,
+      });
+    } catch (error) {
+      console.error(
+        "Convert Lead Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+
+
+// =========================================
 // CUSTOMER API
 // =========================================
 
