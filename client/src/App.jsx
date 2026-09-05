@@ -21,7 +21,11 @@ import {
   RefreshCw,
   LoaderCircle,
   Save,
-
+   Eye,
+  UserPlus,
+  Pencil,
+  UserCheck,
+  Trash2,
 } from "lucide-react";
 import "./App.css";
 
@@ -3284,6 +3288,47 @@ const [customerForm, setCustomerForm] = useState({
   status: "ACTIVE",
   notes: "",
 });
+// =========================================
+// LEAD MANAGEMENT
+// =========================================
+
+const [leads, setLeads] = useState([]);
+const [leadPage, setLeadPage] = useState(1);
+const [leadLimit, setLeadLimit] = useState(10);
+
+const [leadPagination, setLeadPagination] = useState({
+  page: 1,
+  limit: 10,
+  totalLeads: 0,
+  totalPages: 1,
+});
+
+const [users, setUsers] = useState([]);
+
+const [showLeadModal, setShowLeadModal] = useState(false);
+const [savingLead, setSavingLead] = useState(false);
+const [editingLeadId, setEditingLeadId] = useState(null);
+
+const [showLeadDetailsModal, setShowLeadDetailsModal] =
+  useState(false);
+
+const [selectedLead, setSelectedLead] = useState(null);
+
+const [leadForm, setLeadForm] = useState({
+  name: "",
+  phone: "",
+  email: "",
+  companyName: "",
+  address: "",
+  source: "OTHER",
+  status: "NEW",
+  notes: "",
+  assignedToId: "",
+});
+
+// =========================================
+// VENDOR MANAGEMENT
+// =========================================
 
   const [vendors, setVendors] = useState([]);
   const [vendorPage, setVendorPage] = useState(1);
@@ -6307,6 +6352,73 @@ const loadCustomers = async (
     );
   }
 };
+// =========================================
+// LOAD USERS FOR LEAD ASSIGNMENT
+// =========================================
+
+const loadUsers = async () => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/users`
+    );
+
+    if (response.data.success) {
+      setUsers(response.data.data);
+    }
+  } catch (error) {
+    console.error("Load Users Error:", error);
+  }
+};
+
+
+// =========================================
+// LOAD LEADS
+// =========================================
+
+const loadLeads = async (
+  page = leadPage,
+  limit = leadLimit
+) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/leads`,
+      {
+        params: {
+          page,
+          limit,
+        },
+      }
+    );
+
+    if (response.data.success) {
+      setLeads(response.data.data);
+
+      setLeadPagination(
+        response.data.pagination
+      );
+    }
+  } catch (error) {
+    console.error("Load Leads Error:", error);
+
+    setMessage(
+      "❌ Lead data load করা যায়নি!"
+    );
+  }
+};
+
+
+// =========================================
+// LEAD PAGE CHANGE
+// =========================================
+
+const handleLeadPageChange = (newPage) => {
+  setLeadPage(newPage);
+
+  loadLeads(
+    newPage,
+    leadLimit
+  );
+};
 
 const handleCustomerPageChange = (newPage) => {
   setCustomerPage(newPage);
@@ -6927,6 +7039,13 @@ const handleDeleteCustomer = async (id) => {
       activePage,
       customerLimit,
     ]);
+useEffect(() => {
+  if (activePage === "leads") {
+    setLeadPage(1);
+    loadLeads(1, leadLimit);
+    loadUsers();
+  }
+}, [activePage]);
 
   // =========================================
   // REFRESH
@@ -8508,6 +8627,1010 @@ const renderCustomers = () => {
       </div>
 
     </section>
+  );
+};
+
+// =========================================
+// LEAD DETAILS
+// =========================================
+
+const openLeadDetails = async (leadId) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/leads/${leadId}`
+    );
+
+    if (response.data.success) {
+      setSelectedLead(response.data.data);
+      setShowLeadDetailsModal(true);
+    }
+  } catch (error) {
+    console.error("Lead Details Error:", error);
+
+    setMessage(
+      error.response?.data?.message ||
+        "❌ Lead details load করা যায়নি!"
+    );
+  }
+};
+
+
+// =========================================
+// EDIT LEAD
+// =========================================
+
+const handleEditLead = (lead) => {
+  if (lead.status === "CONVERTED") {
+    setMessage(
+      "❌ Converted lead edit করা যাবে না!"
+    );
+    return;
+  }
+
+  setEditingLeadId(lead.id);
+
+  setLeadForm({
+    name: lead.name || "",
+    phone: lead.phone || "",
+    email: lead.email || "",
+    companyName: lead.companyName || "",
+    address: lead.address || "",
+    source: lead.source || "OTHER",
+    status: lead.status || "NEW",
+    notes: lead.notes || "",
+    assignedToId:
+      lead.assignedToId
+        ? String(lead.assignedToId)
+        : "",
+  });
+
+  setShowLeadModal(true);
+};
+
+
+// =========================================
+// DELETE LEAD
+// =========================================
+
+const handleDeleteLead = async (lead) => {
+  if (lead.status === "CONVERTED") {
+    setMessage(
+      "❌ Converted lead delete করা যাবে না!"
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete lead "${lead.name}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await axios.delete(
+      `${API_URL}/api/leads/${lead.id}`
+    );
+
+    if (response.data.success) {
+      setMessage(
+        "✅ Lead deleted successfully!"
+      );
+
+      await loadLeads(
+        leadPage,
+        leadLimit
+      );
+    }
+  } catch (error) {
+    console.error("Delete Lead Error:", error);
+
+    setMessage(
+      error.response?.data?.message ||
+        "❌ Lead delete করা যায়নি!"
+    );
+  }
+};
+
+
+// =========================================
+// CONVERT LEAD TO CUSTOMER
+// =========================================
+
+const handleConvertLead = async (lead) => {
+  if (lead.status === "CONVERTED") {
+    setMessage(
+      "❌ এই lead already converted!"
+    );
+    return;
+  }
+
+  if (lead.status === "LOST") {
+    setMessage(
+      "❌ Lost lead customer-এ convert করা যাবে না!"
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Convert "${lead.name}" to a customer?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/api/leads/${lead.id}/convert`
+    );
+
+    if (response.data.success) {
+      setMessage(
+        `✅ Lead converted to customer successfully! Customer #${response.data.data.customer.id}`
+      );
+
+      await loadLeads(
+        leadPage,
+        leadLimit
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Convert Lead Error:",
+      error
+    );
+
+    setMessage(
+      error.response?.data?.message ||
+        "❌ Lead conversion করা যায়নি!"
+    );
+  }
+};
+
+// =========================================
+// LEAD MANAGEMENT PAGE
+// =========================================
+
+const renderLeads = () => {
+  return (
+    <section className="dashboard">
+      {message && (
+        <div className="message">
+          {message}
+        </div>
+      )}
+
+      <div className="content-card">
+        <div className="card-header">
+          <div>
+            <h2>Leads</h2>
+            <p>
+              Manage and track BE Interior leads
+            </p>
+          </div>
+
+          <div className="header-actions">
+            <RefreshButton
+              onRefresh={() =>
+                loadLeads(
+                  leadPage,
+                  leadLimit
+                )
+              }
+            />
+
+            <button
+              className="add-button"
+              onClick={() => {
+                setEditingLeadId(null);
+
+                setLeadForm({
+                  name: "",
+                  phone: "",
+                  email: "",
+                  companyName: "",
+                  address: "",
+                  source: "OTHER",
+                  status: "NEW",
+                  notes: "",
+                  assignedToId: "",
+                });
+
+                setShowLeadModal(true);
+              }}
+            >
+              <Plus size={18} />
+              Add Lead
+            </button>
+          </div>
+        </div>
+
+        <div className="project-page-size">
+          <label>
+            Show:
+            <select
+              value={leadLimit}
+              onChange={(e) => {
+                const newLimit =
+                  Number(e.target.value);
+
+                setLeadLimit(newLimit);
+                setLeadPage(1);
+
+                loadLeads(
+                  1,
+                  newLimit
+                );
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            entries
+          </label>
+        </div>
+
+        {leads.length === 0 ? (
+          <div className="empty-state">
+            <UserPlus size={50} />
+
+            <h3>No Leads Found</h3>
+
+            <p>
+              Your lead list is currently empty.
+            </p>
+
+            <button
+              className="empty-add-button"
+              onClick={() => {
+                setEditingLeadId(null);
+
+                setLeadForm({
+                  name: "",
+                  phone: "",
+                  email: "",
+                  companyName: "",
+                  address: "",
+                  source: "OTHER",
+                  status: "NEW",
+                  notes: "",
+                  assignedToId: "",
+                });
+
+                setShowLeadModal(true);
+              }}
+            >
+              <Plus size={18} />
+              Add Your First Lead
+            </button>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Lead</th>
+                  <th>Company</th>
+                  <th>Phone</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Assigned To</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {leads.map((lead) => (
+                  <tr key={lead.id}>
+                    <td>
+                      #{lead.id}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {lead.name}
+                      </strong>
+
+                      {lead.address && (
+                        <small className="project-notes">
+                          {lead.address}
+                        </small>
+                      )}
+                    </td>
+
+                    <td>
+                      {lead.companyName || "-"}
+                    </td>
+
+                    <td>
+                      {lead.phone || "-"}
+                    </td>
+
+                    <td>
+                      {lead.source || "-"}
+                    </td>
+
+                    <td>
+                      <span className="status ongoing">
+                        {lead.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      {lead.assignedTo?.name ||
+                        "-"}
+                    </td>
+
+                    <td>
+                      <div className="income-actions">
+                        <button
+                          type="button"
+                          title="View Lead"
+                          onClick={() =>
+                            openLeadDetails(
+                              lead.id
+                            )
+                          }
+                        >
+                          <Eye size={16} />
+                        </button>
+
+                        {lead.status !==
+                          "CONVERTED" && (
+                          <>
+                            <button
+                              type="button"
+                              title="Edit Lead"
+                              onClick={() =>
+                                handleEditLead(
+                                  lead
+                                )
+                              }
+                            >
+                              <Pencil
+                                size={16}
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Convert to Customer"
+                              onClick={() =>
+                                handleConvertLead(
+                                  lead
+                                )
+                              }
+                            >
+                              <UserCheck
+                                size={16}
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Delete Lead"
+                              onClick={() =>
+                                handleDeleteLead(
+                                  lead
+                                )
+                              }
+                            >
+                              <Trash2
+                                size={16}
+                              />
+                            </button>
+                          </>
+                        )}
+
+                        {lead.status ===
+                          "CONVERTED" && (
+                          <span className="status completed">
+                            Converted
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {leadPagination.totalLeads > 0 && (
+          <div className="vendor-pagination">
+            <div>
+              Showing page{" "}
+              {leadPagination.page} of{" "}
+              {leadPagination.totalPages}
+            </div>
+
+            <div className="pagination-buttons">
+              <button
+                type="button"
+                disabled={
+                  leadPagination.page <= 1
+                }
+                onClick={() =>
+                  handleLeadPageChange(
+                    leadPagination.page - 1
+                  )
+                }
+              >
+                Previous
+              </button>
+
+              <span>
+                {leadPagination.page}
+              </span>
+
+              <button
+                type="button"
+                disabled={
+                  leadPagination.page >=
+                  leadPagination.totalPages
+                }
+                onClick={() =>
+                  handleLeadPageChange(
+                    leadPagination.page + 1
+                  )
+                }
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
+const renderLeadModal = () => {
+  if (!showLeadModal) {
+    return null;
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="project-modal">
+        <div className="modal-header">
+          <div>
+            <h2>
+              {editingLeadId
+                ? "Edit Lead"
+                : "Add Lead"}
+            </h2>
+
+            <p>
+              {editingLeadId
+                ? "Update lead information"
+                : "Create a new lead"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => {
+              if (!savingLead) {
+                setShowLeadModal(false);
+              }
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+
+            if (savingLead) {
+              return;
+            }
+
+            if (!leadForm.name.trim()) {
+              setMessage(
+                "❌ Lead name is required!"
+              );
+              return;
+            }
+
+            setSavingLead(true);
+
+            try {
+              const payload = {
+                name: leadForm.name.trim(),
+                phone:
+                  leadForm.phone.trim() || null,
+                email:
+                  leadForm.email.trim() || null,
+                companyName:
+                  leadForm.companyName.trim() ||
+                  null,
+                address:
+                  leadForm.address.trim() || null,
+                source: leadForm.source,
+                status: leadForm.status,
+                notes:
+                  leadForm.notes.trim() || null,
+                assignedToId:
+                  leadForm.assignedToId
+                    ? Number(
+                        leadForm.assignedToId
+                      )
+                    : null,
+              };
+
+              let response;
+
+              if (editingLeadId) {
+                response = await axios.put(
+                  `${API_URL}/api/leads/${editingLeadId}`,
+                  payload
+                );
+              } else {
+                response = await axios.post(
+                  `${API_URL}/api/leads`,
+                  payload
+                );
+              }
+
+              if (response.data.success) {
+                setMessage(
+                  editingLeadId
+                    ? "✅ Lead updated successfully!"
+                    : "✅ Lead created successfully!"
+                );
+
+                setShowLeadModal(false);
+                setEditingLeadId(null);
+
+                setLeadForm({
+                  name: "",
+                  phone: "",
+                  email: "",
+                  companyName: "",
+                  address: "",
+                  source: "OTHER",
+                  status: "NEW",
+                  notes: "",
+                  assignedToId: "",
+                });
+
+                await loadLeads(
+                  leadPage,
+                  leadLimit
+                );
+              }
+            } catch (error) {
+              console.error(
+                "Save Lead Error:",
+                error
+              );
+
+              setMessage(
+                error.response?.data?.message ||
+                  "❌ Lead save করা যায়নি!"
+              );
+            } finally {
+              setSavingLead(false);
+            }
+          }}
+        >
+          <div className="form-grid">
+            <div className="form-group">
+              <label>
+                Lead Name *
+              </label>
+
+              <input
+                type="text"
+                value={leadForm.name}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="Enter lead name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Phone
+              </label>
+
+              <input
+                type="text"
+                value={leadForm.phone}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    phone: e.target.value,
+                  })
+                }
+                placeholder="Enter phone number"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Email
+              </label>
+
+              <input
+                type="email"
+                value={leadForm.email}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    email: e.target.value,
+                  })
+                }
+                placeholder="Enter email"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Company Name
+              </label>
+
+              <input
+                type="text"
+                value={leadForm.companyName}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    companyName:
+                      e.target.value,
+                  })
+                }
+                placeholder="Enter company name"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Source
+              </label>
+
+              <select
+                value={leadForm.source}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    source: e.target.value,
+                  })
+                }
+              >
+                <option value="FACEBOOK">
+                  Facebook
+                </option>
+
+                <option value="WEBSITE">
+                  Website
+                </option>
+
+                <option value="REFERRAL">
+                  Referral
+                </option>
+
+                <option value="PHONE">
+                  Phone
+                </option>
+
+                <option value="WALK_IN">
+                  Walk-in
+                </option>
+
+                <option value="OTHER">
+                  Other
+                </option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>
+                Status
+              </label>
+
+              <select
+                value={leadForm.status}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    status: e.target.value,
+                  })
+                }
+              >
+                <option value="NEW">
+                  New
+                </option>
+
+                <option value="CONTACTED">
+                  Contacted
+                </option>
+
+                <option value="QUALIFIED">
+                  Qualified
+                </option>
+
+                <option value="LOST">
+                  Lost
+                </option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>
+                Assigned To
+              </label>
+
+              <select
+                value={leadForm.assignedToId}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    assignedToId:
+                      e.target.value,
+                  })
+                }
+              >
+                <option value="">
+                  Unassigned
+                </option>
+
+                {users.map((user) => (
+                  <option
+                    key={user.id}
+                    value={user.id}
+                  >
+                    {user.name} (
+                    {user.username})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group full-width">
+              <label>
+                Address
+              </label>
+
+              <textarea
+                rows="3"
+                value={leadForm.address}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    address: e.target.value,
+                  })
+                }
+                placeholder="Enter address"
+              />
+            </div>
+
+            <div className="form-group full-width">
+              <label>
+                Notes
+              </label>
+
+              <textarea
+                rows="4"
+                value={leadForm.notes}
+                onChange={(e) =>
+                  setLeadForm({
+                    ...leadForm,
+                    notes: e.target.value,
+                  })
+                }
+                placeholder="Enter notes"
+              />
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="cancel-button"
+              disabled={savingLead}
+              onClick={() => {
+                setShowLeadModal(false);
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="save-button"
+              disabled={savingLead}
+            >
+              {savingLead
+                ? "Saving..."
+                : editingLeadId
+                ? "Update Lead"
+                : "Save Lead"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+const renderLeadDetailsModal = () => {
+  if (!showLeadDetailsModal || !selectedLead) {
+    return null;
+  }
+
+  const lead = selectedLead;
+
+  return (
+    <div className="modal-overlay">
+      <div className="project-modal lead-details-modal">
+        <div className="modal-header">
+          <div>
+            <h2>Lead Details</h2>
+            <p>
+              View complete lead information
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() =>
+              setShowLeadDetailsModal(false)
+            }
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="details-grid">
+          <div className="detail-item">
+            <span>Lead ID</span>
+            <strong>#{lead.id}</strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Name</span>
+            <strong>
+              {lead.name || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Phone</span>
+            <strong>
+              {lead.phone || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Email</span>
+            <strong>
+              {lead.email || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Company</span>
+            <strong>
+              {lead.companyName || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Source</span>
+            <strong>
+              {lead.source || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Status</span>
+            <strong>
+              {lead.status || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item">
+            <span>Assigned To</span>
+            <strong>
+              {lead.assignedTo?.name ||
+                "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item full-width">
+            <span>Address</span>
+            <strong>
+              {lead.address || "-"}
+            </strong>
+          </div>
+
+          <div className="detail-item full-width">
+            <span>Notes</span>
+            <strong>
+              {lead.notes || "-"}
+            </strong>
+          </div>
+
+          {lead.status === "CONVERTED" && (
+            <>
+              <div className="detail-item">
+                <span>Converted Customer</span>
+                <strong>
+                  {lead.convertedCustomer
+                    ?.name || "-"}
+                </strong>
+              </div>
+
+              <div className="detail-item">
+                <span>Converted At</span>
+                <strong>
+                  {lead.convertedAt
+                    ? new Date(
+                        lead.convertedAt
+                      ).toLocaleString()
+                    : "-"}
+                </strong>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          {lead.status !== "CONVERTED" && (
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setShowLeadDetailsModal(false);
+                  handleEditLead(lead);
+                }}
+              >
+                <Pencil size={16} />
+                Edit Lead
+              </button>
+
+              <button
+                type="button"
+                className="save-button"
+                onClick={() => {
+                  setShowLeadDetailsModal(false);
+                  handleConvertLead(lead);
+                }}
+              >
+                <UserCheck size={16} />
+                Convert to Customer
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() =>
+              setShowLeadDetailsModal(false)
+            }
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
   // =========================================
@@ -22524,6 +23647,17 @@ if (!currentUser) {
           </a>
           <a
             href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("leads");
+            }}
+            className={activePage === "leads" ? "active" : ""}
+          >
+            <UserPlus size={18} />
+            Leads
+          </a>
+          <a
+            href="#"
             onClick={() => setActivePage("customers")}
             className={activePage === "customers" ? "active" : ""}
           >
@@ -23628,7 +24762,7 @@ if (!currentUser) {
 
           </section>
         )}
-
+        {activePage === "leads" && renderLeads()}
         {activePage === "customers" && renderCustomers()}
         {activePage === "projects" && renderProjects()}
         {activePage === "boqs" && renderBOQs()}
@@ -23662,6 +24796,9 @@ if (!currentUser) {
 
         {renderPurchaseOrderModal()}
         {renderPurchaseOrderViewModal()}
+
+        {renderLeadModal()}
+        {renderLeadDetailsModal()}
       </main>
 
 
