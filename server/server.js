@@ -154,6 +154,209 @@ function calculateProjectReturnAvailability(
   };
 }
 // =========================================
+// QUOTATION CALCULATION HELPER
+// =========================================
+
+function calculateQuotationTotals(items, {
+  discountType = null,
+  discountValue = 0,
+  taxType = null,
+  taxRate = 0,
+} = {}) {
+  let subtotal = 0;
+
+  for (const item of items) {
+    const lineTotal =
+      Number(item.lineTotal) || 0;
+
+    if (lineTotal < 0) {
+      throw new Error(
+        "Quotation item total cannot be negative"
+      );
+    }
+
+    subtotal += lineTotal;
+  }
+
+  subtotal =
+    Math.round(subtotal * 100) / 100;
+
+  const cleanDiscountValue =
+    Number(discountValue) || 0;
+
+  if (cleanDiscountValue < 0) {
+    throw new Error(
+      "Discount value cannot be negative"
+    );
+  }
+
+  let discountAmount = 0;
+
+  if (discountType === "PERCENT") {
+    if (cleanDiscountValue > 100) {
+      throw new Error(
+        "Discount percentage cannot exceed 100"
+      );
+    }
+
+    discountAmount =
+      (subtotal * cleanDiscountValue) / 100;
+  } else if (discountType === "FIXED") {
+    discountAmount = cleanDiscountValue;
+  } else if (discountType !== null) {
+    throw new Error(
+      "Invalid discount type"
+    );
+  }
+
+  discountAmount =
+    Math.round(discountAmount * 100) / 100;
+
+  if (discountAmount > subtotal) {
+    throw new Error(
+      "Discount cannot be greater than subtotal"
+    );
+  }
+
+  const taxableAmount =
+    subtotal - discountAmount;
+
+  const cleanTaxRate =
+    Number(taxRate) || 0;
+
+  if (cleanTaxRate < 0) {
+    throw new Error(
+      "Tax rate cannot be negative"
+    );
+  }
+
+  let taxAmount = 0;
+
+  if (taxType === "PERCENT") {
+    if (cleanTaxRate > 100) {
+      throw new Error(
+        "Tax percentage cannot exceed 100"
+      );
+    }
+
+    taxAmount =
+      (taxableAmount * cleanTaxRate) / 100;
+  } else if (taxType === "FIXED") {
+    taxAmount = cleanTaxRate;
+  } else if (taxType !== null) {
+    throw new Error(
+      "Invalid tax type"
+    );
+  }
+
+  taxAmount =
+    Math.round(taxAmount * 100) / 100;
+
+  const grandTotal =
+    Math.round(
+      (subtotal -
+        discountAmount +
+        taxAmount) *
+        100
+    ) / 100;
+
+  if (grandTotal < 0) {
+    throw new Error(
+      "Grand total cannot be negative"
+    );
+  }
+
+  return {
+    subtotal,
+    discountAmount,
+    taxAmount,
+    grandTotal,
+  };
+}
+// =========================================
+// REFRESH QUOTATION TOTALS HELPER
+// =========================================
+
+async function refreshQuotationTotals(
+  quotationId
+) {
+  const quotation =
+    await prisma.quotation.findUnique({
+      where: {
+        id: quotationId,
+      },
+      include: {
+        items: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+        },
+      },
+    });
+
+  if (!quotation) {
+    throw new Error(
+      "Quotation not found"
+    );
+  }
+
+  const totals =
+    calculateQuotationTotals(
+      quotation.items,
+      {
+        discountType:
+          quotation.discountType,
+        discountValue:
+          quotation.discountValue,
+        taxType:
+          quotation.taxType,
+        taxRate:
+          quotation.taxRate,
+      }
+    );
+
+  const updatedQuotation =
+    await prisma.quotation.update({
+      where: {
+        id: quotationId,
+      },
+      data: {
+        subtotal:
+          totals.subtotal,
+
+        discountAmount:
+          totals.discountAmount,
+
+        taxAmount:
+          totals.taxAmount,
+
+        grandTotal:
+          totals.grandTotal,
+      },
+      include: {
+        customer: true,
+        project: true,
+        items: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+          include: {
+            material: true,
+            boqItem: true,
+          },
+        },
+        paymentMilestones: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+        },
+      },
+    });
+
+  return updatedQuotation;
+}
+
+// =========================================
 // MIDDLEWARE
 // =========================================
 
@@ -4088,6 +4291,2547 @@ app.delete("/api/boq-items/:id", async (req, res) => {
     });
   }
 });
+
+// =========================================
+// QUOTATION API
+// =========================================
+
+// GET ALL QUOTATIONS
+app.get("/api/quotations", async (req, res) => {
+  try {
+    const quotations = await prisma.quotation.findMany({
+      include: {
+        customer: true,
+        project: true,
+        items: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+          include: {
+            material: true,
+            boqItem: true,
+          },
+        },
+        paymentMilestones: {
+          orderBy: {
+            sortOrder: "asc",
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: quotations,
+    });
+  } catch (error) {
+    console.error("Get Quotations Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// GET SINGLE QUOTATION
+app.get("/api/quotations/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    const quotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          customer: true,
+          project: true,
+          items: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+            include: {
+              material: true,
+              boqItem: true,
+            },
+          },
+          paymentMilestones: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: quotation,
+    });
+  } catch (error) {
+    console.error(
+      "Get Quotation Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// GET ALL ITEMS OF A QUOTATION
+app.get("/api/quotations/:id/items", async (req, res) => {
+  try {
+    const quotationId = Number(req.params.id);
+
+    if (!Number.isInteger(quotationId) || quotationId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    const quotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id: quotationId,
+        },
+      });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    const items =
+      await prisma.quotationItem.findMany({
+        where: {
+          quotationId,
+        },
+        include: {
+          material: true,
+          boqItem: true,
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      });
+
+    res.json({
+      success: true,
+      data: items,
+    });
+  } catch (error) {
+    console.error(
+      "Get Quotation Items Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// CREATE QUOTATION ITEM
+app.post("/api/quotations/:id/items", async (req, res) => {
+  try {
+    const quotationId = Number(req.params.id);
+
+    const {
+      description,
+      specification,
+      pricingType,
+      quantity,
+      unit,
+      unitPrice,
+      materialId,
+      boqItemId,
+      notes,
+      sortOrder,
+    } = req.body;
+
+    // ==============================
+    // BASIC VALIDATION
+    // ==============================
+
+    if (!Number.isInteger(quotationId) || quotationId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    if (!description || description.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Description is required",
+      });
+    }
+
+    const allowedPricingTypes = [
+      "UNIT_PRICE",
+      "FIXED_AMOUNT",
+    ];
+
+    const cleanPricingType =
+      pricingType || "UNIT_PRICE";
+
+    if (!allowedPricingTypes.includes(cleanPricingType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation pricing type",
+      });
+    }
+
+    // ==============================
+    // VERIFY QUOTATION
+    // ==============================
+
+    const quotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id: quotationId,
+        },
+      });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    // ==============================
+    // PREVENT EDITING LOCKED QUOTES
+    // ==============================
+
+    if (
+      quotation.status !== "DRAFT"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only DRAFT quotations can be modified",
+      });
+    }
+
+    // ==============================
+    // VALIDATE MATERIAL
+    // ==============================
+
+    let cleanMaterialId = null;
+
+    if (
+      materialId !== undefined &&
+      materialId !== null &&
+      materialId !== ""
+    ) {
+      cleanMaterialId = Number(materialId);
+
+      if (
+        !Number.isInteger(cleanMaterialId) ||
+        cleanMaterialId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid material ID",
+        });
+      }
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: cleanMaterialId,
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+    }
+
+    // ==============================
+    // VALIDATE BOQ ITEM
+    // ==============================
+
+    let cleanBoqItemId = null;
+
+    if (
+      boqItemId !== undefined &&
+      boqItemId !== null &&
+      boqItemId !== ""
+    ) {
+      cleanBoqItemId = Number(boqItemId);
+
+      if (
+        !Number.isInteger(cleanBoqItemId) ||
+        cleanBoqItemId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid BOQ item ID",
+        });
+      }
+
+      const boqItem =
+        await prisma.bOQItem.findUnique({
+          where: {
+            id: cleanBoqItemId,
+          },
+        });
+
+      if (!boqItem) {
+        return res.status(400).json({
+          success: false,
+          message: "BOQ item not found",
+        });
+      }
+
+      // BOQ item must belong to the
+      // same project's quotation
+      if (boqItem.boqId) {
+        const boq =
+          await prisma.bOQ.findUnique({
+            where: {
+              id: boqItem.boqId,
+            },
+          });
+
+        if (
+          !boq ||
+          boq.projectId !== quotation.projectId
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Selected BOQ item does not belong to the quotation project",
+          });
+        }
+      }
+    }
+
+    // ==============================
+    // PRICING VALIDATION
+    // ==============================
+
+    let cleanQuantity = null;
+    let cleanUnit = null;
+    let cleanUnitPrice = null;
+    let lineTotal = 0;
+
+    if (cleanPricingType === "UNIT_PRICE") {
+      if (
+        quantity === undefined ||
+        quantity === null ||
+        quantity === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity is required for unit-price items",
+        });
+      }
+
+      cleanQuantity = Number(quantity);
+
+      if (
+        !Number.isFinite(cleanQuantity) ||
+        cleanQuantity <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || unit.trim() === "") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit is required for unit-price items",
+        });
+      }
+
+      cleanUnit = unit.trim();
+
+      if (
+        unitPrice === undefined ||
+        unitPrice === null ||
+        unitPrice === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price is required for unit-price items",
+        });
+      }
+
+      cleanUnitPrice = Number(unitPrice);
+
+      if (
+        !Number.isFinite(cleanUnitPrice) ||
+        cleanUnitPrice < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price cannot be negative",
+        });
+      }
+
+      lineTotal =
+        Math.round(
+          cleanQuantity *
+            cleanUnitPrice *
+            100
+        ) / 100;
+    }
+
+    if (cleanPricingType === "FIXED_AMOUNT") {
+      if (
+        unitPrice !== undefined &&
+        unitPrice !== null &&
+        unitPrice !== "" &&
+        Number(unitPrice) !== 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price is not allowed for fixed-amount items",
+        });
+      }
+
+      const fixedAmount =
+        req.body.lineTotal !== undefined &&
+        req.body.lineTotal !== null &&
+        req.body.lineTotal !== ""
+          ? Number(req.body.lineTotal)
+          : NaN;
+
+      if (
+        !Number.isFinite(fixedAmount) ||
+        fixedAmount < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Line total is required for fixed-amount items",
+        });
+      }
+
+      lineTotal =
+        Math.round(
+          fixedAmount * 100
+        ) / 100;
+    }
+
+    // ==============================
+    // SORT ORDER
+    // ==============================
+
+    const cleanSortOrder =
+      sortOrder === undefined ||
+      sortOrder === null ||
+      sortOrder === ""
+        ? 0
+        : Number(sortOrder);
+
+    if (
+      !Number.isInteger(cleanSortOrder) ||
+      cleanSortOrder < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Sort order must be a non-negative integer",
+      });
+    }
+
+    // ==============================
+    // CREATE ITEM
+    // ==============================
+
+    const item =
+      await prisma.quotationItem.create({
+        data: {
+          quotationId,
+
+          description:
+            description.trim(),
+
+          specification:
+            specification?.trim() ||
+            null,
+
+          pricingType:
+            cleanPricingType,
+
+          quantity:
+            cleanQuantity,
+
+          unit:
+            cleanUnit,
+
+          unitPrice:
+            cleanUnitPrice,
+
+          lineTotal,
+
+          materialId:
+            cleanMaterialId,
+
+          boqItemId:
+            cleanBoqItemId,
+
+          notes:
+            notes?.trim() ||
+            null,
+
+          sortOrder:
+            cleanSortOrder,
+        },
+
+        include: {
+          material: true,
+          boqItem: true,
+        },
+      });
+
+     const updatedQuotation =
+      await refreshQuotationTotals(
+        quotationId
+      );
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Quotation item created successfully",
+        data: item,
+        quotationTotals: {
+          subtotal:
+            updatedQuotation.subtotal,
+          discountAmount:
+            updatedQuotation.discountAmount,
+          taxAmount:
+            updatedQuotation.taxAmount,
+          grandTotal:
+            updatedQuotation.grandTotal,
+        },
+      });
+
+  } catch (error) {
+    console.error(
+      "Create Quotation Item Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// UPDATE QUOTATION ITEM
+app.put("/api/quotation-items/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const {
+      description,
+      specification,
+      pricingType,
+      quantity,
+      unit,
+      unitPrice,
+      lineTotal,
+      materialId,
+      boqItemId,
+      notes,
+      sortOrder,
+    } = req.body;
+
+    // ==============================
+    // BASIC VALIDATION
+    // ==============================
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation item ID",
+      });
+    }
+
+    if (!description || description.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Description is required",
+      });
+    }
+
+    const allowedPricingTypes = [
+      "UNIT_PRICE",
+      "FIXED_AMOUNT",
+    ];
+
+    const cleanPricingType =
+      pricingType || "UNIT_PRICE";
+
+    if (!allowedPricingTypes.includes(cleanPricingType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation pricing type",
+      });
+    }
+
+    // ==============================
+    // FIND EXISTING ITEM
+    // ==============================
+
+    const existingItem =
+      await prisma.quotationItem.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          quotation: true,
+        },
+      });
+
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation item not found",
+      });
+    }
+
+    // ==============================
+    // PREVENT EDITING LOCKED QUOTES
+    // ==============================
+
+    if (
+      existingItem.quotation.status !== "DRAFT"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only DRAFT quotations can be modified",
+      });
+    }
+
+    // ==============================
+    // VALIDATE MATERIAL
+    // ==============================
+
+    let cleanMaterialId = null;
+
+    if (
+      materialId !== undefined &&
+      materialId !== null &&
+      materialId !== ""
+    ) {
+      cleanMaterialId = Number(materialId);
+
+      if (
+        !Number.isInteger(cleanMaterialId) ||
+        cleanMaterialId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid material ID",
+        });
+      }
+
+      const material =
+        await prisma.material.findUnique({
+          where: {
+            id: cleanMaterialId,
+          },
+        });
+
+      if (!material) {
+        return res.status(400).json({
+          success: false,
+          message: "Material not found",
+        });
+      }
+    }
+
+    // ==============================
+    // VALIDATE BOQ ITEM
+    // ==============================
+
+    let cleanBoqItemId = null;
+
+    if (
+      boqItemId !== undefined &&
+      boqItemId !== null &&
+      boqItemId !== ""
+    ) {
+      cleanBoqItemId = Number(boqItemId);
+
+      if (
+        !Number.isInteger(cleanBoqItemId) ||
+        cleanBoqItemId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid BOQ item ID",
+        });
+      }
+
+      const boqItem =
+        await prisma.bOQItem.findUnique({
+          where: {
+            id: cleanBoqItemId,
+          },
+        });
+
+      if (!boqItem) {
+        return res.status(400).json({
+          success: false,
+          message: "BOQ item not found",
+        });
+      }
+
+      const boq =
+        await prisma.bOQ.findUnique({
+          where: {
+            id: boqItem.boqId,
+          },
+        });
+
+      if (
+        !boq ||
+        boq.projectId !==
+          existingItem.quotation.projectId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Selected BOQ item does not belong to the quotation project",
+        });
+      }
+    }
+
+    // ==============================
+    // PRICING
+    // ==============================
+
+    let cleanQuantity = null;
+    let cleanUnit = null;
+    let cleanUnitPrice = null;
+    let cleanLineTotal = 0;
+
+    if (cleanPricingType === "UNIT_PRICE") {
+      if (
+        quantity === undefined ||
+        quantity === null ||
+        quantity === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity is required for unit-price items",
+        });
+      }
+
+      cleanQuantity = Number(quantity);
+
+      if (
+        !Number.isFinite(cleanQuantity) ||
+        cleanQuantity <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quantity must be greater than 0",
+        });
+      }
+
+      if (!unit || unit.trim() === "") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit is required for unit-price items",
+        });
+      }
+
+      cleanUnit = unit.trim();
+
+      if (
+        unitPrice === undefined ||
+        unitPrice === null ||
+        unitPrice === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price is required for unit-price items",
+        });
+      }
+
+      cleanUnitPrice = Number(unitPrice);
+
+      if (
+        !Number.isFinite(cleanUnitPrice) ||
+        cleanUnitPrice < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Unit price cannot be negative",
+        });
+      }
+
+      cleanLineTotal =
+        Math.round(
+          cleanQuantity *
+            cleanUnitPrice *
+            100
+        ) / 100;
+    }
+
+    if (cleanPricingType === "FIXED_AMOUNT") {
+      const fixedAmount =
+        lineTotal === undefined ||
+        lineTotal === null ||
+        lineTotal === ""
+          ? NaN
+          : Number(lineTotal);
+
+      if (
+        !Number.isFinite(fixedAmount) ||
+        fixedAmount < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Line total is required for fixed-amount items",
+        });
+      }
+
+      cleanLineTotal =
+        Math.round(
+          fixedAmount * 100
+        ) / 100;
+    }
+
+    // ==============================
+    // SORT ORDER
+    // ==============================
+
+    const cleanSortOrder =
+      sortOrder === undefined ||
+      sortOrder === null ||
+      sortOrder === ""
+        ? existingItem.sortOrder
+        : Number(sortOrder);
+
+    if (
+      !Number.isInteger(cleanSortOrder) ||
+      cleanSortOrder < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Sort order must be a non-negative integer",
+      });
+    }
+
+    // ==============================
+    // UPDATE ITEM
+    // ==============================
+
+    const updatedItem =
+      await prisma.quotationItem.update({
+        where: {
+          id,
+        },
+        data: {
+          description:
+            description.trim(),
+
+          specification:
+            specification?.trim() ||
+            null,
+
+          pricingType:
+            cleanPricingType,
+
+          quantity:
+            cleanQuantity,
+
+          unit:
+            cleanUnit,
+
+          unitPrice:
+            cleanUnitPrice,
+
+          lineTotal:
+            cleanLineTotal,
+
+          materialId:
+            cleanMaterialId,
+
+          boqItemId:
+            cleanBoqItemId,
+
+          notes:
+            notes?.trim() ||
+            null,
+
+          sortOrder:
+            cleanSortOrder,
+        },
+
+        include: {
+          material: true,
+          boqItem: true,
+        },
+      });
+
+    // ==============================
+    // REFRESH QUOTATION TOTALS
+    // ==============================
+
+    const updatedQuotation =
+      await refreshQuotationTotals(
+        existingItem.quotationId
+      );
+
+    res.json({
+      success: true,
+      message:
+        "Quotation item updated successfully",
+      data: updatedItem,
+      quotationTotals: {
+        subtotal:
+          updatedQuotation.subtotal,
+        discountAmount:
+          updatedQuotation.discountAmount,
+        taxAmount:
+          updatedQuotation.taxAmount,
+        grandTotal:
+          updatedQuotation.grandTotal,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Update Quotation Item Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// DELETE QUOTATION ITEM
+app.delete("/api/quotation-items/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation item ID",
+      });
+    }
+
+    const existingItem =
+      await prisma.quotationItem.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          quotation: true,
+        },
+      });
+
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation item not found",
+      });
+    }
+
+    // ==============================
+    // PREVENT EDITING LOCKED QUOTES
+    // ==============================
+
+    if (
+      existingItem.quotation.status !== "DRAFT"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only DRAFT quotations can be modified",
+      });
+    }
+
+    // ==============================
+    // DELETE ITEM
+    // ==============================
+
+    await prisma.quotationItem.delete({
+      where: {
+        id,
+      },
+    });
+
+    // ==============================
+    // REFRESH QUOTATION TOTALS
+    // ==============================
+
+    const updatedQuotation =
+      await refreshQuotationTotals(
+        existingItem.quotationId
+      );
+
+    res.json({
+      success: true,
+      message:
+        "Quotation item deleted successfully",
+      quotationTotals: {
+        subtotal:
+          updatedQuotation.subtotal,
+        discountAmount:
+          updatedQuotation.discountAmount,
+        taxAmount:
+          updatedQuotation.taxAmount,
+        grandTotal:
+          updatedQuotation.grandTotal,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Delete Quotation Item Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// CREATE QUOTATION
+app.post("/api/quotations", async (req, res) => {
+  try {
+    const {
+      quotationNo,
+      customerId,
+      projectId,
+      quotationDate,
+      validUntil,
+      status,
+      revisionNo,
+      discountType,
+      discountValue,
+      taxType,
+      taxRate,
+      paymentTerms,
+      termsAndConditions,
+      notes,
+    } = req.body;
+
+    // ==============================
+    // BASIC VALIDATION
+    // ==============================
+
+    if (!quotationNo || quotationNo.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Quotation number is required",
+      });
+    }
+
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer is required",
+      });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project is required",
+      });
+    }
+
+    // ==============================
+    // VALIDATE IDS
+    // ==============================
+
+    const cleanCustomerId = Number(customerId);
+    const cleanProjectId = Number(projectId);
+
+    if (
+      !Number.isInteger(cleanCustomerId) ||
+      cleanCustomerId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID",
+      });
+    }
+
+    if (
+      !Number.isInteger(cleanProjectId) ||
+      cleanProjectId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    // ==============================
+    // VERIFY CUSTOMER
+    // ==============================
+
+    const customer =
+      await prisma.customer.findUnique({
+        where: {
+          id: cleanCustomerId,
+        },
+      });
+
+    if (!customer) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // ==============================
+    // VERIFY PROJECT
+    // ==============================
+
+    const project =
+      await prisma.project.findUnique({
+        where: {
+          id: cleanProjectId,
+        },
+      });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // ==============================
+    // CUSTOMER ↔ PROJECT CONSISTENCY
+    // ==============================
+
+    if (
+      project.customerId !== cleanCustomerId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Selected project does not belong to the selected customer",
+      });
+    }
+
+    // ==============================
+    // DUPLICATE QUOTATION NUMBER
+    // ==============================
+
+    const existingQuotation =
+      await prisma.quotation.findUnique({
+        where: {
+          quotationNo: quotationNo.trim(),
+        },
+      });
+
+    if (existingQuotation) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A quotation with this number already exists",
+      });
+    }
+
+    // ==============================
+    // VALIDATE STATUS
+    // ==============================
+
+    const allowedStatuses = [
+      "DRAFT",
+      "SENT",
+      "ACCEPTED",
+      "REJECTED",
+      "EXPIRED",
+      "CANCELLED",
+    ];
+
+    const quotationStatus =
+      status || "DRAFT";
+
+    if (
+      !allowedStatuses.includes(
+        quotationStatus
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation status",
+      });
+    }
+
+    // ==============================
+    // VALIDATE REVISION
+    // ==============================
+
+    const cleanRevisionNo =
+      revisionNo === undefined ||
+      revisionNo === null
+        ? 1
+        : Number(revisionNo);
+
+    if (
+      !Number.isInteger(cleanRevisionNo) ||
+      cleanRevisionNo < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Revision number must be a positive integer",
+      });
+    }
+
+    // ==============================
+    // VALIDATE DISCOUNT
+    // ==============================
+
+    const allowedDiscountTypes = [
+      "PERCENT",
+      "FIXED",
+    ];
+
+    let cleanDiscountType =
+      discountType || null;
+
+    let cleanDiscountValue = 0;
+
+    if (cleanDiscountType !== null) {
+      if (
+        !allowedDiscountTypes.includes(
+          cleanDiscountType
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid discount type",
+        });
+      }
+
+      cleanDiscountValue =
+        discountValue === undefined ||
+        discountValue === null ||
+        discountValue === ""
+          ? 0
+          : Number(discountValue);
+
+      if (
+        !Number.isFinite(cleanDiscountValue) ||
+        cleanDiscountValue < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Discount value cannot be negative",
+        });
+      }
+    }
+
+    // ==============================
+    // VALIDATE TAX
+    // ==============================
+
+    const allowedTaxTypes = [
+      "PERCENT",
+      "FIXED",
+    ];
+
+    let cleanTaxType = taxType || null;
+
+    let cleanTaxRate = 0;
+
+    if (cleanTaxType !== null) {
+      if (
+        !allowedTaxTypes.includes(
+          cleanTaxType
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid tax type",
+        });
+      }
+
+      cleanTaxRate =
+        taxRate === undefined ||
+        taxRate === null ||
+        taxRate === ""
+          ? 0
+          : Number(taxRate);
+
+      if (
+        !Number.isFinite(cleanTaxRate) ||
+        cleanTaxRate < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Tax rate cannot be negative",
+        });
+      }
+    }
+
+    // ==============================
+    // CREATE QUOTATION
+    // ==============================
+
+    const quotation =
+      await prisma.quotation.create({
+        data: {
+          quotationNo:
+            quotationNo.trim(),
+
+          customerId:
+            cleanCustomerId,
+
+          projectId:
+            cleanProjectId,
+
+          quotationDate:
+            quotationDate
+              ? new Date(quotationDate)
+              : new Date(),
+
+          validUntil:
+            validUntil
+              ? new Date(validUntil)
+              : null,
+
+          status:
+            quotationStatus,
+
+          revisionNo:
+            cleanRevisionNo,
+
+          discountType:
+            cleanDiscountType,
+
+          discountValue:
+            cleanDiscountValue,
+
+          taxType:
+            cleanTaxType,
+
+          taxRate:
+            cleanTaxRate,
+
+          paymentTerms:
+            paymentTerms?.trim() ||
+            null,
+
+          termsAndConditions:
+            termsAndConditions?.trim() ||
+            null,
+
+          notes:
+            notes?.trim() ||
+            null,
+        },
+
+        include: {
+          customer: true,
+          project: true,
+          items: true,
+          paymentMilestones: true,
+        },
+      });
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Quotation created successfully",
+      data: quotation,
+    });
+  } catch (error) {
+    console.error(
+      "Create Quotation Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// UPDATE QUOTATION
+app.put("/api/quotations/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    const {
+      customerId,
+      projectId,
+      quotationDate,
+      validUntil,
+      status,
+      revisionNo,
+      discountType,
+      discountValue,
+      taxType,
+      taxRate,
+      paymentTerms,
+      termsAndConditions,
+      notes,
+    } = req.body;
+
+    // ==============================
+    // BASIC VALIDATION
+    // ==============================
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    const existingQuotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existingQuotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    // ==============================
+    // STATUS / EDIT LOCK
+    // ==============================
+
+    if (
+      existingQuotation.status !== "DRAFT"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only DRAFT quotations can be modified",
+      });
+    }
+
+    // ==============================
+    // CUSTOMER + PROJECT
+    // ==============================
+
+    const cleanCustomerId =
+      customerId === undefined ||
+      customerId === null ||
+      customerId === ""
+        ? existingQuotation.customerId
+        : Number(customerId);
+
+    const cleanProjectId =
+      projectId === undefined ||
+      projectId === null ||
+      projectId === ""
+        ? existingQuotation.projectId
+        : Number(projectId);
+
+    if (
+      !Number.isInteger(cleanCustomerId) ||
+      cleanCustomerId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID",
+      });
+    }
+
+    if (
+      !Number.isInteger(cleanProjectId) ||
+      cleanProjectId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    const customer =
+      await prisma.customer.findUnique({
+        where: {
+          id: cleanCustomerId,
+        },
+      });
+
+    if (!customer) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const project =
+      await prisma.project.findUnique({
+        where: {
+          id: cleanProjectId,
+        },
+      });
+
+    if (!project) {
+      return res.status(400).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    if (
+      project.customerId !== cleanCustomerId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Selected project does not belong to the selected customer",
+      });
+    }
+
+    // ==============================
+    // VALIDATE STATUS
+    // ==============================
+
+    const allowedStatuses = [
+      "DRAFT",
+      "SENT",
+      "ACCEPTED",
+      "REJECTED",
+      "EXPIRED",
+      "CANCELLED",
+    ];
+
+    const cleanStatus =
+      status || existingQuotation.status;
+
+    if (
+      !allowedStatuses.includes(cleanStatus)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation status",
+      });
+    }
+  // ==============================
+    // VALIDATE REVISION
+    // ==============================
+  const cleanRevisionNo =
+      revisionNo === undefined ||
+      revisionNo === null ||
+      revisionNo === ""
+        ? existingQuotation.revisionNo
+        : Number(revisionNo);
+
+    if (
+      !Number.isInteger(cleanRevisionNo) ||
+      cleanRevisionNo < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Revision number must be a positive integer",
+      });
+    }
+
+    // ==============================
+    // VALIDATE DISCOUNT
+    // ==============================
+
+    const cleanDiscountType =
+      discountType === undefined
+        ? existingQuotation.discountType
+        : discountType || null;
+
+    const cleanDiscountValue =
+      discountValue === undefined
+        ? Number(existingQuotation.discountValue)
+        : Number(discountValue);
+
+    if (
+      cleanDiscountValue < 0 ||
+      !Number.isFinite(cleanDiscountValue)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Discount value cannot be negative",
+      });
+    }
+
+    // ==============================
+    // VALIDATE TAX
+    // ==============================
+
+    const cleanTaxType =
+      taxType === undefined
+        ? existingQuotation.taxType
+        : taxType || null;
+
+    const cleanTaxRate =
+      taxRate === undefined
+        ? Number(existingQuotation.taxRate)
+        : Number(taxRate);
+
+    if (
+      cleanTaxRate < 0 ||
+      !Number.isFinite(cleanTaxRate)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Tax rate cannot be negative",
+      });
+    }
+    // ==============================
+    // FINALIZATION VALIDATION
+    // ==============================
+    if (
+      cleanStatus === "SENT" ||
+      cleanStatus === "ACCEPTED"
+    ) {
+      const milestones =
+        await prisma.quotationPaymentMilestone.findMany({
+          where: {
+            quotationId: id,
+          },
+        });
+
+      const totalPercentage =
+        milestones.reduce(
+          (sum, milestone) =>
+            sum +
+            (Number(milestone.percentage) || 0),
+          0
+        );
+
+      const totalMilestoneAmount =
+        milestones.reduce(
+          (sum, milestone) =>
+            sum +
+            (Number(milestone.amount) || 0),
+          0
+        );
+
+      const totals =
+        calculateQuotationTotals(
+          await prisma.quotationItem.findMany({
+            where: {
+              quotationId: id,
+            },
+          }),
+          {
+            discountType:
+              cleanDiscountType,
+            discountValue:
+              cleanDiscountValue,
+            taxType:
+              cleanTaxType,
+            taxRate:
+              cleanTaxRate,
+          }
+        );
+
+      if (
+        Math.abs(
+          totalPercentage - 100
+        ) > 0.001
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quotation cannot be finalized until payment milestone percentage totals 100%",
+          totalPercentage,
+        });
+      }
+
+      if (
+        Math.abs(
+          totalMilestoneAmount -
+            totals.grandTotal
+        ) > 0.01
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment milestone total amount must equal quotation grand total",
+          totalMilestoneAmount,
+          grandTotal:
+            totals.grandTotal,
+        });
+      }
+    }
+    // ==============================
+    // UPDATE HEADER
+    // ==============================
+
+    const updatedQuotation =
+      await prisma.quotation.update({
+        where: {
+          id,
+        },
+        data: {
+          customerId:
+            cleanCustomerId,
+
+          projectId:
+            cleanProjectId,
+
+          quotationDate:
+            quotationDate !== undefined
+              ? new Date(quotationDate)
+              : existingQuotation.quotationDate,
+
+          validUntil:
+            validUntil === undefined
+              ? existingQuotation.validUntil
+              : validUntil
+              ? new Date(validUntil)
+              : null,
+
+          status:
+            cleanStatus,
+
+          revisionNo:
+            cleanRevisionNo,
+
+          discountType:
+            cleanDiscountType,
+
+          discountValue:
+            cleanDiscountValue,
+
+          taxType:
+            cleanTaxType,
+
+          taxRate:
+            cleanTaxRate,
+
+          paymentTerms:
+            paymentTerms === undefined
+              ? existingQuotation.paymentTerms
+              : paymentTerms?.trim() || null,
+
+          termsAndConditions:
+            termsAndConditions === undefined
+              ? existingQuotation.termsAndConditions
+              : termsAndConditions?.trim() || null,
+
+          notes:
+            notes === undefined
+              ? existingQuotation.notes
+              : notes?.trim() || null,
+        },
+      });
+
+    // ==============================
+    // REFRESH TOTALS
+    // ==============================
+
+    const quotationWithTotals =
+      await refreshQuotationTotals(
+        id
+      );
+
+    res.json({
+      success: true,
+      message:
+        "Quotation updated successfully",
+      data: quotationWithTotals,
+    });
+  } catch (error) {
+    console.error(
+      "Update Quotation Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// GET ALL PAYMENT MILESTONES OF A QUOTATION
+app.get("/api/quotations/:id/payment-milestones", async (req, res) => {
+  try {
+    const quotationId = Number(req.params.id);
+
+    if (
+      !Number.isInteger(quotationId) ||
+      quotationId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    const quotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id: quotationId,
+        },
+      });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    const milestones =
+      await prisma.quotationPaymentMilestone.findMany({
+        where: {
+          quotationId,
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      });
+
+    res.json({
+      success: true,
+      data: milestones,
+    });
+  } catch (error) {
+    console.error(
+      "Get Quotation Payment Milestones Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// CREATE PAYMENT MILESTONE
+app.post(
+  "/api/quotations/:id/payment-milestones",
+  async (req, res) => {
+    try {
+      const quotationId =
+        Number(req.params.id);
+
+      const {
+        milestoneNo,
+        title,
+        percentage,
+        amount,
+        dueTrigger,
+        notes,
+        sortOrder,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (
+        !Number.isInteger(quotationId) ||
+        quotationId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid quotation ID",
+        });
+      }
+
+      if (
+        milestoneNo === undefined ||
+        milestoneNo === null ||
+        milestoneNo === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone number is required",
+        });
+      }
+
+      const cleanMilestoneNo =
+        Number(milestoneNo);
+
+      if (
+        !Number.isInteger(cleanMilestoneNo) ||
+        cleanMilestoneNo <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone number must be a positive integer",
+        });
+      }
+
+      if (
+        !title ||
+        title.trim() === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone title is required",
+        });
+      }
+
+      // ==============================
+      // VERIFY QUOTATION
+      // ==============================
+
+      const quotation =
+        await prisma.quotation.findUnique({
+          where: {
+            id: quotationId,
+          },
+        });
+
+      if (!quotation) {
+        return res.status(404).json({
+          success: false,
+          message: "Quotation not found",
+        });
+      }
+
+      if (
+        quotation.status !== "DRAFT"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only DRAFT quotations can be modified",
+        });
+      }
+
+      // ==============================
+      // VALIDATE PERCENTAGE
+      // ==============================
+
+      const cleanPercentage =
+        percentage === undefined ||
+        percentage === null ||
+        percentage === ""
+          ? null
+          : Number(percentage);
+
+      if (
+        cleanPercentage !== null &&
+        (
+          !Number.isFinite(
+            cleanPercentage
+          ) ||
+          cleanPercentage < 0 ||
+          cleanPercentage > 100
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Percentage must be between 0 and 100",
+        });
+      }
+
+      // ==============================
+      // VALIDATE AMOUNT
+      // ==============================
+
+      if (
+        amount === undefined ||
+        amount === null ||
+        amount === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone amount is required",
+        });
+      }
+
+      const cleanAmount =
+        Number(amount);
+
+      if (
+        !Number.isFinite(cleanAmount) ||
+        cleanAmount < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone amount cannot be negative",
+        });
+      }
+
+      // ==============================
+      // CHECK EXISTING MILESTONE NUMBER
+      // ==============================
+
+      const existingMilestone =
+        await prisma.quotationPaymentMilestone.findFirst({
+          where: {
+            quotationId,
+            milestoneNo:
+              cleanMilestoneNo,
+          },
+        });
+
+      if (existingMilestone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A milestone with this number already exists",
+        });
+      }
+
+      // ==============================
+      // CHECK TOTAL PERCENTAGE
+      // ==============================
+
+      if (cleanPercentage !== null) {
+        const existingPercentage =
+          await prisma.quotationPaymentMilestone.aggregate({
+            where: {
+              quotationId,
+            },
+            _sum: {
+              percentage: true,
+            },
+          });
+
+        const currentPercentage =
+          Number(
+            existingPercentage._sum
+              .percentage
+          ) || 0;
+
+        const newPercentage =
+          currentPercentage +
+          cleanPercentage;
+
+        if (
+          newPercentage > 100
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Total payment milestone percentage cannot exceed 100",
+          });
+        }
+      }
+
+      // ==============================
+      // SORT ORDER
+      // ==============================
+
+      const cleanSortOrder =
+        sortOrder === undefined ||
+        sortOrder === null ||
+        sortOrder === ""
+          ? cleanMilestoneNo
+          : Number(sortOrder);
+
+      if (
+        !Number.isInteger(
+          cleanSortOrder
+        ) ||
+        cleanSortOrder < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Sort order must be a non-negative integer",
+        });
+      }
+
+      // ==============================
+      // CREATE MILESTONE
+      // ==============================
+
+      const milestone =
+        await prisma.quotationPaymentMilestone.create({
+          data: {
+            quotationId,
+
+            milestoneNo:
+              cleanMilestoneNo,
+
+            title:
+              title.trim(),
+
+            percentage:
+              cleanPercentage,
+
+            amount:
+              cleanAmount,
+
+            dueTrigger:
+              dueTrigger?.trim() ||
+              null,
+
+            notes:
+              notes?.trim() ||
+              null,
+
+            sortOrder:
+              cleanSortOrder,
+          },
+        });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Payment milestone created successfully",
+        data: milestone,
+      });
+    } catch (error) {
+      console.error(
+        "Create Quotation Payment Milestone Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+// UPDATE PAYMENT MILESTONE
+app.put(
+  "/api/quotation-payment-milestones/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const {
+        milestoneNo,
+        title,
+        percentage,
+        amount,
+        dueTrigger,
+        notes,
+        sortOrder,
+      } = req.body;
+
+      // ==============================
+      // BASIC VALIDATION
+      // ==============================
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid payment milestone ID",
+        });
+      }
+
+      const existingMilestone =
+        await prisma.quotationPaymentMilestone.findUnique({
+          where: {
+            id,
+          },
+          include: {
+            quotation: true,
+          },
+        });
+
+      if (!existingMilestone) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment milestone not found",
+        });
+      }
+
+      // ==============================
+      // DRAFT ONLY
+      // ==============================
+
+      if (
+        existingMilestone.quotation.status !== "DRAFT"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only DRAFT quotations can be modified",
+        });
+      }
+
+      // ==============================
+      // MILESTONE NUMBER
+      // ==============================
+
+      const cleanMilestoneNo =
+        milestoneNo === undefined ||
+        milestoneNo === null ||
+        milestoneNo === ""
+          ? existingMilestone.milestoneNo
+          : Number(milestoneNo);
+
+      if (
+        !Number.isInteger(cleanMilestoneNo) ||
+        cleanMilestoneNo <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone number must be a positive integer",
+        });
+      }
+
+      // ==============================
+      // TITLE
+      // ==============================
+
+      const cleanTitle =
+        title === undefined
+          ? existingMilestone.title
+          : title?.trim();
+
+      if (!cleanTitle) {
+        return res.status(400).json({
+          success: false,
+          message: "Milestone title is required",
+        });
+      }
+
+      // ==============================
+      // DUPLICATE MILESTONE NUMBER
+      // ==============================
+
+      const duplicateMilestone =
+        await prisma.quotationPaymentMilestone.findFirst({
+          where: {
+            quotationId:
+              existingMilestone.quotationId,
+            milestoneNo:
+              cleanMilestoneNo,
+            NOT: {
+              id,
+            },
+          },
+        });
+
+      if (duplicateMilestone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A milestone with this number already exists",
+        });
+      }
+
+      // ==============================
+      // PERCENTAGE
+      // ==============================
+
+      const cleanPercentage =
+        percentage === undefined
+          ? existingMilestone.percentage === null
+            ? null
+            : Number(existingMilestone.percentage)
+          : percentage === null ||
+            percentage === ""
+          ? null
+          : Number(percentage);
+
+      if (
+        cleanPercentage !== null &&
+        (
+          !Number.isFinite(cleanPercentage) ||
+          cleanPercentage < 0 ||
+          cleanPercentage > 100
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Percentage must be between 0 and 100",
+        });
+      }
+
+      // ==============================
+      // TOTAL PERCENTAGE CHECK
+      // ==============================
+
+      if (cleanPercentage !== null) {
+        const existingPercentage =
+          await prisma.quotationPaymentMilestone.aggregate({
+            where: {
+              quotationId:
+                existingMilestone.quotationId,
+              NOT: {
+                id,
+              },
+            },
+            _sum: {
+              percentage: true,
+            },
+          });
+
+        const otherPercentage =
+          Number(
+            existingPercentage._sum
+              .percentage
+          ) || 0;
+
+        const newPercentage =
+          otherPercentage +
+          cleanPercentage;
+
+        if (newPercentage > 100) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Total payment milestone percentage cannot exceed 100",
+          });
+        }
+      }
+
+      // ==============================
+      // AMOUNT
+      // ==============================
+
+      const cleanAmount =
+        amount === undefined ||
+        amount === null ||
+        amount === ""
+          ? Number(existingMilestone.amount)
+          : Number(amount);
+
+      if (
+        !Number.isFinite(cleanAmount) ||
+        cleanAmount < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Milestone amount cannot be negative",
+        });
+      }
+
+      // ==============================
+      // SORT ORDER
+      // ==============================
+
+      const cleanSortOrder =
+        sortOrder === undefined ||
+        sortOrder === null ||
+        sortOrder === ""
+          ? existingMilestone.sortOrder
+          : Number(sortOrder);
+
+      if (
+        !Number.isInteger(cleanSortOrder) ||
+        cleanSortOrder < 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Sort order must be a non-negative integer",
+        });
+      }
+
+      // ==============================
+      // UPDATE
+      // ==============================
+
+      const updatedMilestone =
+        await prisma.quotationPaymentMilestone.update({
+          where: {
+            id,
+          },
+          data: {
+            milestoneNo:
+              cleanMilestoneNo,
+
+            title:
+              cleanTitle,
+
+            percentage:
+              cleanPercentage,
+
+            amount:
+              cleanAmount,
+
+            dueTrigger:
+              dueTrigger === undefined
+                ? existingMilestone.dueTrigger
+                : dueTrigger?.trim() || null,
+
+            notes:
+              notes === undefined
+                ? existingMilestone.notes
+                : notes?.trim() || null,
+
+            sortOrder:
+              cleanSortOrder,
+          },
+        });
+
+      res.json({
+        success: true,
+        message:
+          "Payment milestone updated successfully",
+        data: updatedMilestone,
+      });
+    } catch (error) {
+      console.error(
+        "Update Quotation Payment Milestone Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
+// DELETE PAYMENT MILESTONE
+app.delete(
+  "/api/quotation-payment-milestones/:id",
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid payment milestone ID",
+        });
+      }
+
+      const existingMilestone =
+        await prisma.quotationPaymentMilestone.findUnique({
+          where: {
+            id,
+          },
+          include: {
+            quotation: true,
+          },
+        });
+
+      if (!existingMilestone) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment milestone not found",
+        });
+      }
+
+      // Only draft quotations can be modified
+      if (
+        existingMilestone.quotation.status !== "DRAFT"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only DRAFT quotations can be modified",
+        });
+      }
+
+      await prisma.quotationPaymentMilestone.delete({
+        where: {
+          id,
+        },
+      });
+
+      const remainingMilestones =
+        await prisma.quotationPaymentMilestone.findMany({
+          where: {
+            quotationId:
+              existingMilestone.quotationId,
+          },
+          orderBy: {
+            sortOrder: "asc",
+          },
+        });
+
+      const totalPercentage =
+        remainingMilestones.reduce(
+          (sum, milestone) =>
+            sum +
+            (Number(milestone.percentage) || 0),
+          0
+        );
+
+      const totalAmount =
+        remainingMilestones.reduce(
+          (sum, milestone) =>
+            sum +
+            (Number(milestone.amount) || 0),
+          0
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Payment milestone deleted successfully",
+        data: {
+          deletedMilestoneId: id,
+          remainingMilestones,
+          totalPercentage,
+          totalAmount,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Delete Quotation Payment Milestone Error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+);
 
 // =========================================
 // PURCHASE REQUEST API
