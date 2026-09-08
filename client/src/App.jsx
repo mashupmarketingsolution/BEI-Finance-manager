@@ -3567,7 +3567,6 @@ const [boqDetailsLoading, setBoqDetailsLoading] =
 
 const [showBOQDetailsModal, setShowBOQDetailsModal] =
   useState(false);
-
 // =========================================
 // BOQ ITEM STATE
 // =========================================
@@ -3600,9 +3599,447 @@ const [showBOQItemViewModal, setShowBOQItemViewModal] =
   useState(false);
 
 
+// =========================================
+// QUOTATION STATE
+// =========================================
 
+const [quotations, setQuotations] = useState([]);
+const [quotationLoading, setQuotationLoading] = useState(false);
+const [quotationMessage, setQuotationMessage] = useState("");
 
+// =========================================
+// QUOTATION FORM STATE
+// =========================================
 
+const [showQuotationModal, setShowQuotationModal] =
+  useState(false);
+
+const [savingQuotation, setSavingQuotation] =
+  useState(false);
+
+const [editingQuotationId, setEditingQuotationId] =
+  useState(null);
+
+const [quotationForm, setQuotationForm] =
+  useState({
+    quotationNo: "",
+    customerId: "",
+    projectId: "",
+    quotationDate: new Date()
+      .toISOString()
+      .split("T")[0],
+    validUntil: "",
+    status: "DRAFT",
+    paymentTerms: "",
+    termsAndConditions: "",
+    notes: "",
+    discountType: null,
+    discountValue: 0,
+    taxType: null,
+    taxRate: 0,
+  });
+  // =========================================
+// QUOTATION ITEM STATE
+// =========================================
+
+const [
+  showQuotationItemModal,
+  setShowQuotationItemModal,
+] = useState(false);
+
+const [
+  savingQuotationItem,
+  setSavingQuotationItem,
+] = useState(false);
+
+const [
+  quotationItemMessage,
+  setQuotationItemMessage,
+] = useState("");
+
+const [
+  editingQuotationItemId,
+  setEditingQuotationItemId,
+] = useState(null);
+
+const [
+  quotationItemForm,
+  setQuotationItemForm,
+] = useState({
+  description: "",
+  specification: "",
+  pricingType: "UNIT_PRICE",
+  quantity: "",
+  unit: "",
+  unitPrice: "",
+  lineTotal: "",
+  notes: "",
+  sortOrder: 1,
+});
+// =========================================
+// QUOTATION PAYMENT MILESTONE STATE
+// =========================================
+
+const [
+  showQuotationMilestoneModal,
+  setShowQuotationMilestoneModal,
+] = useState(false);
+
+const [
+  savingQuotationMilestone,
+  setSavingQuotationMilestone,
+] = useState(false);
+
+const [
+  quotationMilestoneMessage,
+  setQuotationMilestoneMessage,
+] = useState("");
+
+const [
+  editingQuotationMilestoneId,
+  setEditingQuotationMilestoneId,
+] = useState(null);
+
+const [
+  quotationMilestoneForm,
+  setQuotationMilestoneForm,
+] = useState({
+  milestoneNo: 1,
+  title: "",
+  percentage: "",
+  amount: "",
+  dueTrigger: "",
+  notes: "",
+  sortOrder: 1,
+});
+// =========================================
+// OPEN QUOTATION MILESTONE MODAL
+// =========================================
+
+const openQuotationMilestoneModal = () => {
+  setQuotationMilestoneMessage("");
+
+  setEditingQuotationMilestoneId(null);
+
+  const existingMilestones =
+    selectedQuotation?.paymentMilestones || [];
+
+  const nextMilestoneNo =
+    existingMilestones.length + 1;
+
+  setQuotationMilestoneForm({
+    milestoneNo: nextMilestoneNo,
+    title: "",
+    percentage: "",
+    amount: "",
+    dueTrigger: "",
+    notes: "",
+    sortOrder: nextMilestoneNo,
+  });
+
+  setShowQuotationMilestoneModal(true);
+};
+
+// =========================================
+// EDIT QUOTATION MILESTONE
+// =========================================
+
+const editQuotationMilestone = (milestone) => {
+  setQuotationMilestoneMessage("");
+
+  setEditingQuotationMilestoneId(
+    milestone.id
+  );
+
+  setQuotationMilestoneForm({
+    milestoneNo:
+      milestone.milestoneNo || 1,
+
+    title:
+      milestone.title || "",
+
+    percentage:
+      milestone.percentage !== null &&
+      milestone.percentage !== undefined
+        ? String(milestone.percentage)
+        : "",
+
+    amount:
+      milestone.amount !== null &&
+      milestone.amount !== undefined
+        ? String(milestone.amount)
+        : "",
+
+    dueTrigger:
+      milestone.dueTrigger || "",
+
+    notes:
+      milestone.notes || "",
+
+    sortOrder:
+      milestone.sortOrder || 1,
+  });
+
+  setShowQuotationMilestoneModal(true);
+};
+
+// =========================================
+// CLOSE QUOTATION MILESTONE MODAL
+// =========================================
+
+const closeQuotationMilestoneModal = () => {
+  if (!savingQuotationMilestone) {
+    setShowQuotationMilestoneModal(false);
+    setEditingQuotationMilestoneId(null);
+    setQuotationMilestoneMessage("");
+  }
+};
+// =========================================
+// DELETE QUOTATION PAYMENT MILESTONE
+// =========================================
+
+const deleteQuotationMilestone = async (milestoneId) => {
+
+  if (!selectedQuotation) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this payment milestone?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setQuotationMilestoneMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/quotation-payment-milestones/${milestoneId}`
+    );
+    if (response.data.success) {
+      const quotationResponse =
+        await axios.get(
+          `${API_URL}/api/quotations/${selectedQuotation.id}`
+        );
+
+      if (quotationResponse.data.success) {
+        setSelectedQuotation(
+          quotationResponse.data.data
+        );
+      }
+
+      await loadQuotations();
+
+      setQuotationMilestoneMessage(
+        "✅ Payment milestone deleted successfully"
+      );
+
+      setTimeout(() => {
+        setQuotationMilestoneMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete Quotation Milestone Error:",
+      error
+    );
+
+    setQuotationMilestoneMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Payment milestone delete করা যায়নি!"
+      }`
+    );
+  }
+};
+// =========================================
+// SAVE QUOTATION PAYMENT MILESTONE
+// =========================================
+
+const handleSaveQuotationMilestone = async () => {
+  if (savingQuotationMilestone) {
+    return;
+  }
+
+  if (!selectedQuotation) {
+    setQuotationMilestoneMessage(
+      "❌ No quotation selected"
+    );
+    return;
+  }
+
+  setQuotationMilestoneMessage("");
+
+  const milestoneNo = Number(
+    quotationMilestoneForm.milestoneNo
+  );
+
+  const percentage = Number(
+    quotationMilestoneForm.percentage
+  );
+
+  const amount = Number(
+    quotationMilestoneForm.amount
+  );
+
+  const title =
+    quotationMilestoneForm.title.trim();
+
+  const dueTrigger =
+    quotationMilestoneForm.dueTrigger.trim();
+
+  const notes =
+    quotationMilestoneForm.notes.trim();
+
+  const sortOrder = Number(
+    quotationMilestoneForm.sortOrder
+  );
+
+  // ==============================
+  // VALIDATION
+  // ==============================
+
+  if (
+    !Number.isInteger(milestoneNo) ||
+    milestoneNo <= 0
+  ) {
+    setQuotationMilestoneMessage(
+      "❌ Milestone number must be a positive integer"
+    );
+    return;
+  }
+
+  if (!title) {
+    setQuotationMilestoneMessage(
+      "❌ Milestone title is required"
+    );
+    return;
+  }
+
+  if (
+    !Number.isFinite(percentage) ||
+    percentage < 0 ||
+    percentage > 100
+  ) {
+    setQuotationMilestoneMessage(
+      "❌ Percentage must be between 0 and 100"
+    );
+    return;
+  }
+
+  if (
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
+    setQuotationMilestoneMessage(
+      "❌ Milestone amount cannot be negative"
+    );
+    return;
+  }
+
+  if (
+    !Number.isInteger(sortOrder) ||
+    sortOrder <= 0
+  ) {
+    setQuotationMilestoneMessage(
+      "❌ Sort order must be a positive integer"
+    );
+    return;
+  }
+
+  // ==============================
+  // PAYLOAD
+  // ==============================
+
+  const payload = {
+    milestoneNo,
+    title,
+    percentage,
+    amount,
+    dueTrigger: dueTrigger || null,
+    notes: notes || null,
+    sortOrder,
+  };
+
+  try {
+    setSavingQuotationMilestone(true);
+
+    let response;
+
+    if (editingQuotationMilestoneId) {
+      response = await axios.put(
+        `${API_URL}/api/quotation-payment-milestones/${editingQuotationMilestoneId}`,
+        payload
+      );
+    } else {
+      response = await axios.post(
+        `${API_URL}/api/quotations/${selectedQuotation.id}/payment-milestones`,
+        payload
+      );
+    }
+
+    if (response.data.success) {
+      const quotationResponse =
+        await axios.get(
+          `${API_URL}/api/quotations/${selectedQuotation.id}`
+        );
+
+      if (quotationResponse.data.success) {
+        setSelectedQuotation(
+          quotationResponse.data.data
+        );
+      }
+
+      await loadQuotations();
+
+      setQuotationMilestoneMessage(
+        editingQuotationMilestoneId
+          ? "✅ Payment milestone updated successfully"
+          : "✅ Payment milestone added successfully"
+      );
+
+      setEditingQuotationMilestoneId(null);
+
+      setTimeout(() => {
+        setShowQuotationMilestoneModal(false);
+        setQuotationMilestoneMessage("");
+      }, 700);
+    }
+  } catch (error) {
+    console.error(
+      "Save Quotation Milestone Error:",
+      error
+    );
+
+    setQuotationMilestoneMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Payment milestone save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingQuotationMilestone(false);
+  }
+};
+
+// =========================================
+// QUOTATION VIEW STATE
+// =========================================
+
+const [
+  showQuotationViewModal,
+  setShowQuotationViewModal,
+] = useState(false);
+
+const [selectedQuotation, setSelectedQuotation] =
+  useState(null);
+
+const [
+  quotationViewLoading,
+  setQuotationViewLoading,
+] = useState(false);
 
   // =========================================
   // MATERIAL MODAL STATE
@@ -3792,7 +4229,2326 @@ const [
       );
     }
   };
+// =========================================
+// LOAD QUOTATIONS
+// =========================================
 
+const loadQuotations = async () => {
+  try {
+    setQuotationLoading(true);
+    setQuotationMessage("");
+
+    const response = await axios.get(
+      `${API_URL}/api/quotations`
+    );
+
+    if (response.data.success) {
+      setQuotations(
+        response.data.data || []
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Load Quotations Error:",
+      error
+    );
+
+    setQuotationMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation data load করা যায়নি!"
+      }`
+    );
+  } finally {
+    setQuotationLoading(false);
+  }
+};
+const closeQuotationModal = () => {
+  if (!savingQuotation) {
+    setShowQuotationModal(false);
+  }
+};
+// =========================================
+// CREATE / UPDATE QUOTATION
+// =========================================
+
+const handleSaveQuotation = async (e) => {
+  e.preventDefault();
+
+  if (!quotationForm.quotationNo.trim()) {
+    setQuotationMessage(
+      "❌ Quotation number is required"
+    );
+    return;
+  }
+
+  if (!quotationForm.customerId) {
+    setQuotationMessage(
+      "❌ Customer is required"
+    );
+    return;
+  }
+
+  if (!quotationForm.projectId) {
+    setQuotationMessage(
+      "❌ Project is required"
+    );
+    return;
+  }
+
+  if (!quotationForm.quotationDate) {
+    setQuotationMessage(
+      "❌ Quotation date is required"
+    );
+    return;
+  }
+
+  try {
+    setSavingQuotation(true);
+    setQuotationMessage("");
+    console.log("QUOTATION FORM BEFORE SAVE:", {
+      discountType: quotationForm.discountType,
+      discountValue: quotationForm.discountValue,
+      taxType: quotationForm.taxType,
+      taxRate: quotationForm.taxRate,
+    });
+    // =========================================
+// VALIDATE QUOTATION FINALIZATION
+// =========================================
+
+const finalizingQuotation =
+  quotationForm.status === "SENT" ||
+  quotationForm.status === "ACCEPTED";
+
+if (
+  editingQuotationId &&
+  finalizingQuotation &&
+  selectedQuotation
+) {
+  const milestones =
+    selectedQuotation.paymentMilestones || [];
+
+  const totalMilestonePercentage =
+    milestones.reduce(
+      (sum, milestone) =>
+        sum +
+        Number(milestone.percentage || 0),
+      0
+    );
+
+  const totalMilestoneAmount =
+    milestones.reduce(
+      (sum, milestone) =>
+        sum +
+        Number(milestone.amount || 0),
+      0
+    );
+
+  const quotationGrandTotal =
+    Number(
+      selectedQuotation.grandTotal || 0
+    );
+
+  if (
+    Math.abs(
+      totalMilestonePercentage - 100
+    ) > 0.001
+  ) {
+    setQuotationMessage(
+      `❌ Payment milestone percentage must total 100%. Current total: ${totalMilestonePercentage}%`
+    );
+
+    return;
+  }
+
+  if (
+    Math.abs(
+      totalMilestoneAmount -
+        quotationGrandTotal
+    ) > 0.01
+  ) {
+    setQuotationMessage(
+      `❌ Payment milestone amount must equal quotation grand total. Milestones: ৳${totalMilestoneAmount.toLocaleString()} | Grand Total: ৳${quotationGrandTotal.toLocaleString()}`
+    );
+
+    return;
+  }
+}
+    // =========================================
+// // validation code...
+// =========================================
+
+        const payload = {
+      quotationNo:
+        quotationForm.quotationNo.trim(),
+
+      customerId:
+        Number(quotationForm.customerId),
+
+      projectId:
+        Number(quotationForm.projectId),
+
+      quotationDate:
+        quotationForm.quotationDate,
+
+      validUntil:
+        quotationForm.validUntil || null,
+
+      status:
+        quotationForm.status || "DRAFT",
+
+      revisionNo: 1,
+
+      paymentTerms:
+        quotationForm.paymentTerms.trim() || null,
+
+      termsAndConditions:
+        quotationForm.termsAndConditions.trim() || null,
+
+        discountType:
+    quotationForm.discountType || null,
+
+  discountValue:
+    Number(
+      quotationForm.discountValue || 0
+    ),
+
+  taxType:
+    quotationForm.taxType || null,
+
+  taxRate:
+    Number(
+      quotationForm.taxRate || 0
+    ),
+    };
+    console.log("QUOTATION PAYLOAD:", payload);
+    const response =
+      editingQuotationId
+        ? await axios.put(
+            `${API_URL}/api/quotations/${editingQuotationId}`,
+            payload
+          )
+        : await axios.post(
+            `${API_URL}/api/quotations`,
+            payload
+          );
+
+    if (response.data.success) {
+      await loadQuotations();
+
+      setShowQuotationModal(false);
+      setEditingQuotationId(null);
+
+      setQuotationForm({
+        quotationNo: "",
+        customerId: "",
+        projectId: "",
+        quotationDate: new Date()
+          .toISOString()
+          .split("T")[0],
+        validUntil: "",
+        status: "DRAFT",
+        paymentTerms: "",
+        termsAndConditions: "",
+        notes: "",
+      });
+
+      setQuotationMessage(
+        editingQuotationId
+          ? "✅ Quotation updated successfully"
+          : "✅ Quotation created successfully"
+      );
+
+      setTimeout(() => {
+        setQuotationMessage("");
+      }, 3000);
+    }
+  } catch (error) {
+    console.error(
+      "Save Quotation Error:",
+      error
+    );
+
+    setQuotationMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingQuotation(false);
+  }
+};
+// =========================================
+// VIEW QUOTATION
+// =========================================
+
+const viewQuotation = async (id) => {
+  try {
+    setQuotationViewLoading(true);
+
+    const response = await axios.get(
+      `${API_URL}/api/quotations/${id}`
+    );
+
+    if (response.data.success) {
+      setSelectedQuotation(
+        response.data.data
+      );
+
+      setShowQuotationViewModal(true);
+    }
+  } catch (error) {
+    console.error(
+      "View Quotation Error:",
+      error
+    );
+
+    setQuotationMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation details load করা যায়নি!"
+      }`
+    );
+  } finally {
+    setQuotationViewLoading(false);
+  }
+};
+// =========================================
+// EDIT QUOTATION
+// =========================================
+
+const editQuotation = async (id) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/api/quotations/${id}`
+    );
+
+    if (!response.data.success) {
+      setQuotationMessage(
+        "❌ Quotation details load করা যায়নি!"
+      );
+      return;
+    }
+
+    const quotation =
+      response.data.data;
+
+    // Only DRAFT quotations can be edited
+    if (quotation.status !== "DRAFT") {
+      setQuotationMessage(
+        "❌ Only DRAFT quotations can be edited"
+      );
+      return;
+    }
+
+    setEditingQuotationId(
+      quotation.id
+    );
+
+    setQuotationForm({
+      quotationNo:
+        quotation.quotationNo || "",
+
+      customerId:
+        quotation.customerId
+          ? String(quotation.customerId)
+          : "",
+
+      projectId:
+        quotation.projectId
+          ? String(quotation.projectId)
+          : "",
+
+      quotationDate:
+        quotation.quotationDate
+          ? new Date(
+              quotation.quotationDate
+            )
+              .toISOString()
+              .split("T")[0]
+          : new Date()
+              .toISOString()
+              .split("T")[0],
+
+      validUntil:
+        quotation.validUntil
+          ? new Date(
+              quotation.validUntil
+            )
+              .toISOString()
+              .split("T")[0]
+          : "",
+
+      status:
+        quotation.status || "DRAFT",
+
+      paymentTerms:
+        quotation.paymentTerms || "",
+
+      termsAndConditions:
+        quotation.termsAndConditions ||
+        "",
+
+      notes:
+        quotation.notes || "",
+          discountType:
+        quotation.discountType || null,
+
+      discountValue:
+        quotation.discountValue ?? 0,
+
+      taxType:
+        quotation.taxType || null,
+
+      taxRate:
+        quotation.taxRate ?? 0,
+        });
+
+    // Make sure dropdown data is available
+    await Promise.all([
+      loadCustomers(1, 100),
+      loadProjects(1, 100),
+    ]);
+
+    setQuotationMessage("");
+    setShowQuotationViewModal(false);
+    setSelectedQuotation(null);
+    setShowQuotationModal(true);
+  } catch (error) {
+    console.error(
+      "Edit Quotation Load Error:",
+      error
+    );
+
+    setQuotationMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation edit data load করা যায়নি!"
+      }`
+    );
+  }
+};
+// =========================================
+// CLOSE QUOTATION VIEW MODAL
+// =========================================
+
+const closeQuotationViewModal = () => {
+  setShowQuotationViewModal(false);
+  setSelectedQuotation(null);
+};
+// =========================================
+// OPEN QUOTATION ITEM MODAL
+// =========================================
+
+const openQuotationItemModal = () => {
+  setQuotationItemMessage("");
+
+  setEditingQuotationItemId(null);
+
+  setQuotationItemForm({
+    description: "",
+    specification: "",
+    pricingType: "UNIT_PRICE",
+    quantity: "",
+    unit: "",
+    unitPrice: "",
+    lineTotal: "",
+    notes: "",
+    sortOrder:
+      (selectedQuotation?.items?.length || 0) + 1,
+  });
+
+  setShowQuotationItemModal(true);
+};
+// =========================================
+// EDIT QUOTATION ITEM
+// =========================================
+
+const editQuotationItem = (item) => {
+  setQuotationItemMessage("");
+
+  setEditingQuotationItemId(item.id);
+
+  setQuotationItemForm({
+    description:
+      item.description || "",
+
+    specification:
+      item.specification || "",
+
+    pricingType:
+      item.pricingType || "UNIT_PRICE",
+
+    quantity:
+      item.quantity !== null &&
+      item.quantity !== undefined
+        ? String(item.quantity)
+        : "",
+
+    unit:
+      item.unit || "",
+
+    unitPrice:
+      item.unitPrice !== null &&
+      item.unitPrice !== undefined
+        ? String(item.unitPrice)
+        : "",
+
+    lineTotal:
+      item.lineTotal !== null &&
+      item.lineTotal !== undefined
+        ? String(item.lineTotal)
+        : "",
+
+    notes:
+      item.notes || "",
+
+    sortOrder:
+      item.sortOrder || 1,
+  });
+
+  setShowQuotationItemModal(true);
+};
+ // =========================================
+// DELETE QUOTATION ITEM
+// =========================================
+
+const deleteQuotationItem = async (itemId) => {
+  if (!selectedQuotation) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this quotation item?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setQuotationItemMessage("");
+
+    const response = await axios.delete(
+      `${API_URL}/api/quotation-items/${itemId}`
+    );
+
+    if (response.data.success) {
+      const quotationResponse =
+        await axios.get(
+          `${API_URL}/api/quotations/${selectedQuotation.id}`
+        );
+
+      if (quotationResponse.data.success) {
+        setSelectedQuotation(
+          quotationResponse.data.data
+        );
+      }
+
+      await loadQuotations();
+
+      setQuotationItemMessage(
+        "✅ Quotation item deleted successfully"
+      );
+
+      setTimeout(() => {
+        setQuotationItemMessage("");
+      }, 2000);
+    }
+  } catch (error) {
+    console.error(
+      "Delete Quotation Item Error:",
+      error
+    );
+
+    setQuotationItemMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation item delete করা যায়নি!"
+      }`
+    );
+  }
+};
+// =========================================
+// SAVE QUOTATION ITEM
+// =========================================
+
+const handleSaveQuotationItem = async () => {
+  if (savingQuotationItem) {
+    return;
+  }
+
+  if (!selectedQuotation) {
+    setQuotationItemMessage(
+      "❌ No quotation selected"
+    );
+    return;
+  }
+
+  setQuotationItemMessage("");
+
+  const description =
+    quotationItemForm.description.trim();
+
+  if (!description) {
+    setQuotationItemMessage(
+      "❌ Item description is required"
+    );
+    return;
+  }
+
+  const pricingType =
+    quotationItemForm.pricingType;
+
+  if (
+    pricingType !== "UNIT_PRICE" &&
+    pricingType !== "FIXED_AMOUNT"
+  ) {
+    setQuotationItemMessage(
+      "❌ Invalid pricing type"
+    );
+    return;
+  }
+
+  let payload;
+
+  if (pricingType === "UNIT_PRICE") {
+    const quantity =
+      Number(quotationItemForm.quantity);
+
+    const unitPrice =
+      Number(quotationItemForm.unitPrice);
+
+    const unit =
+      quotationItemForm.unit.trim();
+
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      setQuotationItemMessage(
+        "❌ Quantity must be greater than 0"
+      );
+      return;
+    }
+
+    if (!unit) {
+      setQuotationItemMessage(
+        "❌ Unit is required"
+      );
+      return;
+    }
+
+    if (
+      !Number.isFinite(unitPrice) ||
+      unitPrice < 0
+    ) {
+      setQuotationItemMessage(
+        "❌ Unit price cannot be negative"
+      );
+      return;
+    }
+
+    payload = {
+      description,
+      specification:
+        quotationItemForm.specification.trim() ||
+        null,
+      pricingType: "UNIT_PRICE",
+      quantity,
+      unit,
+      unitPrice,
+      lineTotal:
+        Math.round(
+          quantity * unitPrice * 100
+        ) / 100,
+      notes:
+        quotationItemForm.notes.trim() ||
+        null,
+      sortOrder:
+        Number(
+          quotationItemForm.sortOrder
+        ) || 0,
+    };
+  } else {
+    const lineTotal =
+      Number(quotationItemForm.lineTotal);
+
+    if (
+      !Number.isFinite(lineTotal) ||
+      lineTotal < 0
+    ) {
+      setQuotationItemMessage(
+        "❌ Fixed amount cannot be negative"
+      );
+      return;
+    }
+
+    payload = {
+      description,
+      specification:
+        quotationItemForm.specification.trim() ||
+        null,
+      pricingType: "FIXED_AMOUNT",
+      quantity: null,
+      unit: null,
+      unitPrice: null,
+      lineTotal,
+      notes:
+        quotationItemForm.notes.trim() ||
+        null,
+      sortOrder:
+        Number(
+          quotationItemForm.sortOrder
+        ) || 0,
+    };
+  }
+
+  try {
+    setSavingQuotationItem(true);
+
+    let response;
+
+    if (editingQuotationItemId) {
+      response = await axios.put(
+        `${API_URL}/api/quotation-items/${editingQuotationItemId}`,
+        payload
+      );
+    } else {
+      response = await axios.post(
+        `${API_URL}/api/quotations/${selectedQuotation.id}/items`,
+        payload
+      );
+    }
+
+    if (response.data.success) {
+      const quotationResponse =
+        await axios.get(
+          `${API_URL}/api/quotations/${selectedQuotation.id}`
+        );
+
+      if (quotationResponse.data.success) {
+        setSelectedQuotation(
+          quotationResponse.data.data
+        );
+      }
+
+      await loadQuotations();
+
+      setQuotationItemMessage(
+        editingQuotationItemId
+          ? "✅ Quotation item updated successfully"
+          : "✅ Quotation item added successfully"
+      );
+
+      setQuotationItemForm({
+        description: "",
+        specification: "",
+        pricingType: "UNIT_PRICE",
+        quantity: "",
+        unit: "",
+        unitPrice: "",
+        lineTotal: "",
+        notes: "",
+        sortOrder:
+          (
+            quotationResponse.data.data
+              ?.items?.length || 0
+          ) + 1,
+      });
+
+      setEditingQuotationItemId(null);
+
+      setTimeout(() => {
+        setShowQuotationItemModal(false);
+        setQuotationItemMessage("");
+      }, 700);
+    }
+  } catch (error) {
+    console.error(
+      "Save Quotation Item Error:",
+      error
+    );
+
+    setQuotationItemMessage(
+      `❌ ${
+        error.response?.data?.message ||
+        "Quotation item save করা যায়নি!"
+      }`
+    );
+  } finally {
+    setSavingQuotationItem(false);
+  }
+};
+// =========================================
+// CLOSE QUOTATION ITEM MODAL
+// =========================================
+
+const closeQuotationItemModal = () => {
+  if (!savingQuotationItem) {
+    setShowQuotationItemModal(false);
+    setEditingQuotationItemId(null);
+    setQuotationItemMessage("");
+  }
+};
+
+// =========================================
+// RENDER QUOTATION VIEW MODAL
+// =========================================
+
+const renderQuotationViewModal = () => {
+  if (
+    !showQuotationViewModal ||
+    !selectedQuotation
+  ) {
+    return null;
+  }
+
+  const quotation = selectedQuotation;
+
+  const items = quotation.items || [];
+  const milestones =
+    quotation.paymentMilestones || [];
+    const totalMilestonePercentage =
+      milestones.reduce(
+        (sum, milestone) =>
+          sum + Number(milestone.percentage || 0),
+        0
+      );
+
+    const totalMilestoneAmount =
+      milestones.reduce(
+        (sum, milestone) =>
+          sum + Number(milestone.amount || 0),
+        0
+      );
+  return (
+    <div
+      className="modal-overlay"
+      onClick={closeQuotationViewModal}
+    >
+      <div
+        className="project-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+
+        {/* HEADER */}
+
+        <div className="modal-header">
+          <div>
+            <h2>
+              Quotation Details
+            </h2>
+
+            <p>
+              {quotation.quotationNo}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={
+              closeQuotationViewModal
+            }
+          >
+            ×
+          </button>
+        </div>
+
+        {/* BODY */}
+
+        <div
+          style={{
+            padding: "24px",
+          }}
+        >
+
+          {/* QUOTATION SUMMARY */}
+
+          <div className="form-grid">
+
+            <div className="form-group">
+              <label>
+                Quotation No
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.quotationNo ||
+                  ""
+                }
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Status
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.status ||
+                  ""
+                }
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Customer
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.customer
+                    ?.name ||
+                  "—"
+                }
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Project
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.project
+                    ?.name ||
+                  "—"
+                }
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Quotation Date
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.quotationDate
+                    ? new Date(
+                        quotation.quotationDate
+                      ).toLocaleDateString()
+                    : "—"
+                }
+                readOnly
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                Valid Until
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotation.validUntil
+                    ? new Date(
+                        quotation.validUntil
+                      ).toLocaleDateString()
+                    : "—"
+                }
+                readOnly
+              />
+            </div>
+
+          </div>
+        {/* ITEMS */}
+
+        <div
+          style={{
+            marginTop: "24px",
+          }}
+        >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "14px",
+            gap: "12px",
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0 }}>
+              Quotation Items
+            </h3>
+
+            <span
+              style={{
+                fontSize: "13px",
+                color: "#64748b",
+              }}
+            >
+              {items.length}{" "}
+              {items.length === 1
+                ? "item"
+                : "items"}
+            </span>
+          </div>
+
+          {quotation.status === "DRAFT" && (
+            <button
+              type="button"
+              className="add-button"
+              onClick={openQuotationItemModal}
+            >
+              <Plus size={16} />
+              Add Item
+            </button>
+          )}
+        </div>
+
+          {items.length === 0 ? (
+
+            <div className="empty-state">
+              <p>
+                No quotation items added.
+              </p>
+            </div>
+
+          ) : (
+
+            <div className="table-wrapper">
+
+              <table>
+
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Description</th>
+                    <th>Pricing Type</th>
+                    <th>Specification</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                    <th>Unit Price</th>
+                    <th>Line Total</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+
+                  {items.map(
+                    (item, index) => {
+
+                      const isUnitPrice =
+                        item.pricingType ===
+                        "UNIT_PRICE";
+
+                      return (
+                        <tr
+                          key={item.id}
+                        >
+
+                          {/* NUMBER */}
+
+                          <td>
+                            {index + 1}
+                          </td>
+
+                          {/* DESCRIPTION */}
+
+                          <td>
+                            <strong>
+                              {item.description}
+                            </strong>
+
+                            {item.notes && (
+                              <div
+                                style={{
+                                  marginTop: "5px",
+                                  fontSize: "12px",
+                                  color: "#64748b",
+                                }}
+                              >
+                                Note:{" "}
+                                {item.notes}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* PRICING TYPE */}
+
+                          <td>
+                            <span
+                              className="status-badge"
+                            >
+                              {isUnitPrice
+                                ? "Unit Price"
+                                : "Fixed Amount"}
+                            </span>
+                          </td>
+
+                          {/* SPECIFICATION */}
+
+                          <td
+                            style={{
+                              minWidth: "220px",
+                              maxWidth: "320px",
+                              whiteSpace: "normal",
+                              lineHeight: "1.5",
+                            }}
+                          >
+                            {item.specification ||
+                              "—"}
+                          </td>
+
+                          {/* QUANTITY */}
+
+                          <td>
+                            {isUnitPrice &&
+                            item.quantity !== null &&
+                            item.quantity !== undefined
+                              ? Number(
+                                  item.quantity
+                                ).toLocaleString()
+                              : "—"}
+                          </td>
+
+                          {/* UNIT */}
+
+                          <td>
+                            {isUnitPrice
+                              ? item.unit || "—"
+                              : "—"}
+                          </td>
+
+                          {/* UNIT PRICE */}
+
+                          <td>
+                            {isUnitPrice &&
+                            item.unitPrice !== null &&
+                            item.unitPrice !== undefined
+                              ? `৳ ${Number(
+                                  item.unitPrice
+                                ).toLocaleString()}`
+                              : "—"}
+                          </td>
+
+                          {/* LINE TOTAL */}
+
+                          <td>
+                            <strong>
+                              ৳{" "}
+                              {Number(
+                                item.lineTotal || 0
+                              ).toLocaleString()}
+                            </strong>
+                          </td>
+                          <td>
+                            {quotation.status === "DRAFT" && (
+                              <div className="action-buttons">
+
+                                <button
+                                  type="button"
+                                  className="edit-button"
+                                  title="Edit quotation item"
+                                  onClick={() => {
+                                    editQuotationItem(item);
+                                  }}
+                                >
+                                  <Pencil size={15} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="delete-button"
+                                  title="Delete quotation item"
+                                  onClick={() => {
+                                    deleteQuotationItem(item.id);
+                                  }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+
+                              </div>
+                            )}
+                          </td>
+
+                        </tr>
+                      );
+                    }
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          )}
+
+        </div>
+          {/* TOTALS */}
+
+          <div
+            style={{
+              marginTop: "24px",
+              display: "flex",
+              justifyContent:
+                "flex-end",
+            }}
+          >
+            <div
+              style={{
+                width: "340px",
+              }}
+            >
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span>
+                  Subtotal
+                </span>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    quotation.subtotal ||
+                      0
+                  ).toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span>
+                  Discount
+                </span>
+
+                <strong>
+                  - ৳{" "}
+                  {Number(
+                    quotation.discountAmount ||
+                      0
+                  ).toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  marginBottom: "8px",
+                }}
+              >
+                <span>
+                  Tax
+                </span>
+
+                <strong>
+                  + ৳{" "}
+                  {Number(
+                    quotation.taxAmount ||
+                      0
+                  ).toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  borderTop:
+                    "1px solid #e5e7eb",
+                  paddingTop: "12px",
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  fontSize: "18px",
+                }}
+              >
+                <strong>
+                  Grand Total
+                </strong>
+
+                <strong>
+                  ৳{" "}
+                  {Number(
+                    quotation.grandTotal ||
+                      0
+                  ).toLocaleString()}
+                </strong>
+              </div>
+
+            </div>
+          </div>
+
+          {/* PAYMENT MILESTONES */}
+
+          <div
+            style={{
+              marginTop: "28px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "14px",
+                gap: "12px",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  Payment Milestones
+                </h3>
+
+                <span
+                  style={{
+                    fontSize: "13px",
+                    color: "#64748b",
+                  }}
+                >
+                  {milestones.length}{" "}
+                  {milestones.length === 1
+                    ? "milestone"
+                    : "milestones"}
+                </span>
+              </div>
+
+              {quotation.status === "DRAFT" && (
+                <button
+                  type="button"
+                  className="add-button"
+                  onClick={openQuotationMilestoneModal}
+                >
+                  <Plus size={16} />
+                  Add Milestone
+                </button>
+              )}
+            </div>
+
+            {milestones.length === 0 ? (
+
+              <div className="empty-state">
+                <p>
+                  No payment milestones added.
+                </p>
+              </div>
+
+            ) : (
+
+              <div className="table-wrapper">
+
+                <table>
+
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Milestone</th>
+                      <th>Percentage</th>
+                      <th>Amount</th>
+                      <th>Due Trigger</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {milestones.map(
+                      (milestone) => (
+                        <tr
+                          key={
+                            milestone.id
+                          }
+                        >
+                          <td>
+                            {
+                              milestone.milestoneNo
+                            }
+                          </td>
+
+                          <td>
+                            <strong>
+                              {
+                                milestone.title
+                              }
+                            </strong>
+                          </td>
+
+                          <td>
+                            {milestone.percentage ??
+                              "—"}
+                            %
+                          </td>
+
+                          <td>
+                            <strong>
+                              ৳{" "}
+                              {Number(
+                                milestone.amount ||
+                                  0
+                              ).toLocaleString()}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {milestone.dueTrigger ||
+                              "—"}
+                          </td>
+                          <td>
+                            {quotation.status === "DRAFT" && (
+                              <div className="action-buttons">
+
+                                <button
+                                  type="button"
+                                  className="edit-button"
+                                  title="Edit payment milestone"
+                                  onClick={() => {
+                                    editQuotationMilestone(milestone);
+                                  }}
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="delete-button"
+                                  title="Delete payment milestone"
+                                  onClick={() => {
+                                    deleteQuotationMilestone(
+                                      milestone.id
+                                    );
+                                  }}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            )}
+            <div
+            style={{
+              marginTop: "14px",
+              padding: "14px 16px",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+              background: "#f8fafc",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "20px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#64748b",
+                  marginBottom: "4px",
+                }}
+              >
+                Total Milestone Percentage
+              </div>
+
+              <strong
+                style={{
+                  fontSize: "17px",
+                }}
+              >
+                {totalMilestonePercentage}%
+              </strong>
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#64748b",
+                  marginBottom: "4px",
+                }}
+              >
+                Total Milestone Amount
+              </div>
+
+              <strong
+                style={{
+                  fontSize: "17px",
+                }}
+              >
+                ৳{" "}
+                {totalMilestoneAmount.toLocaleString()}
+              </strong>
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#64748b",
+                  marginBottom: "4px",
+                }}
+              >
+                Payment Schedule
+              </div>
+
+              <strong
+                style={{
+                  fontSize: "15px",
+                  color:
+                    totalMilestonePercentage === 100
+                      ? "#15803d"
+                      : "#b45309",
+                }}
+              >
+                {totalMilestonePercentage === 100
+                  ? "100% Covered"
+                  : "Incomplete"}
+              </strong>
+            </div>
+          </div>
+
+          </div>
+
+        {/* TERMS */}
+
+        <div
+          style={{
+            marginTop: "28px",
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(2, minmax(0, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {quotation.paymentTerms && (
+            <div
+              style={{
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "10px",
+                background: "#ffffff",
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "8px",
+                }}
+              >
+                Payment Terms
+              </h3>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#475569",
+                  lineHeight: "1.6",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {quotation.paymentTerms}
+              </p>
+            </div>
+          )}
+
+          {quotation.termsAndConditions && (
+            <div
+              style={{
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "10px",
+                background: "#ffffff",
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "8px",
+                }}
+              >
+                Terms & Conditions
+              </h3>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#475569",
+                  lineHeight: "1.6",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {quotation.termsAndConditions}
+              </p>
+            </div>
+          )}
+
+          {quotation.notes && (
+            <div
+              style={{
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "10px",
+                background: "#ffffff",
+                gridColumn: "1 / -1",
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "8px",
+                }}
+              >
+                Notes
+              </h3>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "#475569",
+                  lineHeight: "1.6",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {quotation.notes}
+              </p>
+            </div>
+          )}
+        </div>
+
+        </div>
+
+        {/* FOOTER */}
+
+        <div className="modal-actions">
+
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={
+              closeQuotationViewModal
+            }
+          >
+            Close
+          </button>
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
+// =========================================
+// RENDER QUOTATION ITEM MODAL
+// =========================================
+
+const renderQuotationItemModal = () => {
+  if (!showQuotationItemModal) {
+    return null;
+  }
+
+  const isUnitPrice =
+    quotationItemForm.pricingType ===
+    "UNIT_PRICE";
+
+  const quantity =
+    Number(quotationItemForm.quantity) || 0;
+
+  const unitPrice =
+    Number(quotationItemForm.unitPrice) || 0;
+
+  const calculatedLineTotal =
+    isUnitPrice
+      ? quantity * unitPrice
+      : Number(
+          quotationItemForm.lineTotal
+        ) || 0;
+
+  return (
+    <div
+      className="boq-modal-overlay"
+      onClick={closeQuotationItemModal}
+    >
+      <div
+        className="boq-item-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+
+        {/* HEADER */}
+
+        <div className="boq-modal-header">
+          <div>
+            <h2>
+              {editingQuotationItemId
+                ? "Edit Quotation Item"
+                : "Add Quotation Item"}
+            </h2>
+
+            <p>
+              {editingQuotationItemId
+                ? "Update quotation item"
+                : "Add an item to the quotation"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="boq-modal-close"
+            onClick={closeQuotationItemModal}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* BODY */}
+
+        <div className="boq-modal-body">
+
+          {quotationItemMessage && (
+            <div
+              className={`message-box ${
+                quotationItemMessage.includes(
+                  "❌"
+                )
+                  ? "message-error"
+                  : "message-success"
+              }`}
+            >
+              {quotationItemMessage}
+            </div>
+          )}
+
+          <div className="boq-form-grid">
+
+            {/* DESCRIPTION */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Description *
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotationItemForm.description
+                }
+                onChange={(e) =>
+                  setQuotationItemForm(
+                    (prev) => ({
+                      ...prev,
+                      description:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Example: Drawing Room Ceiling"
+                required
+              />
+            </div>
+
+            {/* PRICING TYPE */}
+
+            <div className="boq-form-group">
+              <label>
+                Pricing Type *
+              </label>
+
+              <select
+                value={
+                  quotationItemForm.pricingType
+                }
+                onChange={(e) =>
+                  setQuotationItemForm(
+                    (prev) => ({
+                      ...prev,
+                      pricingType:
+                        e.target.value,
+
+                      ...(e.target.value ===
+                      "UNIT_PRICE"
+                        ? {
+                            lineTotal: "",
+                          }
+                        : {
+                            quantity: "",
+                            unit: "",
+                            unitPrice: "",
+                          }),
+                    })
+                  )
+                }
+              >
+                <option value="UNIT_PRICE">
+                  Unit Price
+                </option>
+
+                <option value="FIXED_AMOUNT">
+                  Fixed Amount
+                </option>
+              </select>
+            </div>
+
+            {/* SORT ORDER */}
+
+            <div className="boq-form-group">
+              <label>
+                Sort Order
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={
+                  quotationItemForm.sortOrder
+                }
+                onChange={(e) =>
+                  setQuotationItemForm(
+                    (prev) => ({
+                      ...prev,
+                      sortOrder:
+                        e.target.value,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            {/* SPECIFICATION */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Specification
+              </label>
+
+              <textarea
+                rows={4}
+                value={
+                  quotationItemForm.specification
+                }
+                onChange={(e) =>
+                  setQuotationItemForm(
+                    (prev) => ({
+                      ...prev,
+                      specification:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Materials, finishes, hardware, fitting & fixing details..."
+              />
+            </div>
+
+            {/* UNIT PRICE FIELDS */}
+
+            {isUnitPrice && (
+              <>
+                <div className="boq-form-group">
+                  <label>
+                    Quantity *
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={
+                      quotationItemForm.quantity
+                    }
+                    onChange={(e) =>
+                      setQuotationItemForm(
+                        (prev) => ({
+                          ...prev,
+                          quantity:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="348"
+                    required
+                  />
+                </div>
+
+                <div className="boq-form-group">
+                  <label>
+                    Unit *
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      quotationItemForm.unit
+                    }
+                    onChange={(e) =>
+                      setQuotationItemForm(
+                        (prev) => ({
+                          ...prev,
+                          unit:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="SQFT"
+                    required
+                  />
+                </div>
+
+                <div className="boq-form-group">
+                  <label>
+                    Unit Price *
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      quotationItemForm.unitPrice
+                    }
+                    onChange={(e) =>
+                      setQuotationItemForm(
+                        (prev) => ({
+                          ...prev,
+                          unitPrice:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="550"
+                    required
+                  />
+                </div>
+
+                {/* LINE TOTAL PREVIEW */}
+
+                <div className="boq-form-group">
+                  <label>
+                    Line Total
+                  </label>
+
+                  <input
+                    type="text"
+                    value={calculatedLineTotal.toLocaleString()}
+                    readOnly
+                  />
+                </div>
+              </>
+            )}
+
+            {/* FIXED AMOUNT */}
+
+            {!isUnitPrice && (
+              <div className="boq-form-group full-width">
+                <label>
+                  Fixed Amount *
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    quotationItemForm.lineTotal
+                  }
+                  onChange={(e) =>
+                    setQuotationItemForm(
+                      (prev) => ({
+                        ...prev,
+                        lineTotal:
+                          e.target.value,
+                      })
+                    )
+                  }
+                  placeholder="350000"
+                  required
+                />
+              </div>
+            )}
+
+            {/* NOTES */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Notes
+              </label>
+
+              <textarea
+                rows={3}
+                value={
+                  quotationItemForm.notes
+                }
+                onChange={(e) =>
+                  setQuotationItemForm(
+                    (prev) => ({
+                      ...prev,
+                      notes:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Optional item notes..."
+              />
+            </div>
+
+          </div>
+
+          {/* FOOTER */}
+
+          <div className="boq-modal-actions">
+
+            <button
+              type="button"
+              className="boq-cancel-button"
+              onClick={closeQuotationItemModal}
+              disabled={
+                savingQuotationItem
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              className="boq-save-button"
+              onClick={handleSaveQuotationItem}
+              disabled={
+                savingQuotationItem
+              }
+            >
+              {savingQuotationItem
+                ? "Saving..."
+                : editingQuotationItemId
+                ? "Update Item"
+                : "Save Item"}
+            </button>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
+// =========================================
+// RENDER QUOTATION MILESTONE MODAL
+// =========================================
+
+const renderQuotationMilestoneModal = () => {
+  if (!showQuotationMilestoneModal) {
+    return null;
+  }
+
+  return (
+    <div
+      className="boq-modal-overlay"
+      onClick={closeQuotationMilestoneModal}
+    >
+      <div
+        className="boq-item-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+
+        {/* HEADER */}
+
+        <div className="boq-modal-header">
+          <div>
+            <h2>
+              {editingQuotationMilestoneId
+                ? "Edit Payment Milestone"
+                : "Add Payment Milestone"}
+            </h2>
+
+            <p>
+              {editingQuotationMilestoneId
+                ? "Update quotation payment milestone"
+                : "Add a payment milestone to the quotation"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="boq-modal-close"
+            onClick={closeQuotationMilestoneModal}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* BODY */}
+
+        <div className="boq-modal-body">
+
+          {quotationMilestoneMessage && (
+            <div
+              className={`message-box ${
+                quotationMilestoneMessage.includes("❌")
+                  ? "message-error"
+                  : "message-success"
+              }`}
+            >
+              {quotationMilestoneMessage}
+            </div>
+          )}
+
+          <div className="boq-form-grid">
+
+            {/* MILESTONE NO */}
+
+            <div className="boq-form-group">
+              <label>
+                Milestone No *
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={
+                  quotationMilestoneForm.milestoneNo
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      milestoneNo:
+                        e.target.value,
+                    })
+                  )
+                }
+                required
+              />
+            </div>
+
+            {/* SORT ORDER */}
+
+            <div className="boq-form-group">
+              <label>
+                Sort Order
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={
+                  quotationMilestoneForm.sortOrder
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      sortOrder:
+                        e.target.value,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            {/* TITLE */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Title *
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotationMilestoneForm.title
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      title:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Example: Work Order"
+                required
+              />
+            </div>
+
+            {/* PERCENTAGE */}
+
+            <div className="boq-form-group">
+              <label>
+                Percentage *
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={
+                  quotationMilestoneForm.percentage
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      percentage:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="50"
+                required
+              />
+            </div>
+
+            {/* AMOUNT */}
+
+            <div className="boq-form-group">
+              <label>
+                Amount *
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  quotationMilestoneForm.amount
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      amount:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="98658"
+                required
+              />
+            </div>
+
+            {/* DUE TRIGGER */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Due Trigger
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotationMilestoneForm.dueTrigger
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      dueTrigger:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Example: At work order confirmation"
+              />
+            </div>
+
+            {/* NOTES */}
+
+            <div className="boq-form-group full-width">
+              <label>
+                Notes
+              </label>
+
+              <textarea
+                rows={3}
+                value={
+                  quotationMilestoneForm.notes
+                }
+                onChange={(e) =>
+                  setQuotationMilestoneForm(
+                    (prev) => ({
+                      ...prev,
+                      notes:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Optional milestone notes..."
+              />
+            </div>
+
+          </div>
+
+          {/* FOOTER */}
+
+          <div className="boq-modal-actions">
+
+            <button
+              type="button"
+              className="boq-cancel-button"
+              onClick={closeQuotationMilestoneModal}
+              disabled={
+                savingQuotationMilestone
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              className="boq-save-button"
+              onClick={handleSaveQuotationMilestone}
+              disabled={
+                savingQuotationMilestone
+              }
+            >
+              {savingQuotationMilestone
+                ? "Saving..."
+                : editingQuotationMilestoneId
+                ? "Update Milestone"
+                : "Save Milestone"}
+            </button>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
 
   const loadBOQs = async () => {
   try {
@@ -7039,11 +9795,21 @@ const handleDeleteCustomer = async (id) => {
       activePage,
       customerLimit,
     ]);
+
 useEffect(() => {
   if (activePage === "leads") {
     setLeadPage(1);
     loadLeads(1, leadLimit);
     loadUsers();
+  }
+
+}, [activePage]);
+
+useEffect(() => {
+if (activePage === "quotations") {
+    loadQuotations();
+    loadCustomers(1, 100);
+    loadProjects(1, 100);
   }
 }, [activePage]);
 
@@ -11156,6 +13922,245 @@ const renderPurchaseOrderViewModal = () => {
     </div>
   );
 };
+// =========================================
+// RENDER QUOTATIONS
+// =========================================
+
+// =========================================
+// RENDER QUOTATIONS
+// =========================================
+
+const renderQuotations = () => {
+  return (
+    <section className="dashboard">
+
+      {quotationMessage && (
+        <div
+          className={`message-box ${
+            quotationMessage.includes("❌")
+              ? "message-error"
+              : "message-success"
+          }`}
+        >
+          {quotationMessage}
+        </div>
+      )}
+
+      <div className="content-card">
+
+        <div className="card-header">
+
+          <div>
+            <h2>Quotations</h2>
+
+            <p>
+              Manage all BE Interior customer quotations
+            </p>
+          </div>
+
+          <div className="header-actions">
+
+            <RefreshButton
+              onRefresh={loadQuotations}
+            />
+
+            <button
+              className="add-button"
+           onClick={() => {
+                setEditingQuotationId(null);
+
+                setQuotationForm({
+                  quotationNo: "",
+                  customerId: "",
+                  projectId: "",
+                  quotationDate: new Date()
+                    .toISOString()
+                    .split("T")[0],
+                  validUntil: "",
+                  status: "DRAFT",
+                  paymentTerms: "",
+                  termsAndConditions: "",
+                  notes: "",
+                  });
+
+                setQuotationMessage("");
+                setShowQuotationModal(true);
+              }}
+            >
+              <Plus size={18} />
+              Add Quotation
+            </button>
+
+          </div>
+
+        </div>
+
+        {quotationLoading ? (
+
+          <div className="empty-state">
+            <p>Loading Quotations...</p>
+          </div>
+
+        ) : quotations.length === 0 ? (
+
+          <div className="empty-state">
+
+            <FileText size={50} />
+
+            <h3>No Quotations Found</h3>
+
+            <p>
+              Create your first customer quotation.
+            </p>
+
+            <button
+              className="empty-add-button"
+              onClick={() => {
+                setQuotationMessage(
+                  "Quotation creation will be added next."
+                );
+              }}
+            >
+              <Plus size={18} />
+              Add Your First Quotation
+            </button>
+
+          </div>
+
+        ) : (
+
+          <div className="table-wrapper">
+
+            <table>
+
+              <thead>
+
+                <tr>
+                  <th>ID</th>
+                  <th>Quotation No</th>
+                  <th>Customer</th>
+                  <th>Project</th>
+                  <th>Quotation Date</th>
+                  <th>Valid Until</th>
+                  <th>Grand Total</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {quotations.map((quotation) => (
+
+                  <tr key={quotation.id}>
+
+                    <td>
+                      #{quotation.id}
+                    </td>
+
+                    <td>
+                      <strong>
+                        {quotation.quotationNo}
+                      </strong>
+                    </td>
+
+                    <td>
+                      {quotation.customer?.name ||
+                        "—"}
+                    </td>
+
+                    <td>
+                      {quotation.project?.name ||
+                        "—"}
+                    </td>
+
+                    <td>
+                      {quotation.quotationDate
+                        ? new Date(
+                            quotation.quotationDate
+                          ).toLocaleDateString()
+                        : "—"}
+                    </td>
+
+                    <td>
+                      {quotation.validUntil
+                        ? new Date(
+                            quotation.validUntil
+                          ).toLocaleDateString()
+                        : "—"}
+                    </td>
+
+                    <td>
+                      <strong>
+                        ৳{" "}
+                        {Number(
+                          quotation.grandTotal || 0
+                        ).toLocaleString()}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`status-badge status-${String(
+                          quotation.status || ""
+                        ).toLowerCase()}`}
+                      >
+                        {quotation.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      <div className="action-buttons">
+
+                        <button
+                          className="view-button"
+                          title="View quotation"
+                        onClick={() => {
+                            viewQuotation(quotation.id);
+                          }}
+                          >
+                          <Eye size={16} />
+                        </button>
+
+                       <button
+                          type="button"
+                          className="edit-button"
+                          title={
+                            quotation.status === "DRAFT"
+                              ? "Edit quotation"
+                              : "Only DRAFT quotations can be edited"
+                          }
+                          onClick={() => {
+                            if (quotation.status === "DRAFT") {
+                              editQuotation(quotation.id);
+                            }
+                          }}
+                          disabled={quotation.status !== "DRAFT"}
+                        >
+                          <Pencil size={16} />
+                        </button>
+
+                      </div>
+                    </td>
+
+                  </tr>
+
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </section>
+  );
+};
 
 const renderBOQs = () => {
   return (
@@ -11380,6 +14385,7 @@ const renderBOQs = () => {
     </section>
   );
 };
+
 
 const saveBOQ = async () => {
   if (savingBOQ) {
@@ -12544,6 +15550,685 @@ const renderBOQItemViewModal = () => {
           </button>
         </div>
 
+      </div>
+    </div>
+  );
+};
+// =========================================
+// RENDER QUOTATION MODAL
+// =========================================
+
+const renderQuotationModal = () => {
+  if (!showQuotationModal) return null;
+
+  const selectedCustomerId =
+    Number(quotationForm.customerId);
+
+  const availableProjects =
+    projects.filter(
+      (project) =>
+        Number(project.customerId) ===
+        selectedCustomerId
+    );
+const quotationSubtotal =
+  Number(
+    selectedQuotation?.subtotal || 0
+  );
+
+const discountValue =
+  Number(
+    quotationForm.discountValue || 0
+  );
+
+const quotationDiscountAmount =
+  quotationForm.discountType === "PERCENT"
+    ? (quotationSubtotal * discountValue) / 100
+    : quotationForm.discountType === "FIXED"
+    ? discountValue
+    : 0;
+
+const taxableAmount =
+  quotationSubtotal -
+  quotationDiscountAmount;
+
+const taxValue =
+  Number(
+    quotationForm.taxRate || 0
+  );
+
+const quotationTaxAmount =
+  quotationForm.taxType === "PERCENT"
+    ? (taxableAmount * taxValue) / 100
+    : quotationForm.taxType === "FIXED"
+    ? taxValue
+    : 0;
+
+const quotationGrandTotal =
+  taxableAmount +
+  quotationTaxAmount;
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={closeQuotationModal}
+    >
+      <div
+        className="project-modal"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+        {/* HEADER */}
+
+        <div className="modal-header">
+          <div>
+            <h2>
+              {editingQuotationId
+                ? "Edit Quotation"
+                : "Add Quotation"}
+            </h2>
+
+            <p>
+              {editingQuotationId
+                ? "Update customer quotation"
+                : "Create a new customer quotation"}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={closeQuotationModal}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* BODY */}
+
+      <form onSubmit={handleSaveQuotation}>
+          <div className="form-grid">
+
+            {/* QUOTATION NO */}
+
+            <div className="form-group">
+              <label>
+                Quotation No
+              </label>
+
+              <input
+                type="text"
+                value={
+                  quotationForm.quotationNo
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      quotationNo:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="QT-0001"
+              />
+            </div>
+
+            {/* CUSTOMER */}
+
+            <div className="form-group">
+              <label>
+                Customer *
+              </label>
+
+              <select
+                value={
+                  quotationForm.customerId
+                }
+                onChange={(e) => {
+                  const customerId =
+                    e.target.value;
+
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      customerId,
+                      projectId: "",
+                    })
+                  );
+                }}
+                required
+              >
+                <option value="">
+                  Select Customer
+                </option>
+
+                {customers.map(
+                  (customer) => (
+                    <option
+                      key={customer.id}
+                      value={customer.id}
+                    >
+                      {customer.name}
+                      {customer.companyName
+                        ? ` — ${customer.companyName}`
+                        : ""}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            {/* PROJECT */}
+
+            <div className="form-group">
+              <label>
+                Project *
+              </label>
+
+              <select
+                value={
+                  quotationForm.projectId
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      projectId:
+                        e.target.value,
+                    })
+                  )
+                }
+                disabled={
+                  !quotationForm.customerId
+                }
+                required
+              >
+                <option value="">
+                  {!quotationForm.customerId
+                    ? "Select customer first"
+                    : availableProjects.length ===
+                      0
+                    ? "No projects for this customer"
+                    : "Select Project"}
+                </option>
+
+                {availableProjects.map(
+                  (project) => (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                    >
+                      {project.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            {/* QUOTATION DATE */}
+
+            <div className="form-group">
+              <label>
+                Quotation Date *
+              </label>
+
+              <input
+                type="date"
+                value={
+                  quotationForm.quotationDate
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      quotationDate:
+                        e.target.value,
+                    })
+                  )
+                }
+                required
+              />
+            </div>
+
+            {/* VALID UNTIL */}
+
+            <div className="form-group">
+              <label>
+                Valid Until
+              </label>
+
+              <input
+                type="date"
+                value={
+                  quotationForm.validUntil
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      validUntil:
+                        e.target.value,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            {/* STATUS */}
+
+            <div className="form-group">
+              <label>
+                Status
+              </label>
+
+              <select
+                value={
+                  quotationForm.status
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      status:
+                        e.target.value,
+                    })
+                  )
+                }
+              >
+                <option value="DRAFT">
+                  Draft
+                </option>
+
+                <option value="SENT">
+                  Sent
+                </option>
+
+                <option value="ACCEPTED">
+                  Accepted
+                </option>
+
+                <option value="REJECTED">
+                  Rejected
+                </option>
+
+                <option value="EXPIRED">
+                  Expired
+                </option>
+
+                <option value="CANCELLED">
+                  Cancelled
+                </option>
+              </select>
+            </div>
+
+            {/* PAYMENT TERMS */}
+
+            <div className="form-group full-width">
+              <label>
+                Payment Terms
+              </label>
+
+              <textarea
+                rows="3"
+                value={
+                  quotationForm.paymentTerms
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      paymentTerms:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Example: 50% advance with work order..."
+              />
+            </div>
+
+            {/* TERMS & CONDITIONS */}
+
+            <div className="form-group full-width">
+              <label>
+                Terms & Conditions
+              </label>
+
+              <textarea
+                rows="4"
+                value={
+                  quotationForm.termsAndConditions
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      termsAndConditions:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Quotation terms and conditions..."
+              />
+            </div>
+
+            {/* NOTES */}
+
+            <div className="form-group full-width">
+              <label>
+                Notes
+              </label>
+
+              <textarea
+                rows="3"
+                value={
+                  quotationForm.notes
+                }
+                onChange={(e) =>
+                  setQuotationForm(
+                    (prev) => ({
+                      ...prev,
+                      notes:
+                        e.target.value,
+                    })
+                  )
+                }
+                placeholder="Internal notes..."
+              />
+            </div>
+
+            {/* DISCOUNT & TAX */}
+            <div
+              className="full-width"
+              style={{
+                marginTop: "20px",
+                padding: "18px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "10px",
+                background: "#f8fafc",
+            }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "16px",
+                }}
+              >
+                Discount & Tax
+              </h3>
+
+              <div className="form-grid">
+
+                {/* DISCOUNT TYPE */}
+
+                <div className="form-group">
+                  <label>
+                    Discount Type
+                  </label>
+
+                  <select
+                    value={
+                      quotationForm.discountType || ""
+                    }
+                    onChange={(e) =>
+                      setQuotationForm((prev) => ({
+                        ...prev,
+                        discountType:
+                          e.target.value || null,
+                        discountValue:
+                          e.target.value
+                            ? prev.discountValue
+                            : 0,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      No Discount
+                    </option>
+
+                    <option value="PERCENT">
+                      Percentage (%)
+                    </option>
+
+                    <option value="FIXED">
+                      Fixed Amount
+                    </option>
+                  </select>
+                </div>
+
+                {/* DISCOUNT VALUE */}
+
+                <div className="form-group">
+                  <label>
+                    {quotationForm.discountType ===
+                    "PERCENT"
+                      ? "Discount (%)"
+                      : "Discount Amount"}
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      quotationForm.discountValue ?? 0
+                    }
+                    onChange={(e) =>
+                      setQuotationForm((prev) => ({
+                        ...prev,
+                        discountValue:
+                          e.target.value,
+                      }))
+                    }
+                    disabled={
+                      !quotationForm.discountType
+                    }
+                    placeholder={
+                      quotationForm.discountType ===
+                      "PERCENT"
+                        ? "10"
+                        : "25000"
+                    }
+                  />
+                </div>
+
+                {/* TAX TYPE */}
+
+                <div className="form-group">
+                  <label>
+                    Tax Type
+                  </label>
+
+                  <select
+                    value={
+                      quotationForm.taxType || ""
+                    }
+                    onChange={(e) =>
+                      setQuotationForm((prev) => ({
+                        ...prev,
+                        taxType:
+                          e.target.value || null,
+                        taxRate:
+                          e.target.value
+                            ? prev.taxRate
+                            : 0,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      No Tax
+                    </option>
+
+                    <option value="PERCENT">
+                      Percentage (%)
+                    </option>
+
+                    <option value="FIXED">
+                      Fixed Amount
+                    </option>
+                  </select>
+                </div>
+
+                {/* TAX VALUE */}
+
+                <div className="form-group">
+                  <label>
+                    {quotationForm.taxType ===
+                    "PERCENT"
+                      ? "Tax (%)"
+                      : "Tax Amount"}
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      quotationForm.taxRate ?? 0
+                    }
+                    onChange={(e) =>
+                      setQuotationForm((prev) => ({
+                        ...prev,
+                        taxRate:
+                          e.target.value,
+                      }))
+                    }
+                    disabled={
+                      !quotationForm.taxType
+                    }
+                    placeholder={
+                      quotationForm.taxType ===
+                      "PERCENT"
+                        ? "5"
+                        : "10000"
+                    }
+                  />
+                </div>
+
+              </div>
+            </div>
+            {/* PRICING SUMMARY */}
+
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "18px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "10px",
+                background: "#ffffff",
+              }}
+            >
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "16px",
+                }}
+              >
+                Pricing Summary
+              </h3>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>Subtotal</span>
+
+                  <strong>
+                    ৳{" "}
+                    {quotationSubtotal.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>
+                    Discount
+                  </span>
+
+                  <strong>
+                    - ৳{" "}
+                    {quotationDiscountAmount.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>Tax</span>
+
+                  <strong>
+                    + ৳{" "}
+                    {quotationTaxAmount.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    borderTop:
+                      "1px solid #e5e7eb",
+                    paddingTop: "12px",
+                    marginTop: "4px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "20px",
+                  }}
+                >
+                  <strong>
+                    Grand Total
+                  </strong>
+
+                  <strong>
+                    ৳{" "}
+                    {quotationGrandTotal.toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ACTIONS */}
+
+          <div className="modal-actions">
+
+            <button
+              type="button"
+              className="cancel-button"
+              onClick={closeQuotationModal}
+              disabled={savingQuotation}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="save-button"
+              disabled={savingQuotation}
+            >
+              <Save size={17} />
+
+              {savingQuotation
+                ? "Saving..."
+                : "Save Draft"}
+            </button>
+
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -23667,6 +27352,21 @@ if (!currentUser) {
           <a
             href="#"
             className={
+              activePage === "quotations"
+                ? "active"
+                : ""
+            }
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("quotations");
+            }}
+          >
+            <FileText size={20} />
+            <span>Quotations</span>
+          </a>
+          <a
+            href="#"
+            className={
               activePage === "boqs"
                 ? "active"
                 : ""
@@ -23970,7 +27670,7 @@ if (!currentUser) {
             <span>{currentUser?.username || ""}</span>
           </div>
         </div>
-          
+
         </header>
 
 
@@ -24765,6 +28465,7 @@ if (!currentUser) {
         {activePage === "leads" && renderLeads()}
         {activePage === "customers" && renderCustomers()}
         {activePage === "projects" && renderProjects()}
+        {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}
         {activePage === "income" && renderIncome()}
         {activePage === "expenses" && renderExpenses()}
@@ -24780,6 +28481,10 @@ if (!currentUser) {
 
 
         {renderProjectViewModal()}
+        {renderQuotationModal()}
+        {renderQuotationViewModal()}
+        {renderQuotationItemModal()}
+        {renderQuotationMilestoneModal()}
 
         {renderBOQModal()}
         {renderBOQDetailsModal()}
