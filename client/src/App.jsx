@@ -1,3 +1,4 @@
+import Billing from "./Billing";
 import { milestoneAmount, quotationCategories } from "./quotation-utils";
 import { Fragment, useEffect, useState } from "react";
 
@@ -27589,6 +27590,7 @@ if (!currentUser) {
             <Users size={18} />
             Customers
           </a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage("billing");}} className={activePage === "billing" ? "active" : ""}><Wallet size={18} />Client Billing</a>
           <a
             href="#"
             className={
@@ -28704,6 +28706,7 @@ if (!currentUser) {
         )}
         {activePage === "leads" && renderLeads()}
         {activePage === "customers" && renderCustomers()}
+        {activePage === "billing" && <Billing apiUrl={API_URL} />}
         {activePage === "projects" && renderProjects()}
         {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}
@@ -32014,7 +32017,13 @@ if (!currentUser) {
             <h3>Client CRM &amp; Financial History</h3>
             <p>Lead source: {selectedCustomer.source || 'OTHER'}</p>
             <p>Contract value: {Number(selectedCustomer.financials?.contractValue || 0).toLocaleString()} · Project receipts: {Number(selectedCustomer.financials?.received || 0).toLocaleString()} · Outstanding: {Number(selectedCustomer.financials?.outstanding || 0).toLocaleString()} · Credit: {Number(selectedCustomer.financials?.credit || 0).toLocaleString()}</p>
-            <p>Outstanding is calculated per project from contract value less recorded income. Invoices are not yet available.</p>
+            <p>Project outstanding is contract value less recorded income. Invoice balances below include only receipts allocated to each invoice.</p>
+            <h4>Client invoices</h4>
+            <button type="button" onClick={()=>{setShowCustomerDetailsModal(false);setActivePage("billing");}}>Open Client Billing</button>
+            <div className="table-wrapper"><table><thead><tr><th>Invoice</th><th>Status</th><th>Amount</th><th>Paid</th><th>Due</th></tr></thead><tbody>
+            {(selectedCustomer.invoices || []).map(i=><tr key={i.id}><td>{i.invoiceNo}</td><td>{i.status} / {i.paymentStatus}</td><td>{Number(i.amount).toLocaleString()}</td><td>{Number(i.paidAmount).toLocaleString()}</td><td>{Number(i.dueAmount).toLocaleString()}</td></tr>)}
+            {!selectedCustomer.invoices?.length && <tr><td colSpan={5}>No invoices created</td></tr>}
+            </tbody></table></div>
             <h4>Quotations</h4>
             <div className="table-wrapper"><table><thead><tr><th>Quotation</th><th>Status</th><th>Total</th></tr></thead><tbody>
             {(selectedCustomer.quotations || []).map(q=><tr key={q.id}><td>{q.quotationNo}</td><td>{q.status}</td><td>{Number(q.grandTotal).toLocaleString()}{q.status === 'ACCEPTED' && !q.projectId && <button type="button" className="btn btn-primary" onClick={async () => {

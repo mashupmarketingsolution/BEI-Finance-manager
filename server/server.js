@@ -364,6 +364,7 @@ async function refreshQuotationTotals(
 
 app.use(cors());
 app.use(express.json());
+require("./billing").registerBilling(app, prisma, authMiddleware);
 app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
 // =========================================
 // AUTHENTICATION ROUTES
@@ -1984,6 +1985,7 @@ app.get("/api/customers/:id", authMiddleware, async (req, res) => {
         include: {
           quotations: {orderBy:{createdAt:"desc"}},
           convertedLeads: {select:{id:true, source:true, status:true}},
+          invoices: {include:{payments:true},orderBy:{id:"desc"}},
           projects: {
             include: {transactions:{where:{type:"INCOME"}, orderBy:{transactionDate:"desc"}}},
             orderBy: {
@@ -2002,7 +2004,7 @@ app.get("/api/customers/:id", authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      data: {...customer, financials: customerFinancials(customer.projects)},
+      data: {...customer, invoices: customer.invoices.map(require("./billing").present), financials: customerFinancials(customer.projects)},
     });
   } catch (error) {
     console.error(

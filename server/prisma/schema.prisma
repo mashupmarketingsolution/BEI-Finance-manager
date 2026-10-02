@@ -20,6 +20,7 @@ model Customer {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  invoices       ClientInvoice[]
   projects       Project[]
   convertedLeads Lead[]      @relation("LeadConvertedCustomer")
   quotations     Quotation[]
@@ -105,6 +106,7 @@ enum LeadStatus {
 }
 
 model Project {
+  invoices         ClientInvoice[]
   id               Int               @id @default(autoincrement())
   name             String            @unique @db.VarChar(150)
   contractValue    Decimal           @default(0.00) @db.Decimal(15, 2)
@@ -173,12 +175,14 @@ model Category {
 }
 
 enum TransactionSource {
+  CLIENT_PAYMENT
   MANUAL
   PURCHASE
   PURCHASE_PAYMENT
 }
 
 model Transaction {
+  invoicePayment InvoicePayment?
   id              Int               @id @default(autoincrement())
   transactionDate DateTime
   type            TransactionType
@@ -467,6 +471,7 @@ model QuotationItem {
 }
 
 model QuotationPaymentMilestone {
+  invoice ClientInvoice?
   id          Int @id @default(autoincrement())
   quotationId Int
 
@@ -756,4 +761,47 @@ enum StockMovementType {
   RETURN
   DAMAGE
   ADJUSTMENT
+}
+
+model ClientInvoice {
+  id Int @id @default(autoincrement())
+  invoiceNo String @unique @db.VarChar(50)
+  customerId Int
+  projectId Int
+  milestoneId Int? @unique
+  customerName String @db.VarChar(150)
+  customerAddress String? @db.Text
+  invoiceDate DateTime @db.Date
+  dueDate DateTime @db.Date
+  description String @db.Text
+  amount Decimal @db.Decimal(15,2)
+  status InvoiceStatus @default(DRAFT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  customer Customer @relation(fields:[customerId], references:[id], onDelete:Restrict)
+  project Project @relation(fields:[projectId], references:[id], onDelete:Restrict)
+  milestone QuotationPaymentMilestone? @relation(fields:[milestoneId], references:[id], onDelete:Restrict)
+  payments InvoicePayment[]
+  @@index([customerId])
+  @@index([projectId])
+  @@index([status,dueDate])
+  @@map("client_invoices")
+}
+
+model InvoicePayment {
+  id Int @id @default(autoincrement())
+  invoiceId Int
+  transactionId Int @unique
+  amount Decimal @db.Decimal(15,2)
+  createdAt DateTime @default(now())
+  invoice ClientInvoice @relation(fields:[invoiceId],references:[id],onDelete:Restrict)
+  transaction Transaction @relation(fields:[transactionId],references:[id],onDelete:Restrict)
+  @@index([invoiceId])
+  @@map("invoice_payments")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  VOID
 }
