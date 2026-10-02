@@ -16065,6 +16065,7 @@ const quotationGrandTotal =
                 value={
                   quotationForm.status
                 }
+                disabled={!editingQuotationId}
                 onChange={(e) =>
                   setQuotationForm(
                     (prev) => ({
