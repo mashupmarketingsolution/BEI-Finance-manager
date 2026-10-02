@@ -13,6 +13,7 @@ model Customer {
   email        String?      @db.VarChar(150)
   companyName  String?      @db.VarChar(150)
   address      String?      @db.Text
+  source       LeadSource   @default(OTHER)
   customerType CustomerType @default(INDIVIDUAL)
   status       RecordStatus @default(ACTIVE)
   notes        String?      @db.Text
@@ -94,6 +95,11 @@ enum LeadStatus {
   NEW
   CONTACTED
   QUALIFIED
+  MEETING
+  SITE_VISIT
+  QUOTATION
+  NEGOTIATION
+  WON
   LOST
   CONVERTED
 }
@@ -377,7 +383,7 @@ model Quotation {
   quotationNo String @unique @db.VarChar(50)
 
   customerId Int
-  projectId  Int
+  projectId  Int?
 
   quotationDate DateTime
   validUntil    DateTime?
@@ -405,7 +411,11 @@ model Quotation {
   updatedAt DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  project  Project  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  originalQuotationId Int?
+  originalQuotation   Quotation?  @relation("QuotationRevisions", fields: [originalQuotationId], references: [id], onDelete: Restrict)
+  revisions           Quotation[] @relation("QuotationRevisions")
 
   items             QuotationItem[]
   paymentMilestones QuotationPaymentMilestone[]
@@ -414,6 +424,8 @@ model Quotation {
   @@index([projectId])
   @@index([status])
   @@index([quotationDate])
+  @@index([originalQuotationId])
+  @@unique([originalQuotationId, revisionNo])
   @@map("quotations")
 }
 
@@ -421,6 +433,7 @@ model QuotationItem {
   id          Int @id @default(autoincrement())
   quotationId Int
 
+  category      String  @default("OTHER") @db.VarChar(30)
   description   String  @db.VarChar(255)
   specification String? @db.Text
 

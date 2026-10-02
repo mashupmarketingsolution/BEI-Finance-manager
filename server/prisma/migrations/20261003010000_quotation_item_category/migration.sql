@@ -1,0 +1,1 @@
+ALTER TABLE `quotation_items` ADD COLUMN `category` VARCHAR(30) NOT NULL DEFAULT 'OTHER';

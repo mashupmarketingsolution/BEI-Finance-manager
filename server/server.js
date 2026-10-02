@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 
+const { validateContact, customerFinancials } = require("./crm");
+const { categories: quotationCategories, validateFinalization, registerQuotationWorkflow } = require("./quotation-workflow");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -362,6 +364,7 @@ async function refreshQuotationTotals(
 
 app.use(cors());
 app.use(express.json());
+app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
 // =========================================
 // AUTHENTICATION ROUTES
 // =========================================
@@ -1151,10 +1154,8 @@ app.get("/api/users", authMiddleware, async (req, res) => {
 // GET ALL LEADS WITH PAGINATION
 app.get("/api/leads", authMiddleware, async (req, res) => {
   try {
-    const page = Math.max(
-      Number(req.query.page) || 1,
-      1
-    );
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    if (!Number.isSafeInteger(page)) return res.status(400).json({success:false,message:"Invalid page"});
 
     const limitValue =
       Number(req.query.limit) || 10;
@@ -1167,11 +1168,18 @@ app.get("/api/leads", authMiddleware, async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const totalLeads =
-      await prisma.lead.count();
+    const where = {};
+    if (req.query.search) where.OR = ['name','phone','email','companyName'].map(field => ({[field]: {contains: String(req.query.search)}}));
+    const statuses = ['NEW','CONTACTED','QUALIFIED','MEETING','SITE_VISIT','QUOTATION','NEGOTIATION','WON','LOST','CONVERTED'];
+    if (req.query.status) {
+      if (!statuses.includes(req.query.status)) return res.status(400).json({success:false,message:'Invalid lead status'});
+      where.status = req.query.status;
+    }
+    const totalLeads = await prisma.lead.count({where});
 
     const leads =
       await prisma.lead.findMany({
+        where,
         include: {
           assignedTo: {
             select: {
@@ -1195,7 +1203,7 @@ app.get("/api/leads", authMiddleware, async (req, res) => {
       });
 
     const totalPages =
-      Math.ceil(totalLeads / limit);
+      Math.max(1, Math.ceil(totalLeads / limit));
 
     res.json({
       success: true,
@@ -1211,7 +1219,7 @@ app.get("/api/leads", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Get Leads Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1272,7 +1280,7 @@ app.get("/api/leads/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Get Lead Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1282,6 +1290,8 @@ app.get("/api/leads/:id", authMiddleware, async (req, res) => {
 // CREATE LEAD
 app.post("/api/leads", authMiddleware, async (req, res) => {
   try {
+    const invalid = validateContact(req.body);
+    if (invalid) return res.status(400).json({success:false,message:invalid});
     const {
       name,
       phone,
@@ -1331,6 +1341,7 @@ app.post("/api/leads", authMiddleware, async (req, res) => {
       "NEW",
       "CONTACTED",
       "QUALIFIED",
+      "MEETING", "SITE_VISIT", "QUOTATION", "NEGOTIATION", "WON",
       "LOST",
       "CONVERTED",
     ];
@@ -1459,7 +1470,7 @@ app.post("/api/leads", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Create Lead Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1469,6 +1480,8 @@ app.post("/api/leads", authMiddleware, async (req, res) => {
 // UPDATE LEAD
 app.put("/api/leads/:id", authMiddleware, async (req, res) => {
   try {
+    const invalid = validateContact(req.body);
+    if (invalid) return res.status(400).json({success:false,message:invalid});
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id <= 0) {
@@ -1549,6 +1562,7 @@ app.put("/api/leads/:id", authMiddleware, async (req, res) => {
       "NEW",
       "CONTACTED",
       "QUALIFIED",
+      "MEETING", "SITE_VISIT", "QUOTATION", "NEGOTIATION", "WON",
       "LOST",
     ];
 
@@ -1695,7 +1709,7 @@ app.put("/api/leads/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Update Lead Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1749,7 +1763,7 @@ app.delete("/api/leads/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Delete Lead Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1813,6 +1827,8 @@ app.post(
       const result =
         await prisma.$transaction(
           async (tx) => {
+            const claimed = await tx.lead.updateMany({where:{id, status:existingLead.status, updatedAt:existingLead.updatedAt, convertedCustomerId:null}, data:{status:'CONVERTED'}});
+            if (claimed.count !== 1) throw Object.assign(new Error('Lead changed or was already converted. Refresh and retry.'), {status:409});
             const customer =
               await tx.customer.create({
                 data: {
@@ -1822,6 +1838,7 @@ app.post(
                   companyName:
                     existingLead.companyName,
                   address: existingLead.address,
+                  source: existingLead.source,
                   customerType,
                   status: "ACTIVE",
                   notes: existingLead.notes,
@@ -1878,7 +1895,7 @@ app.post(
         error
       );
 
-      res.status(500).json({
+      res.status(error.status || 500).json({
         success: false,
         message: error.message,
       });
@@ -1892,12 +1909,10 @@ app.post(
 // =========================================
 
 // GET ALL CUSTOMERS WITH PAGINATION
-app.get("/api/customers", async (req, res) => {
+app.get("/api/customers", authMiddleware, async (req, res) => {
   try {
-    const page = Math.max(
-      Number(req.query.page) || 1,
-      1
-    );
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    if (!Number.isSafeInteger(page)) return res.status(400).json({success:false,message:"Invalid page"});
 
     const limitValue =
       Number(req.query.limit) || 10;
@@ -1941,7 +1956,7 @@ app.get("/api/customers", async (req, res) => {
   } catch (error) {
     console.error("Get Customers Error:", error);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -1950,7 +1965,7 @@ app.get("/api/customers", async (req, res) => {
 
 
 // GET SINGLE CUSTOMER WITH PROJECTS
-app.get("/api/customers/:id", async (req, res) => {
+app.get("/api/customers/:id", authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -1967,7 +1982,10 @@ app.get("/api/customers/:id", async (req, res) => {
           id,
         },
         include: {
+          quotations: {orderBy:{createdAt:"desc"}},
+          convertedLeads: {select:{id:true, source:true, status:true}},
           projects: {
+            include: {transactions:{where:{type:"INCOME"}, orderBy:{transactionDate:"desc"}}},
             orderBy: {
               createdAt: "desc",
             },
@@ -1984,7 +2002,7 @@ app.get("/api/customers/:id", async (req, res) => {
 
     res.json({
       success: true,
-      data: customer,
+      data: {...customer, financials: customerFinancials(customer.projects)},
     });
   } catch (error) {
     console.error(
@@ -1992,7 +2010,7 @@ app.get("/api/customers/:id", async (req, res) => {
       error
     );
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -2000,8 +2018,10 @@ app.get("/api/customers/:id", async (req, res) => {
 });
 
 // CREATE CUSTOMER
-app.post("/api/customers", async (req, res) => {
+app.post("/api/customers", authMiddleware, async (req, res) => {
   try {
+    const invalid = validateContact(req.body);
+    if (invalid) return res.status(400).json({success:false,message:invalid});
     const {
       name,
       phone,
@@ -2009,12 +2029,13 @@ app.post("/api/customers", async (req, res) => {
       companyName,
       address,
       customerType,
+      source,
       status,
       notes,
     } = req.body;
 
     // Name is required
-    if (!name || name.trim() === "") {
+    if (typeof name !== "string" || name.trim() === "") {
       return res.status(400).json({
         success: false,
         message: "Customer name is required",
@@ -2059,6 +2080,7 @@ app.post("/api/customers", async (req, res) => {
       await prisma.customer.create({
         data: {
           name: name.trim(),
+          ...(source !== undefined && {source}),
 
           phone:
             phone?.trim() || null,
@@ -2094,7 +2116,7 @@ app.post("/api/customers", async (req, res) => {
       error
     );
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -2103,8 +2125,10 @@ app.post("/api/customers", async (req, res) => {
 
 
 // UPDATE CUSTOMER
-app.put("/api/customers/:id", async (req, res) => {
+app.put("/api/customers/:id", authMiddleware, async (req, res) => {
   try {
+    const invalid = validateContact(req.body);
+    if (invalid) return res.status(400).json({success:false,message:invalid});
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id <= 0) {
@@ -2121,6 +2145,7 @@ app.put("/api/customers/:id", async (req, res) => {
       companyName,
       address,
       customerType,
+      source,
       status,
       notes,
     } = req.body;
@@ -2139,7 +2164,7 @@ app.put("/api/customers/:id", async (req, res) => {
       });
     }
 
-    if (!name || name.trim() === "") {
+    if (typeof name !== "string" || name.trim() === "") {
       return res.status(400).json({
         success: false,
         message: "Customer name is required",
@@ -2185,6 +2210,7 @@ app.put("/api/customers/:id", async (req, res) => {
         },
         data: {
           name: name.trim(),
+          ...(source !== undefined && {source}),
 
           phone:
             phone?.trim() || null,
@@ -2222,7 +2248,7 @@ app.put("/api/customers/:id", async (req, res) => {
       error
     );
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -2231,7 +2257,7 @@ app.put("/api/customers/:id", async (req, res) => {
 
 
 // DELETE CUSTOMER
-app.delete("/api/customers/:id", async (req, res) => {
+app.delete("/api/customers/:id", authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -2248,6 +2274,8 @@ app.delete("/api/customers/:id", async (req, res) => {
           id,
         },
         include: {
+          quotations: {select:{id:true}},
+          convertedLeads: {select:{id:true}},
           projects: {
             select: {
               id: true,
@@ -2264,11 +2292,11 @@ app.delete("/api/customers/:id", async (req, res) => {
     }
 
     // Do not delete a customer with linked projects
-    if (existingCustomer.projects.length > 0) {
+    if (existingCustomer.projects.length || existingCustomer.quotations.length || existingCustomer.convertedLeads.length) {
       return res.status(400).json({
         success: false,
         message:
-          "Cannot delete customer because projects are linked to this customer.",
+          "This customer has linked projects, quotations or lead history. Mark it inactive instead.",
       });
     }
 
@@ -2288,7 +2316,7 @@ app.delete("/api/customers/:id", async (req, res) => {
       error
     );
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message,
     });
@@ -4297,6 +4325,37 @@ app.delete("/api/boq-items/:id", async (req, res) => {
 // =========================================
 
 // GET ALL QUOTATIONS
+// Create a project once an accepted quotation is ready for delivery.
+app.post("/api/quotations/:id/project", authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const name = req.body?.name;
+    if (!Number.isSafeInteger(id) || id <= 0 || typeof name !== "string" || !name.trim() || name.trim().length > 150) {
+      return res.status(400).json({success:false,message:"Valid quotation ID and project name (up to 150 characters) are required"});
+    }
+    const project = await prisma.$transaction(async tx => {
+      const quotation = await tx.quotation.findUnique({where:{id}, include:{customer:true}});
+      if (!quotation) throw Object.assign(new Error("Quotation not found"), {status:404});
+      if (quotation.projectId) throw Object.assign(new Error("Quotation already has a linked project"), {status:409});
+      const rootId = quotation.originalQuotationId || quotation.id;
+      const family = await tx.quotation.findMany({where:{OR:[{id:rootId},{originalQuotationId:rootId}]}});
+      if (family.some(q => q.revisionNo > quotation.revisionNo || q.projectId)) {
+        throw Object.assign(new Error("Use the latest accepted revision; this quotation family may already have a project"), {status:409});
+      }
+      if (quotation.status !== "ACCEPTED" || quotation.customer.status !== "ACTIVE") {
+        throw Object.assign(new Error("An accepted quotation and active customer are required"), {status:400});
+      }
+      const created = await tx.project.create({data:{name:name.trim(), customerId:quotation.customerId, contractValue:quotation.grandTotal, notes:`Created from quotation ${quotation.quotationNo}`}});
+      const linked = await tx.quotation.updateMany({where:{id, projectId:null, status:"ACCEPTED", updatedAt:quotation.updatedAt}, data:{projectId:created.id}});
+      if (linked.count !== 1) throw Object.assign(new Error("Quotation changed. Refresh and retry."), {status:409});
+      return created;
+    });
+    res.status(201).json({success:true,data:project});
+  } catch (error) {
+    res.status(error.code === "P2002" ? 409 : error.status || 500).json({success:false,message:error.code === "P2002" ? "Project name already exists" : error.message});
+  }
+});
+
 app.get("/api/quotations", async (req, res) => {
   try {
     const quotations = await prisma.quotation.findMany({
@@ -4380,9 +4439,56 @@ app.get("/api/quotations/:id", async (req, res) => {
       });
     }
 
+    // ==============================
+    // REVISION HISTORY
+    // ==============================
+
+    const rootId =
+      quotation.originalQuotationId ||
+      quotation.id;
+
+    const revisionHistory =
+      await prisma.quotation.findMany({
+        where: {
+          OR: [
+            {
+              id: rootId,
+            },
+            {
+              originalQuotationId: rootId,
+            },
+          ],
+        },
+        orderBy: {
+          revisionNo: "asc",
+        },
+        select: {
+          id: true,
+          quotationNo: true,
+          revisionNo: true,
+          status: true,
+          quotationDate: true,
+          validUntil: true,
+          originalQuotationId: true,
+          grandTotal: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+    const latestRevision =
+      revisionHistory[
+        revisionHistory.length - 1
+      ];
+
     res.json({
       success: true,
-      data: quotation,
+      data: {
+        ...quotation,
+        revisionHistory,
+        isLatestRevision:
+          latestRevision?.id === quotation.id,
+      },
     });
   } catch (error) {
     console.error(
@@ -4453,6 +4559,8 @@ app.get("/api/quotations/:id/items", async (req, res) => {
     });
   }
 });
+registerQuotationWorkflow(app, prisma, authMiddleware, calculateQuotationTotals);
+
 // CREATE QUOTATION ITEM
 app.post("/api/quotations/:id/items", async (req, res) => {
   try {
@@ -4460,6 +4568,7 @@ app.post("/api/quotations/:id/items", async (req, res) => {
 
     const {
       description,
+      category,
       specification,
       pricingType,
       quantity,
@@ -4482,7 +4591,8 @@ app.post("/api/quotations/:id/items", async (req, res) => {
       });
     }
 
-    if (!description || description.trim() === "") {
+    if (category !== undefined && !quotationCategories.includes(category)) return res.status(400).json({success:false,message:"Invalid quotation item category"});
+    if (typeof description !== "string" || !description.trim() || description.trim().length > 255) {
       return res.status(400).json({
         success: false,
         message: "Description is required",
@@ -4781,6 +4891,7 @@ app.post("/api/quotations/:id/items", async (req, res) => {
         data: {
           quotationId,
 
+          ...(category !== undefined && {category}),
           description:
             description.trim(),
 
@@ -4863,6 +4974,7 @@ app.put("/api/quotation-items/:id", async (req, res) => {
 
     const {
       description,
+      category,
       specification,
       pricingType,
       quantity,
@@ -4886,7 +4998,8 @@ app.put("/api/quotation-items/:id", async (req, res) => {
       });
     }
 
-    if (!description || description.trim() === "") {
+    if (category !== undefined && !quotationCategories.includes(category)) return res.status(400).json({success:false,message:"Invalid quotation item category"});
+    if (typeof description !== "string" || !description.trim() || description.trim().length > 255) {
       return res.status(400).json({
         success: false,
         message: "Description is required",
@@ -5173,6 +5286,7 @@ app.put("/api/quotation-items/:id", async (req, res) => {
           id,
         },
         data: {
+          ...(category !== undefined && {category}),
           description:
             description.trim(),
 
@@ -5351,7 +5465,6 @@ app.post("/api/quotations", async (req, res) => {
       quotationDate,
       validUntil,
       status,
-      revisionNo,
       discountType,
       discountValue,
       taxType,
@@ -5379,19 +5492,14 @@ app.post("/api/quotations", async (req, res) => {
       });
     }
 
-    if (!projectId) {
-      return res.status(400).json({
-        success: false,
-        message: "Project is required",
-      });
-    }
+
 
     // ==============================
     // VALIDATE IDS
     // ==============================
 
     const cleanCustomerId = Number(customerId);
-    const cleanProjectId = Number(projectId);
+    const cleanProjectId = projectId == null || projectId === "" ? null : Number(projectId);
 
     if (
       !Number.isInteger(cleanCustomerId) ||
@@ -5404,8 +5512,8 @@ app.post("/api/quotations", async (req, res) => {
     }
 
     if (
-      !Number.isInteger(cleanProjectId) ||
-      cleanProjectId <= 0
+      cleanProjectId !== null && (!Number.isInteger(cleanProjectId) ||
+      cleanProjectId <= 0)
     ) {
       return res.status(400).json({
         success: false,
@@ -5435,14 +5543,9 @@ app.post("/api/quotations", async (req, res) => {
     // VERIFY PROJECT
     // ==============================
 
-    const project =
-      await prisma.project.findUnique({
-        where: {
-          id: cleanProjectId,
-        },
-      });
+    const project = cleanProjectId === null ? null : await prisma.project.findUnique({where:{id:cleanProjectId}});
 
-    if (!project) {
+    if (cleanProjectId !== null && !project) {
       return res.status(400).json({
         success: false,
         message: "Project not found",
@@ -5454,7 +5557,7 @@ app.post("/api/quotations", async (req, res) => {
     // ==============================
 
     if (
-      project.customerId !== cleanCustomerId
+      project && project.customerId !== cleanCustomerId
     ) {
       return res.status(400).json({
         success: false,
@@ -5495,8 +5598,8 @@ app.post("/api/quotations", async (req, res) => {
       "CANCELLED",
     ];
 
-    const quotationStatus =
-      status || "DRAFT";
+    const quotationStatus = status || "DRAFT";
+    if (quotationStatus !== "DRAFT") return res.status(400).json({success:false,message:"Create as DRAFT, add items and milestones, then send or accept the quotation"});
 
     if (
       !allowedStatuses.includes(
@@ -5506,27 +5609,6 @@ app.post("/api/quotations", async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid quotation status",
-      });
-    }
-
-    // ==============================
-    // VALIDATE REVISION
-    // ==============================
-
-    const cleanRevisionNo =
-      revisionNo === undefined ||
-      revisionNo === null
-        ? 1
-        : Number(revisionNo);
-
-    if (
-      !Number.isInteger(cleanRevisionNo) ||
-      cleanRevisionNo < 1
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Revision number must be a positive integer",
       });
     }
 
@@ -5649,7 +5731,7 @@ app.post("/api/quotations", async (req, res) => {
             quotationStatus,
 
           revisionNo:
-            cleanRevisionNo,
+            1,
 
           discountType:
             cleanDiscountType,
@@ -5713,7 +5795,6 @@ app.put("/api/quotations/:id", async (req, res) => {
       quotationDate,
       validUntil,
       status,
-      revisionNo,
       discountType,
       discountValue,
       taxType,
@@ -5774,11 +5855,7 @@ app.put("/api/quotations/:id", async (req, res) => {
         : Number(customerId);
 
     const cleanProjectId =
-      projectId === undefined ||
-      projectId === null ||
-      projectId === ""
-        ? existingQuotation.projectId
-        : Number(projectId);
+      projectId === undefined ? existingQuotation.projectId : projectId === null || projectId === "" ? null : Number(projectId);
 
     if (
       !Number.isInteger(cleanCustomerId) ||
@@ -5791,8 +5868,8 @@ app.put("/api/quotations/:id", async (req, res) => {
     }
 
     if (
-      !Number.isInteger(cleanProjectId) ||
-      cleanProjectId <= 0
+      cleanProjectId !== null && (!Number.isInteger(cleanProjectId) ||
+      cleanProjectId <= 0)
     ) {
       return res.status(400).json({
         success: false,
@@ -5814,14 +5891,9 @@ app.put("/api/quotations/:id", async (req, res) => {
       });
     }
 
-    const project =
-      await prisma.project.findUnique({
-        where: {
-          id: cleanProjectId,
-        },
-      });
+    const project = cleanProjectId === null ? null : await prisma.project.findUnique({where:{id:cleanProjectId}});
 
-    if (!project) {
+    if (cleanProjectId !== null && !project) {
       return res.status(400).json({
         success: false,
         message: "Project not found",
@@ -5829,7 +5901,7 @@ app.put("/api/quotations/:id", async (req, res) => {
     }
 
     if (
-      project.customerId !== cleanCustomerId
+      project && project.customerId !== cleanCustomerId
     ) {
       return res.status(400).json({
         success: false,
@@ -5862,27 +5934,6 @@ app.put("/api/quotations/:id", async (req, res) => {
         message: "Invalid quotation status",
       });
     }
-  // ==============================
-    // VALIDATE REVISION
-    // ==============================
-  const cleanRevisionNo =
-      revisionNo === undefined ||
-      revisionNo === null ||
-      revisionNo === ""
-        ? existingQuotation.revisionNo
-        : Number(revisionNo);
-
-    if (
-      !Number.isInteger(cleanRevisionNo) ||
-      cleanRevisionNo < 1
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Revision number must be a positive integer",
-      });
-    }
-
     // ==============================
     // VALIDATE DISCOUNT
     // ==============================
@@ -5935,6 +5986,10 @@ app.put("/api/quotations/:id", async (req, res) => {
     // ==============================
     // FINALIZATION VALIDATION
     // ==============================
+    const currentItems = await prisma.quotationItem.findMany({where:{quotationId:id}});
+    let validatedTotals;
+    try { validatedTotals = calculateQuotationTotals(currentItems, {discountType:cleanDiscountType,discountValue:cleanDiscountValue,taxType:cleanTaxType,taxRate:cleanTaxRate}); }
+    catch(error) { return res.status(400).json({success:false,message:error.message}); }
     if (
       cleanStatus === "SENT" ||
       cleanStatus === "ACCEPTED"
@@ -5946,6 +6001,8 @@ app.put("/api/quotations/:id", async (req, res) => {
           },
         });
 
+      const invalid = validateFinalization(currentItems, milestones, validatedTotals.grandTotal);
+      if (invalid) return res.status(400).json({success:false,message:invalid});
       const totalPercentage =
         milestones.reduce(
           (sum, milestone) =>
@@ -6041,8 +6098,6 @@ app.put("/api/quotations/:id", async (req, res) => {
           status:
             cleanStatus,
 
-          revisionNo:
-            cleanRevisionNo,
 
           discountType:
             cleanDiscountType,
@@ -6091,6 +6146,366 @@ app.put("/api/quotations/:id", async (req, res) => {
   } catch (error) {
     console.error(
       "Update Quotation Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+// CREATE NEW QUOTATION REVISION
+app.post("/api/quotations/:id/revisions", async (req, res) => {
+  try {
+    const sourceId = Number(req.params.id);
+
+    if (
+      !Number.isInteger(sourceId) ||
+      sourceId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quotation ID",
+      });
+    }
+
+    // ---------------------------------
+    // LOAD SOURCE SNAPSHOT
+    // ---------------------------------
+
+    const sourceQuotation =
+      await prisma.quotation.findUnique({
+        where: {
+          id: sourceId,
+        },
+        include: {
+          items: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+          paymentMilestones: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      });
+
+    if (!sourceQuotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found",
+      });
+    }
+
+    // DRAFT can be edited directly.
+    if (sourceQuotation.status === "DRAFT") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "DRAFT quotations can be edited directly and do not require a new revision",
+      });
+    }
+
+    // ---------------------------------
+    // DETERMINE REVISION FAMILY ROOT
+    // ---------------------------------
+
+    const rootId =
+      sourceQuotation.originalQuotationId ||
+      sourceQuotation.id;
+
+    const rootQuotation =
+      rootId === sourceQuotation.id
+        ? sourceQuotation
+        : await prisma.quotation.findUnique({
+            where: {
+              id: rootId,
+            },
+          });
+
+    if (!rootQuotation) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Quotation revision root could not be found",
+      });
+    }
+
+    // ---------------------------------
+    // LOAD WHOLE FAMILY
+    // ---------------------------------
+
+    const family =
+      await prisma.quotation.findMany({
+        where: {
+          OR: [
+            {
+              id: rootId,
+            },
+            {
+              originalQuotationId: rootId,
+            },
+          ],
+        },
+        orderBy: {
+          revisionNo: "asc",
+        },
+      });
+
+    if (family.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Quotation revision family could not be loaded",
+      });
+    }
+
+    const latestRevision =
+      family[family.length - 1];
+
+    // Prevent branching from an older revision.
+    if (latestRevision.id !== sourceQuotation.id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A new revision can only be created from the latest quotation revision",
+        latestRevisionId:
+          latestRevision.id,
+        latestRevisionNo:
+          latestRevision.revisionNo,
+      });
+    }
+
+    const nextRevisionNo =
+      latestRevision.revisionNo + 1;
+
+    // ---------------------------------
+    // GENERATE REVISION NUMBER
+    // ---------------------------------
+
+    const rootQuotationNo =
+      rootQuotation.quotationNo;
+
+    const nextQuotationNo =
+      `${rootQuotationNo}-R${nextRevisionNo}`;
+
+    const duplicateNumber =
+      await prisma.quotation.findUnique({
+        where: {
+          quotationNo:
+            nextQuotationNo,
+        },
+      });
+
+    if (duplicateNumber) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Generated quotation revision number already exists",
+      });
+    }
+
+    // ---------------------------------
+    // CREATE FULL SNAPSHOT TRANSACTION
+    // ---------------------------------
+
+    const newRevision =
+      await prisma.$transaction(
+        async (tx) => {
+          const created =
+            await tx.quotation.create({
+              data: {
+                quotationNo:
+                  nextQuotationNo,
+
+                customerId:
+                  sourceQuotation.customerId,
+
+                projectId:
+                  sourceQuotation.projectId,
+
+                quotationDate:
+                  new Date(),
+
+                validUntil:
+                  sourceQuotation.validUntil,
+
+                status:
+                  "DRAFT",
+
+                revisionNo:
+                  nextRevisionNo,
+
+                originalQuotationId:
+                  rootId,
+
+                subtotal:
+                  sourceQuotation.subtotal,
+
+                discountType:
+                  sourceQuotation.discountType,
+
+                discountValue:
+                  sourceQuotation.discountValue,
+
+                discountAmount:
+                  sourceQuotation.discountAmount,
+
+                taxType:
+                  sourceQuotation.taxType,
+
+                taxRate:
+                  sourceQuotation.taxRate,
+
+                taxAmount:
+                  sourceQuotation.taxAmount,
+
+                grandTotal:
+                  sourceQuotation.grandTotal,
+
+                paymentTerms:
+                  sourceQuotation.paymentTerms,
+
+                termsAndConditions:
+                  sourceQuotation.termsAndConditions,
+
+                notes:
+                  sourceQuotation.notes,
+              },
+            });
+
+          if (
+            sourceQuotation.items.length > 0
+          ) {
+            await tx.quotationItem.createMany({
+              data:
+                sourceQuotation.items.map(
+                  (item) => ({
+                    quotationId:
+                      created.id,
+
+                    category: item.category,
+                    description:
+                      item.description,
+
+                    specification:
+                      item.specification,
+
+                    pricingType:
+                      item.pricingType,
+
+                    quantity:
+                      item.quantity,
+
+                    unit:
+                      item.unit,
+
+                    unitPrice:
+                      item.unitPrice,
+
+                    lineTotal:
+                      item.lineTotal,
+
+                    materialId:
+                      item.materialId,
+
+                    boqItemId:
+                      item.boqItemId,
+
+                    notes:
+                      item.notes,
+
+                    sortOrder:
+                      item.sortOrder,
+                  })
+                ),
+            });
+          }
+
+          if (
+            sourceQuotation.paymentMilestones
+              .length > 0
+          ) {
+            await tx.quotationPaymentMilestone.createMany({
+              data:
+                sourceQuotation.paymentMilestones.map(
+                  (milestone) => ({
+                    quotationId:
+                      created.id,
+
+                    milestoneNo:
+                      milestone.milestoneNo,
+
+                    title:
+                      milestone.title,
+
+                    percentage:
+                      milestone.percentage,
+
+                    amount:
+                      milestone.amount,
+
+                    dueTrigger:
+                      milestone.dueTrigger,
+
+                    notes:
+                      milestone.notes,
+
+                    sortOrder:
+                      milestone.sortOrder,
+                  })
+                ),
+            });
+          }
+
+          return tx.quotation.findUnique({
+            where: {
+              id: created.id,
+            },
+            include: {
+              customer: true,
+              project: true,
+
+              items: {
+                orderBy: {
+                  sortOrder: "asc",
+                },
+                include: {
+                  material: true,
+                  boqItem: true,
+                },
+              },
+
+              paymentMilestones: {
+                orderBy: {
+                  sortOrder: "asc",
+                },
+              },
+
+              originalQuotation: true,
+
+              revisions: {
+                orderBy: {
+                  revisionNo: "asc",
+                },
+              },
+            },
+          });
+        }
+      );
+
+    res.status(201).json({
+      success: true,
+      message:
+        `Quotation revision ${nextRevisionNo} created successfully`,
+      data: newRevision,
+    });
+  } catch (error) {
+    console.error(
+      "Create Quotation Revision Error:",
       error
     );
 
@@ -16272,7 +16687,7 @@ app.use((req, res) => {
 // START SERVER
 // =========================================
 
-app.listen(PORT, () => {
+if (require.main === module) app.listen(PORT, () => {
   console.log("=================================");
   console.log(
     "BE Interior Finance Manager API"
@@ -16286,4 +16701,4 @@ app.listen(PORT, () => {
   console.log("=================================");
 });
 
-
+module.exports = {app, prisma};

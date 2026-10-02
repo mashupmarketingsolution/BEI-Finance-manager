@@ -1,3 +1,4 @@
+import { milestoneAmount, quotationCategories } from "./quotation-utils";
 import { Fragment, useEffect, useState } from "react";
 
 import axios from "axios";
@@ -3292,6 +3293,8 @@ const [customerForm, setCustomerForm] = useState({
 // LEAD MANAGEMENT
 // =========================================
 
+const [leadSearch, setLeadSearch] = useState("");
+const [leadStatusFilter, setLeadStatusFilter] = useState("");
 const [leads, setLeads] = useState([]);
 const [leadPage, setLeadPage] = useState(1);
 const [leadLimit, setLeadLimit] = useState(10);
@@ -3725,7 +3728,7 @@ const openQuotationMilestoneModal = () => {
     selectedQuotation?.paymentMilestones || [];
 
   const nextMilestoneNo =
-    existingMilestones.length + 1;
+    Math.max(0, ...existingMilestones.map(m => Number(m.milestoneNo))) + 1;
 
   setQuotationMilestoneForm({
     milestoneNo: nextMilestoneNo,
@@ -4041,6 +4044,11 @@ const [
   setQuotationViewLoading,
 ] = useState(false);
 
+const [
+  creatingQuotationRevision,
+  setCreatingQuotationRevision,
+] = useState(false);
+
   // =========================================
   // MATERIAL MODAL STATE
   // =========================================
@@ -4289,12 +4297,7 @@ const handleSaveQuotation = async (e) => {
     return;
   }
 
-  if (!quotationForm.projectId) {
-    setQuotationMessage(
-      "❌ Project is required"
-    );
-    return;
-  }
+
 
   if (!quotationForm.quotationDate) {
     setQuotationMessage(
@@ -4386,7 +4389,7 @@ if (
         Number(quotationForm.customerId),
 
       projectId:
-        Number(quotationForm.projectId),
+        quotationForm.projectId ? Number(quotationForm.projectId) : null,
 
       quotationDate:
         quotationForm.quotationDate,
@@ -4514,6 +4517,98 @@ const viewQuotation = async (id) => {
     setQuotationViewLoading(false);
   }
 };
+// =========================================
+// CREATE QUOTATION REVISION
+// =========================================
+
+const [changingQuotationStatus, setChangingQuotationStatus] = useState(false);
+const changeQuotationStatus = async (status) => {
+  if (!selectedQuotation || changingQuotationStatus) return;
+  if (!window.confirm('Mark quotation ' + selectedQuotation.quotationNo + ' as ' + status + '?')) return;
+  setChangingQuotationStatus(true);
+  try {
+    await axios.patch(API_URL + '/api/quotations/' + selectedQuotation.id + '/status', {status});
+    await viewQuotation(selectedQuotation.id);
+    await loadQuotations();
+  } catch(error) { window.alert(error.response?.data?.message || 'Status update failed'); }
+  finally { setChangingQuotationStatus(false); }
+};
+
+const handleCreateQuotationRevision = async () => {
+  if (!selectedQuotation || creatingQuotationRevision) {
+    return;
+  }
+
+  if (selectedQuotation.status === "DRAFT") {
+    setQuotationMessage(
+      "DRAFT quotations can be edited directly"
+    );
+    return;
+  }
+
+  if (!selectedQuotation.isLatestRevision) {
+    setQuotationMessage(
+      "A new revision can only be created from the latest quotation revision"
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Create a new revision from ${selectedQuotation.quotationNo}?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setCreatingQuotationRevision(true);
+    setQuotationMessage("");
+
+    const response = await axios.post(
+      `${API_URL}/api/quotations/${selectedQuotation.id}/revisions`
+    );
+
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message ||
+          "Quotation revision could not be created"
+      );
+    }
+
+    const newRevision = response.data.data;
+
+    const quotationResponse = await axios.get(
+      `${API_URL}/api/quotations/${newRevision.id}`
+    );
+
+    if (quotationResponse.data.success) {
+      setSelectedQuotation(
+        quotationResponse.data.data
+      );
+    }
+
+    await loadQuotations();
+
+    setQuotationMessage(
+      `${newRevision.quotationNo} created successfully`
+    );
+  } catch (error) {
+    console.error(
+      "Create Quotation Revision Error:",
+      error
+    );
+
+    setQuotationMessage(
+      error.response?.data?.message ||
+      error.message ||
+      "Quotation revision could not be created"
+    );
+  } finally {
+    setCreatingQuotationRevision(false);
+  }
+};
+
 // =========================================
 // EDIT QUOTATION
 // =========================================
@@ -4647,6 +4742,7 @@ const openQuotationItemModal = () => {
   setEditingQuotationItemId(null);
 
   setQuotationItemForm({
+    category: "OTHER",
     description: "",
     specification: "",
     pricingType: "UNIT_PRICE",
@@ -4671,6 +4767,7 @@ const editQuotationItem = (item) => {
   setEditingQuotationItemId(item.id);
 
   setQuotationItemForm({
+    category: item.category || "OTHER",
     description:
       item.description || "",
 
@@ -4851,6 +4948,7 @@ const handleSaveQuotationItem = async () => {
     }
 
     payload = {
+      category: quotationItemForm.category || "OTHER",
       description,
       specification:
         quotationItemForm.specification.trim() ||
@@ -4886,6 +4984,7 @@ const handleSaveQuotationItem = async () => {
     }
 
     payload = {
+      category: quotationItemForm.category || "OTHER",
       description,
       specification:
         quotationItemForm.specification.trim() ||
@@ -5170,6 +5269,111 @@ const renderQuotationViewModal = () => {
             </div>
 
           </div>
+          {/* REVISION HISTORY */}
+
+          {quotation.revisionHistory?.length > 0 && (
+            <div
+              style={{
+                marginTop: "24px",
+                padding: "16px",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0 }}>
+                    Revision History
+                  </h3>
+
+                  <p
+                    style={{
+                      margin: "4px 0 0",
+                      color: "#64748b",
+                      fontSize: "13px",
+                    }}
+                  >
+                    View previous quotation revisions
+                  </p>
+                </div>
+
+                <span
+                  className={`status-badge status-${String(
+                    quotation.status || ""
+                  ).toLowerCase()}`}
+                >
+                  Rev {quotation.revisionNo}
+                  {" | "}
+                  {quotation.status}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {quotation.revisionHistory.map(
+                  (revision) => {
+                    const isCurrent =
+                      revision.id === quotation.id;
+
+                    return (
+                      <button
+                        key={revision.id}
+                        type="button"
+                        onClick={() => {
+                          if (!isCurrent) {
+                            viewQuotation(revision.id);
+                          }
+                        }}
+                        disabled={isCurrent}
+                        title={
+                          isCurrent
+                            ? "Current revision"
+                            : `Open ${revision.quotationNo}`
+                        }
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          border: isCurrent
+                            ? "2px solid #2563eb"
+                            : "1px solid #cbd5e1",
+                          background: isCurrent
+                            ? "#eff6ff"
+                            : "#ffffff",
+                          cursor: isCurrent
+                            ? "default"
+                            : "pointer",
+                          fontWeight: isCurrent
+                            ? 700
+                            : 500,
+                        }}
+                      >
+                        Rev {revision.revisionNo}
+                        {" - "}
+                        {revision.quotationNo}
+                        {" - "}
+                        {revision.status}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+          )}
+
         {/* ITEMS */}
 
         <div
@@ -5268,7 +5472,7 @@ const renderQuotationViewModal = () => {
 
                           <td>
                             <strong>
-                              {item.description}
+                              {item.description}<small style={{display:"block",color:"#64748b"}}>{item.category || "OTHER"}</small>
                             </strong>
 
                             {item.notes && (
@@ -5851,6 +6055,29 @@ const renderQuotationViewModal = () => {
         {/* FOOTER */}
 
         <div className="modal-actions">
+          {quotation.isLatestRevision && ['DRAFT','SENT'].includes(quotation.status) && (quotation.status === 'DRAFT' ? ['SENT','ACCEPTED','CANCELLED'] : ['ACCEPTED','REJECTED','EXPIRED','CANCELLED']).map(status => <button key={status} type="button" className="add-button" disabled={changingQuotationStatus} onClick={()=>changeQuotationStatus(status)}>{status === 'SENT' ? 'Mark Sent' : status === 'ACCEPTED' ? 'Accept' : status === 'REJECTED' ? 'Reject' : status === 'EXPIRED' ? 'Mark Expired' : 'Cancel Quotation'}</button>)}
+          {quotation.isLatestRevision &&
+            quotation.status !== "DRAFT" && (
+              <button
+                type="button"
+                className="add-button"
+                onClick={
+                  handleCreateQuotationRevision
+                }
+                disabled={
+                  creatingQuotationRevision
+                }
+              >
+                {creatingQuotationRevision
+                  ? "Creating Revision..."
+                  : `Create Rev ${
+                      Number(
+                        quotation.revisionNo || 1
+                      ) + 1
+                    }`}
+              </button>
+            )}
+
 
           <button
             type="button"
@@ -5954,6 +6181,7 @@ const renderQuotationItemModal = () => {
 
             {/* DESCRIPTION */}
 
+            <div className="boq-form-group"><label>Category</label><select value={quotationItemForm.category || 'OTHER'} onChange={e=>setQuotationItemForm(prev=>({...prev,category:e.target.value}))}>{quotationCategories.map(category=><option key={category} value={category}>{category}</option>)}</select></div>
             <div className="boq-form-group full-width">
               <label>
                 Description *
@@ -6422,8 +6650,8 @@ const renderQuotationMilestoneModal = () => {
                   setQuotationMilestoneForm(
                     (prev) => ({
                       ...prev,
-                      percentage:
-                        e.target.value,
+                      percentage: e.target.value,
+                      amount: milestoneAmount(selectedQuotation?.grandTotal, e.target.value),
                     })
                   )
                 }
@@ -9142,6 +9370,8 @@ const loadLeads = async (
         params: {
           page,
           limit,
+          search: leadSearch,
+          status: leadStatusFilter,
         },
       }
     );
@@ -9288,6 +9518,7 @@ const handleSaveCustomer = async (e) => {
       customerType: customerForm.customerType,
       status: customerForm.status,
       notes: customerForm.notes.trim(),
+      source: customerForm.source || "OTHER",
     };
 
     let response;
@@ -9352,6 +9583,7 @@ const handleEditCustomer = (customer) => {
   setEditingCustomerId(customer.id);
 
   setCustomerForm({
+    source: customer.source || "OTHER",
     name: customer.name || "",
     phone: customer.phone || "",
     email: customer.email || "",
@@ -11639,6 +11871,13 @@ const renderLeads = () => {
           </label>
         </div>
 
+        <form className="filter-bar" onSubmit={e => {e.preventDefault(); setLeadPage(1); loadLeads(1, leadLimit);}} style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
+          <input aria-label="Search leads" placeholder="Search name, phone, email or company" value={leadSearch} onChange={e=>setLeadSearch(e.target.value)} />
+          <select aria-label="Lead pipeline stage" value={leadStatusFilter} onChange={e=>setLeadStatusFilter(e.target.value)}>
+            <option value="">All stages</option>
+            {['NEW','CONTACTED','MEETING','SITE_VISIT','QUOTATION','NEGOTIATION','WON','LOST','QUALIFIED','CONVERTED'].map(status=><option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}
+          </select><button className="btn btn-primary" type="submit">Apply filters</button>
+        </form>
         {leads.length === 0 ? (
           <div className="empty-state">
             <UserPlus size={50} />
@@ -12126,6 +12365,7 @@ const renderLeadModal = () => {
                   Contacted
                 </option>
 
+                {["MEETING", "SITE_VISIT", "QUOTATION", "NEGOTIATION", "WON"].map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
                 <option value="QUALIFIED">
                   Qualified
                 </option>
@@ -15723,7 +15963,7 @@ const quotationGrandTotal =
 
             <div className="form-group">
               <label>
-                Project *
+                Project (optional before acceptance)
               </label>
 
               <select
@@ -15742,7 +15982,6 @@ const quotationGrandTotal =
                 disabled={
                   !quotationForm.customerId
                 }
-                required
               >
                 <option value="">
                   {!quotationForm.customerId
@@ -31132,6 +31371,7 @@ if (!currentUser) {
 
         {/* CUSTOMER TYPE */}
 
+        <div className="form-group"><label>Lead Source</label><select name="source" value={customerForm.source || 'OTHER'} onChange={handleCustomerChange}>{['FACEBOOK','WEBSITE','REFERRAL','PHONE','WALK_IN','OTHER'].map(source=><option key={source} value={source}>{source.replaceAll('_',' ')}</option>)}</select></div>
         <div className="form-group">
 
           <label>
@@ -31769,6 +32009,27 @@ if (!currentUser) {
           </div>
 
 
+          <section style={{marginTop:24}}>
+            <h3>Client CRM &amp; Financial History</h3>
+            <p>Lead source: {selectedCustomer.source || 'OTHER'}</p>
+            <p>Contract value: {Number(selectedCustomer.financials?.contractValue || 0).toLocaleString()} · Project receipts: {Number(selectedCustomer.financials?.received || 0).toLocaleString()} · Outstanding: {Number(selectedCustomer.financials?.outstanding || 0).toLocaleString()} · Credit: {Number(selectedCustomer.financials?.credit || 0).toLocaleString()}</p>
+            <p>Outstanding is calculated per project from contract value less recorded income. Invoices are not yet available.</p>
+            <h4>Quotations</h4>
+            <div className="table-wrapper"><table><thead><tr><th>Quotation</th><th>Status</th><th>Total</th></tr></thead><tbody>
+            {(selectedCustomer.quotations || []).map(q=><tr key={q.id}><td>{q.quotationNo}</td><td>{q.status}</td><td>{Number(q.grandTotal).toLocaleString()}{q.status === 'ACCEPTED' && !q.projectId && <button type="button" className="btn btn-primary" onClick={async () => {
+              const name = window.prompt('Name for the project created from this accepted quotation:', selectedCustomer.name + ' - ' + q.quotationNo);
+              if (!name?.trim()) return;
+              try { await axios.post(API_URL + '/api/quotations/' + q.id + '/project', {name}); const response = await axios.get(API_URL + '/api/customers/' + selectedCustomer.id); setSelectedCustomer(response.data.data); }
+              catch(error) { window.alert(error.response?.data?.message || 'Project creation failed'); }
+            }}>Create Project</button>}</td></tr>)}
+            {!selectedCustomer.quotations?.length && <tr><td colSpan={3}>No quotations linked</td></tr>}
+            </tbody></table></div>
+            <h4>Project receipt history</h4>
+            <div className="table-wrapper"><table><thead><tr><th>Date</th><th>Project</th><th>Amount</th><th>Method</th></tr></thead><tbody>
+            {(selectedCustomer.financials?.payments || []).map(p=><tr key={p.id}><td>{new Date(p.transactionDate).toLocaleDateString()}</td><td>{p.projectName}</td><td>{Number(p.amount).toLocaleString()}</td><td>{p.paymentMethod}</td></tr>)}
+            {!selectedCustomer.financials?.payments?.length && <tr><td colSpan={4}>No project receipts recorded</td></tr>}
+            </tbody></table></div>
+          </section>
           {/* PROJECTS */}
 
           <div
