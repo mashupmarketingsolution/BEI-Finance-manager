@@ -182,6 +182,7 @@ enum TransactionSource {
 }
 
 model Transaction {
+  purchasePayment PurchasePayment?
   invoicePayment InvoicePayment?
   id              Int               @id @default(autoincrement())
   transactionDate DateTime
@@ -256,6 +257,9 @@ model Material {
 }
 
 model Purchase {
+  vendorBillNo String? @db.VarChar(100)
+  dueDate DateTime? @db.Date
+  @@unique([vendorId, vendorBillNo])
   id            Int                   @id @default(autoincrement())
   purchaseNo    String                @unique @db.VarChar(50)
   purchaseDate  DateTime
@@ -285,6 +289,8 @@ model Purchase {
 }
 
 model PurchasePayment {
+  transactionId Int? @unique
+  transaction Transaction? @relation(fields:[transactionId],references:[id],onDelete:Restrict)
   id            Int           @id @default(autoincrement())
   purchaseId    Int
   paymentDate   DateTime

@@ -1,4 +1,5 @@
 import Billing from "./Billing";
+import Payables from "./Payables";
 import { milestoneAmount, quotationCategories } from "./quotation-utils";
 import { Fragment, useEffect, useState } from "react";
 
@@ -27591,6 +27592,7 @@ if (!currentUser) {
             Customers
           </a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage("billing");}} className={activePage === "billing" ? "active" : ""}><Wallet size={18} />Client Billing</a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage("payables");}} className={activePage === "payables" ? "active" : ""}><Building2 size={18} />Vendor Payables</a>
           <a
             href="#"
             className={
@@ -28707,6 +28709,7 @@ if (!currentUser) {
         {activePage === "leads" && renderLeads()}
         {activePage === "customers" && renderCustomers()}
         {activePage === "billing" && <Billing apiUrl={API_URL} />}
+        {activePage === "payables" && <Payables apiUrl={API_URL} onPurchases={()=>setActivePage("purchases")} />}
         {activePage === "projects" && renderProjects()}
         {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}
