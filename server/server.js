@@ -366,6 +366,7 @@ app.use(cors());
 app.use(express.json());
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
+require("./project-profit").registerProjectProfit(app, prisma, authMiddleware);
 app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
 // =========================================
 // AUTHENTICATION ROUTES
