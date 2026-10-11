@@ -106,6 +106,8 @@ enum LeadStatus {
 }
 
 model Project {
+  payrollAccruals PayrollAccrual[]
+  overheadAllocations OverheadAllocation[]
   invoices         ClientInvoice[]
   id               Int               @id @default(autoincrement())
   name             String            @unique @db.VarChar(150)
@@ -130,6 +132,7 @@ model Project {
 }
 
 model Worker {
+  payrollAccruals PayrollAccrual[]
   id           Int           @id @default(autoincrement())
   name         String        @db.VarChar(150)
   phone        String?       @db.VarChar(30)
@@ -182,6 +185,8 @@ enum TransactionSource {
 }
 
 model Transaction {
+  payrollPayment PayrollPayment?
+  overheadAllocations OverheadAllocation[]
   purchasePayment PurchasePayment?
   invoicePayment InvoicePayment?
   id              Int               @id @default(autoincrement())
@@ -210,6 +215,41 @@ model Transaction {
   @@index([vendorId], map: "transactions_vendorId_fkey")
   @@index([workerId], map: "transactions_workerId_fkey")
   @@map("transactions")
+}
+
+model PayrollAccrual {
+  id Int @id @default(autoincrement())
+  projectId Int
+  workerId Int
+  reference String @unique @db.VarChar(100)
+  description String @db.VarChar(500)
+  earnedDate DateTime
+  amount Decimal @db.Decimal(15, 2)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  payments PayrollPayment[]
+  createdAt DateTime @default(now())
+  @@map("payroll_accruals")
+}
+
+model PayrollPayment {
+  id Int @id @default(autoincrement())
+  accrualId Int
+  transactionId Int @unique
+  accrual PayrollAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  @@map("payroll_payments")
+}
+
+model OverheadAllocation {
+  id Int @id @default(autoincrement())
+  transactionId Int
+  projectId Int
+  amount Decimal @db.Decimal(15, 2)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  @@unique([transactionId, projectId])
+  @@map("overhead_allocations")
 }
 
 model MaterialCategory {

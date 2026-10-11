@@ -14,8 +14,8 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 8 | Client Billing / Receivables | Core invoices and receipts tested; PDF and receipt splitting remain |
 | 9 | Vendor Payables | Core statements/payments/reversal tested; unlinked historical payments cannot be automatically reversed |
 | 10 | Full Accounting | Not implemented: chart of accounts, balanced journals, ledger, trial balance, balance sheet and accounting cash flow |
-| 11 | Project Job Costing | Purchase-based report, cost groups, selectable BOQ variance and profit margin implemented; consumption valuation, accrued payroll and overhead allocation remain |
-| 12 | Worker / Labour Management | Basic worker master exists; attendance, payroll, advances and accrued dues remain |
+| 11 | Project Job Costing | Purchase/consumption bases, weighted stock valuation with incomplete-history warnings, accrued wages and manual overhead allocation implemented; BOQ purchase variance and margin available |
+| 12 | Worker / Labour Management | Worker master and basic project wage accrual/partial payment/reversal exist; attendance, advances and full payroll workflow remain |
 | 13 | Site Management | Full workflow remains |
 | 14 | Documents / File Management | Full workflow remains |
 | 15 | Approval System | Full role-based multi-step approval workflow remains |

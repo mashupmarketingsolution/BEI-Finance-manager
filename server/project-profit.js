@@ -40,29 +40,44 @@ function costingDetails(project, expenses) {
     purchaseAdjustments:purchases.reduce((s,p)=>s+toCents(p.grandTotal)-sum(p.items||[],'total'),0)/100};
 }
 
-function projectProfit(project) {
+function projectProfit(project, consumption) {
   const transactions = project.transactions || [];
   const purchases = project.purchases || [];
   // Purchases are the cost source; their accounting mirrors and settlements are excluded.
-  const expenses = transactions.filter(t => t.type === 'EXPENSE' && !['PURCHASE', 'PURCHASE_PAYMENT'].includes(t.source));
+  const cashExpenses = transactions.filter(t => t.type === 'EXPENSE' && !['PURCHASE', 'PURCHASE_PAYMENT'].includes(t.source));
+  const expenses = cashExpenses.filter(t => !t.payrollPayment);
+  const payroll = sum(project.payrollAccruals || []);
+  const payrollPaid = (project.payrollAccruals || []).reduce((s,a)=>s+(a.payments||[]).reduce((n,p)=>n+toCents(p.transaction.amount),0),0);
+  const overhead = sum(project.overheadAllocations || []);
   const purchaseCost = sum(purchases, 'grandTotal');
   const labourCost = sum(expenses.filter(t => t.workerId));
   const otherCost = sum(expenses.filter(t => !t.workerId));
   const receipts = sum(transactions.filter(t => t.type === 'INCOME'));
   const purchasePaid = purchases.reduce((total, p) => total + sum(p.payments || []), 0);
   const vendorDue = purchases.reduce((total, p) => total + Math.max(0, toCents(p.grandTotal) - sum(p.payments || [])), 0);
-  const cost = purchaseCost + labourCost + otherCost;
+  const materialBasis = consumption ? toCents(consumption.cost) : purchaseCost;
+  const cost = materialBasis + labourCost + otherCost + payroll + overhead;
   const contract = toCents(project.contractValue);
-  const cashOut = purchasePaid + labourCost + otherCost;
+  const cashOut = purchasePaid + sum(cashExpenses) + overhead;
   const values = {contract, receipts, customerDue: Math.max(0, contract - receipts), customerCredit: Math.max(0, receipts - contract), purchaseCost, labourCost, otherCost, cost, projectedProfit: contract - cost, purchasePaid, vendorDue, cashOut, cashBalance: receipts - cashOut};
-  return {id: project.id, name: project.name, status: project.status, customer: project.customer?.name || '', profitMargin:contract>0?Math.round((contract-cost)/contract*10000)/100:null, ...Object.fromEntries(Object.entries(values).map(([key,value]) => [key,value / 100])),...costingDetails(project,expenses)};
+  const details=costingDetails(project,expenses);
+  if(consumption){details.breakdown.materials += (materialBasis-purchaseCost+sum(purchases,'transportCost'))/100;details.breakdown.transport -= sum(purchases,'transportCost')/100;}
+  details.breakdown.labour += payroll/100;
+  details.breakdown.overhead = overhead/100;
+  return {id: project.id, name: project.name, status: project.status, customer: project.customer?.name || '', profitMargin:contract>0?Math.round((contract-cost)/contract*10000)/100:null, ...Object.fromEntries(Object.entries(values).map(([key,value]) => [key,value / 100])),...details,payroll:payroll/100,unpaidPayroll:(payroll-payrollPaid)/100,overhead:overhead/100,consumption:consumption||null};
 }
 
 function registerProjectProfit(app, prisma, auth) {
   app.get('/api/reports/project-profit', auth, async (req, res) => {
     try {
-      const projects = await prisma.project.findMany({include: {customer: true, transactions: {include:{category:true}}, purchases: {include: {payments: true,items:{include:{material:{select:{name:true}}}}}},boqs:{include:{items:{include:{material:{select:{name:true}}}}},orderBy:{id:'desc'}}}, orderBy: {name: 'asc'}});
-      res.json({success: true, data: projects.map(projectProfit)});
+      const projects = await prisma.project.findMany({include: {customer: true,payrollAccruals:{include:{payments:{include:{transaction:true}}}},overheadAllocations:true, transactions: {include:{category:true,payrollPayment:true}}, purchases: {include: {payments: true,items:{include:{material:{select:{name:true}}}}}},boqs:{include:{items:{include:{material:{select:{name:true}}}}},orderBy:{id:'desc'}}}, orderBy: {name: 'asc'}});
+      let consumption;
+      if(req.query?.basis==='consumption'){
+        const movements=await prisma.stockMovement.findMany({include:{material:{select:{name:true}}}});
+        const purchases=await prisma.purchase.findMany({include:{items:true}});
+        consumption=require('./consumption-cost').consumptionCosts(movements,purchases);
+      }
+      res.json({success: true, data: projects.map(p=>projectProfit(p,consumption?(consumption.get(p.id)||{cost:0,incomplete:false,items:[]}):undefined))});
     } catch (error) {
       console.error('Project profit report:', error);
       res.status(500).json({success: false, message: 'Unable to load project profit report'});

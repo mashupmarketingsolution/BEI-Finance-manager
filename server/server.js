@@ -373,6 +373,7 @@ require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
 require("./project-profit").registerProjectProfit(app, prisma, authMiddleware);
+require("./job-costing").registerJobCosting(app, prisma);
 app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
 // =========================================
 // AUTHENTICATION ROUTES

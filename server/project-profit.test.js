@@ -30,7 +30,7 @@ test('job costing reconciles groups, separates BOQs, units and bill adjustments'
     {type:'EXPENSE',amount:15,category:{name:'Materials'}}
   ],boqs:[{id:1,status:'APPROVED',items:[{...item(1,'pcs',0,3),estimatedTotal:250},{...item(1,'box',0,1),estimatedTotal:20}]},{id:2,status:'DRAFT',items:[{...item(1,'pcs',0,9),estimatedTotal:900}]},{id:3,status:'CANCELLED',items:[]}]});
   assert.equal(report.cost,455);assert.equal(report.profitMargin,54.5);
-  assert.deepEqual(report.breakdown,{materials:295,transport:30,design:30,labour:40,vendor:50,other:10});
+  assert.deepEqual(report.breakdown,{materials:295,transport:30,design:30,labour:40,vendor:50,other:10,overhead:0});
   assert.equal(Object.values(report.breakdown).reduce((a,b)=>a+b,0),report.cost);
   assert.equal(report.purchaseLineCost,300);assert.equal(report.purchaseAdjustments,-10);
   assert.equal(report.boqs.length,2);assert.equal(report.boqs[0].estimatedCost,270);assert.equal(report.boqs[1].estimatedCost,900);
