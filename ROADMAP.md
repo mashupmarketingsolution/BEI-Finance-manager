@@ -6,7 +6,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 |---|---|---|
 | 1 | Materials Master | Core implemented; photo and full source checklist still need completion/verification |
 | 2 | Vendor Price Comparison | Vendor prices and lead times implemented; complete recommendation/history scope needs verification |
-| 3 | BOQ / Estimation | Estimation implemented; actual-cost/variance comparison remains |
+| 3 | BOQ / Estimation | Estimation and selected-BOQ purchase-cost/variance comparison implemented; consumption valuation remains outside scope |
 | 4 | Purchase Request → RFQ → PO | Core workflow exists; receiving integrity fixes included in this review |
 | 5 | Inventory / Stock | Receive/usage/return/damage/adjustment exist; reservation and transfer remain |
 | 6 | Client / CRM | Core pipeline/conversion/customer history tested; follow-up/activity workflow remains |
@@ -14,7 +14,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 8 | Client Billing / Receivables | Core invoices and receipts tested; PDF and receipt splitting remain |
 | 9 | Vendor Payables | Core statements/payments/reversal tested; unlinked historical payments cannot be automatically reversed |
 | 10 | Full Accounting | Not implemented: chart of accounts, balanced journals, ledger, trial balance, balance sheet and accounting cash flow |
-| 11 | Project Job Costing | Partial: lifetime projected profit and cash report; detailed allocations, consumption valuation and margin remain |
+| 11 | Project Job Costing | Purchase-based report, cost groups, selectable BOQ variance and profit margin implemented; consumption valuation, accrued payroll and overhead allocation remain |
 | 12 | Worker / Labour Management | Basic worker master exists; attendance, payroll, advances and accrued dues remain |
 | 13 | Site Management | Full workflow remains |
 | 14 | Documents / File Management | Full workflow remains |
