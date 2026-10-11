@@ -28035,7 +28035,7 @@ if (!currentUser) {
                 <div className="kpi-content">
 
                   <span className="stat-title">
-                    Current Balance
+                    Cash Balance
                   </span>
 
                   <h2>
@@ -28046,7 +28046,7 @@ if (!currentUser) {
                   </h2>
 
                   <small className="kpi-subtitle">
-                    Income − Expenses
+                    Received − Cash Paid
                   </small>
 
                 </div>
@@ -28116,12 +28116,12 @@ if (!currentUser) {
                     <strong>
                       ৳{" "}
                       {formatMoney(
-                        dashboardData.totalExpenses
+                        dashboardData.totalCashPaid
                       )}
                     </strong>
 
                     <small>
-                      Total Expenses
+                      Cash Paid
                     </small>
 
                   </div>
@@ -28141,7 +28141,7 @@ if (!currentUser) {
                     </strong>
 
                     <small>
-                      Income − Expenses
+                      Received − Cash Paid
                     </small>
 
                   </div>

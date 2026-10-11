@@ -1,4 +1,6 @@
-# Project profit and loss report
+# Phase 11 (partial): Project job costing / profit report
+
+Numbering corrected to the original roadmap. This report was previously mislabeled Phase 10. Phase 10 is Full Accounting and remains unimplemented.
 
 Open **Project Profit & Loss**. Search by project/customer; the summary follows the search. Details break down purchases, worker-linked expenses, other expenses, vendor payments and balances. Values cover the full lifetime of each project.
 

@@ -364,6 +364,12 @@ async function refreshQuotationTotals(
 
 app.use(cors());
 app.use(express.json());
+// All business endpoints require an active login.
+app.use("/api", (req,res,next) => {
+  if ((req.method === "POST" && req.path === "/auth/login") || (req.method === "GET" && req.path === "/health")) return next();
+  return authMiddleware(req,res,next);
+});
+require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
 require("./project-profit").registerProjectProfit(app, prisma, authMiddleware);
@@ -471,6 +477,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
 // =========================================
 
 async function authMiddleware(req, res, next) {
+  if (req.user) return next();
   try {
     const authHeader = req.headers.authorization;
 
@@ -1000,7 +1007,7 @@ app.put("/api/projects/:id", async (req, res) => {
         message: "Project not found",
       });
     }
-      let projectCustomerId = null;
+      let projectCustomerId = customerId === undefined ? existingProject.customerId : null;
 
       if (
         customerId !== undefined &&
@@ -2387,6 +2394,10 @@ const customersWithoutProjects =
       expenseResult._sum.amount || 0
     );
 
+    const cashExpenses = await prisma.transaction.aggregate({where:{type:"EXPENSE",source:{notIn:["PURCHASE","PURCHASE_PAYMENT"]}},_sum:{amount:true}});
+    const vendorPayments = await prisma.purchasePayment.aggregate({_sum:{amount:true}});
+    const totalCashPaid = Number(cashExpenses._sum.amount || 0) + Number(vendorPayments._sum.amount || 0);
+
     const recentProjects = await prisma.project.findMany({
       orderBy: {
         createdAt: "desc",
@@ -2400,7 +2411,8 @@ const customersWithoutProjects =
         totalProjects,
         totalIncome,
         totalExpenses,
-        currentBalance: totalIncome - totalExpenses,
+        currentBalance: totalIncome - totalCashPaid,
+        totalCashPaid,
 
         totalCustomers,
         activeCustomers,
@@ -12958,160 +12970,6 @@ app.get(
 // RECEIVE PURCHASE MATERIAL
 // =====================================================
 
-app.post("/api/purchases/:id/receive", async (req, res) => {
-  try {
-    const purchaseId = Number(req.params.id);
-
-    if (!purchaseId || purchaseId <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid purchase ID",
-      });
-    }
-
-    const { receiveDate, items } = req.body;
-
-    if (!receiveDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Receive date is required",
-      });
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one receive item is required",
-      });
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      const purchase = await tx.purchase.findUnique({
-        where: {
-          id: purchaseId,
-        },
-        include: {
-          items: true,
-        },
-      });
-
-      if (!purchase) {
-        throw new Error("Purchase not found");
-      }
-
-      const purchaseItemsById = new Map(
-        purchase.items.map((item) => [item.id, item])
-      );
-
-      const receiveResults = [];
-
-      for (const receiveItem of items) {
-        const purchaseItemId = Number(receiveItem.purchaseItemId);
-        const receiveQuantity = Number(receiveItem.quantity);
-
-        if (!purchaseItemId || purchaseItemId <= 0) {
-          throw new Error("Invalid purchase item ID");
-        }
-
-        if (
-          !Number.isFinite(receiveQuantity) ||
-          receiveQuantity <= 0
-        ) {
-          throw new Error(
-            `Receive quantity must be greater than 0 for PurchaseItem ${purchaseItemId}`
-          );
-        }
-
-        const purchaseItem =
-          purchaseItemsById.get(purchaseItemId);
-
-        if (!purchaseItem) {
-          throw new Error(
-            `PurchaseItem ${purchaseItemId} does not belong to Purchase ${purchaseId}`
-          );
-        }
-
-        const orderedQuantity =
-          Number(purchaseItem.quantity) || 0;
-
-        const alreadyReceived =
-          Number(purchaseItem.receivedQuantity) || 0;
-
-        const newReceivedQuantity =
-          alreadyReceived + receiveQuantity;
-
-        if (newReceivedQuantity > orderedQuantity) {
-          throw new Error(
-            `Cannot receive ${receiveQuantity} for PurchaseItem ${purchaseItemId}. ` +
-              `Ordered: ${orderedQuantity}, already received: ${alreadyReceived}, ` +
-              `remaining: ${orderedQuantity - alreadyReceived}`
-          );
-        }
-
-        const updatedPurchaseItem =
-          await tx.purchaseItem.update({
-            where: {
-              id: purchaseItemId,
-            },
-            data: {
-              receivedQuantity: newReceivedQuantity,
-            },
-          });
-
-        const stockMovement =
-          await tx.stockMovement.create({
-            data: {
-              materialId: purchaseItem.materialId,
-              movementType: "PURCHASE",
-              quantity: receiveQuantity,
-              unit: purchaseItem.unit,
-              referenceType: "PURCHASE_RECEIVE",
-              referenceId: purchase.id,
-              projectId: purchase.projectId,
-              unitCost: purchaseItem.unitPrice,
-              notes:
-                receiveItem.notes?.trim() ||
-                `Material Receive - ${purchase.purchaseNo}`,
-              movementDate: new Date(receiveDate),
-            },
-          });
-
-        receiveResults.push({
-          purchaseItem: updatedPurchaseItem,
-          stockMovement,
-        });
-      }
-
-      return {
-        purchaseId: purchase.id,
-        purchaseNo: purchase.purchaseNo,
-        receiveDate: new Date(receiveDate),
-        items: receiveResults,
-      };
-    });
-
-    res.json({
-      success: true,
-      message: "Purchase material received successfully",
-      data: result,
-    });
-  } catch (error) {
-    console.error(
-      "Receive Purchase Material Error:",
-      error
-    );
-
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-// =====================================================
-// GET PROJECT MATERIAL RETURN AVAILABILITY
-// =====================================================
-
 app.get(
   "/api/stock-movements/return-availability",
   async (req, res) => {
@@ -13381,567 +13239,6 @@ app.get("/api/materials/:id/stock", async (req, res) => {
 // CREATE STOCK OUT / PROJECT USAGE
 // =====================================================
 
-app.post("/api/stock-movements/usage", async (req, res) => {
-  try {
-    const {
-      materialId,
-      quantity,
-      projectId,
-      unit,
-      notes,
-    } = req.body;
-
-    const materialIdNumber = Number(materialId);
-    const quantityNumber = Number(quantity);
-
-    if (!materialIdNumber || materialIdNumber <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Material is required",
-      });
-    }
-
-    if (
-      Number.isNaN(quantityNumber) ||
-      quantityNumber <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Quantity must be greater than 0",
-      });
-    }
-
-    // Verify material
-    const material = await prisma.material.findUnique({
-      where: {
-        id: materialIdNumber,
-      },
-    });
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: "Material not found",
-      });
-    }
-
-    // Calculate current stock before usage
-    const movements = await prisma.stockMovement.findMany({
-      where: {
-        materialId: materialIdNumber,
-      },
-    });
-
-       const { currentStock } =
-  calculateMaterialStock(movements);
-
-    // Prevent negative stock
-    if (quantityNumber > currentStock) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient stock. Available stock: ${currentStock} ${material.unit}`,
-      });
-    }
-
-// Project is mandatory for stock usage
-const projectIdNumber = Number(projectId);
-
-if (!projectIdNumber || projectIdNumber <= 0) {
-  return res.status(400).json({
-    success: false,
-    message: "Project is required",
-  });
-}
-
-// Verify project
-const project = await prisma.project.findUnique({
-  where: {
-    id: projectIdNumber,
-  },
-});
-
-if (!project) {
-  return res.status(400).json({
-    success: false,
-    message: "Project not found",
-  });
-}
-
-
-
-
-    const movement =
-      await prisma.stockMovement.create({
-        data: {
-          materialId: materialIdNumber,
-
-          movementType:
-            "PROJECT_USAGE",
-
-          quantity:
-            quantityNumber,
-
-          unit:
-            unit?.trim() || material.unit,
-
-          referenceType:
-            "PROJECT_USAGE",
-
-         projectId: projectIdNumber,
-
-          notes:
-            notes?.trim() || null,
-        },
-
-        include: {
-          material: true,
-          project: true,
-        },
-      });
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Stock usage recorded successfully",
-      data: movement,
-    });
-
-  } catch (error) {
-    console.error(
-      "Create Stock Usage Error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-// =====================================================
-// CREATE STOCK RETURN / PROJECT RETURN
-// =====================================================
-
-app.post("/api/stock-movements/return", async (req, res) => {
-  try {
-    const {
-      materialId,
-      quantity,
-      unit,
-      projectId,
-      notes,
-    } = req.body;
-
-    const materialIdNumber = Number(materialId);
-    const quantityNumber = Number(quantity);
-    const projectIdNumber = Number(projectId);
-
-    // -----------------------------------------
-    // BASIC VALIDATION
-    // -----------------------------------------
-
-    if (!materialIdNumber || materialIdNumber <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Material is required",
-      });
-    }
-
-    if (
-      !Number.isFinite(quantityNumber) ||
-      quantityNumber <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Quantity must be greater than 0",
-      });
-    }
-
-    if (!projectIdNumber || projectIdNumber <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Project is required for material return",
-      });
-    }
-
-    // -----------------------------------------
-    // VERIFY MATERIAL
-    // -----------------------------------------
-
-    const material = await prisma.material.findUnique({
-      where: {
-        id: materialIdNumber,
-      },
-    });
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: "Material not found",
-      });
-    }
-
-    // -----------------------------------------
-    // VERIFY PROJECT
-    // -----------------------------------------
-
-    const project = await prisma.project.findUnique({
-      where: {
-        id: projectIdNumber,
-      },
-    });
-
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: "Project not found",
-      });
-    }
-// -----------------------------------------
-// GET PROJECT MATERIAL MOVEMENTS
-// -----------------------------------------
-
-const projectMovements =
-  await prisma.stockMovement.findMany({
-    where: {
-      materialId: materialIdNumber,
-      projectId: projectIdNumber,
-      movementType: {
-        in: ["PROJECT_USAGE", "RETURN"],
-      },
-    },
-    select: {
-      movementType: true,
-      quantity: true,
-    },
-  });
-
-// -----------------------------------------
-// CALCULATE PROJECT RETURN AVAILABILITY
-// -----------------------------------------
-
-const {
-  totalUsed,
-  totalReturned,
-  availableReturn,
-} =
-  calculateProjectReturnAvailability(
-    projectMovements
-  );
-
-
-    // -----------------------------------------
-    // PREVENT INVALID RETURN
-    // -----------------------------------------
-
-    if (quantityNumber > availableReturn) {
-      return res.status(400).json({
-        success: false,
-        message:
-          `Return quantity cannot exceed available project material. ` +
-          `Available return: ${availableReturn} ${material.unit}`,
-      });
-    }
-
-    // -----------------------------------------
-    // CREATE PROJECT RETURN
-    // -----------------------------------------
-
-    const movement =
-      await prisma.stockMovement.create({
-        data: {
-          materialId: materialIdNumber,
-
-          movementType: "RETURN",
-
-          quantity: quantityNumber,
-
-          unit:
-            unit?.trim() || material.unit,
-
-          referenceType: "STOCK_RETURN",
-
-          projectId: projectIdNumber,
-
-          notes:
-            notes?.trim() || null,
-        },
-
-        include: {
-          material: true,
-          project: true,
-        },
-      });
-
-    // -----------------------------------------
-    // RESPONSE
-    // -----------------------------------------
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Project material return recorded successfully",
-
-      data: movement,
-
-      summary: {
-        totalUsed,
-        totalReturned:
-          totalReturned + quantityNumber,
-        availableReturn:
-          availableReturn - quantityNumber,
-      },
-    });
-
-  } catch (error) {
-    console.error(
-      "Create Project Return Error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-// =====================================================
-// CREATE STOCK DAMAGE
-// =====================================================
-
-app.post("/api/stock-movements/damage", async (req, res) => {
-  try {
-    const {
-      materialId,
-      quantity,
-      unit,
-      notes,
-    } = req.body;
-
-    const materialIdNumber = Number(materialId);
-    const quantityNumber = Number(quantity);
-
-    if (!materialIdNumber || materialIdNumber <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Material is required",
-      });
-    }
-
-    if (
-      Number.isNaN(quantityNumber) ||
-      quantityNumber <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Quantity must be greater than 0",
-      });
-    }
-
-    const material =
-      await prisma.material.findUnique({
-        where: {
-          id: materialIdNumber,
-        },
-      });
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: "Material not found",
-      });
-    }
-
-    // Check current stock
-    const stockMovements =
-      await prisma.stockMovement.findMany({
-        where: {
-          materialId: materialIdNumber,
-        },
-        select: {
-          movementType: true,
-          quantity: true,
-        },
-      });
-
-         const { currentStock } =
-      calculateMaterialStock(stockMovements);
-
-    if (quantityNumber > currentStock) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient stock. Available stock: ${currentStock}`,
-      });
-    }
-
-    const movement =
-      await prisma.stockMovement.create({
-        data: {
-          materialId: materialIdNumber,
-
-          movementType: "DAMAGE",
-
-          quantity: quantityNumber,
-
-          unit:
-            unit?.trim() || material.unit,
-
-          referenceType: "STOCK_DAMAGE",
-
-          notes:
-            notes?.trim() || null,
-        },
-
-        include: {
-          material: true,
-        },
-      });
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Stock damage recorded successfully",
-      data: movement,
-    });
-
-  } catch (error) {
-    console.error(
-      "Create Stock Damage Error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-
-// =====================================================
-// CREATE STOCK ADJUSTMENT
-// =====================================================
-
-app.post("/api/stock-movements/adjustment", async (req, res) => {
-  try {
-    const {
-      materialId,
-      quantity,
-      unit,
-      notes,
-    } = req.body;
-
-    const materialIdNumber = Number(materialId);
-    const quantityNumber = Number(quantity);
-
-    if (!materialIdNumber || materialIdNumber <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Material is required",
-      });
-    }
-
-    if (
-      Number.isNaN(quantityNumber) ||
-      quantityNumber === 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Adjustment quantity cannot be 0",
-      });
-    }
-
-    const material =
-      await prisma.material.findUnique({
-        where: {
-          id: materialIdNumber,
-        },
-      });
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: "Material not found",
-      });
-    }
-
-    // Calculate current stock
-    const stockMovements =
-      await prisma.stockMovement.findMany({
-        where: {
-          materialId: materialIdNumber,
-        },
-        select: {
-          movementType: true,
-          quantity: true,
-        },
-      });
-    const { currentStock } =
-      calculateMaterialStock(stockMovements);
-    // Negative adjustment cannot exceed stock
-    if (
-      quantityNumber < 0 &&
-      Math.abs(quantityNumber) > currentStock
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient stock. Available stock: ${currentStock}`,
-      });
-    }
-
-    const movement =
-      await prisma.stockMovement.create({
-        data: {
-          materialId: materialIdNumber,
-
-          movementType: "ADJUSTMENT",
-
-          // IMPORTANT:
-          // Positive = increase
-          // Negative = decrease
-          quantity: quantityNumber,
-
-          unit:
-            unit?.trim() || material.unit,
-
-          referenceType: "STOCK_ADJUSTMENT",
-
-          notes:
-            notes?.trim() || null,
-        },
-
-        include: {
-          material: true,
-        },
-      });
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Stock adjustment recorded successfully",
-      data: movement,
-    });
-
-  } catch (error) {
-    console.error(
-      "Create Stock Adjustment Error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-
-// =========================================
-// VENDOR MATERIAL PRICE API
-// =========================================
-
-// GET ALL PRICES FOR A MATERIAL
 app.get(
   "/api/materials/:id/prices",
   async (req, res) => {
@@ -15835,7 +15132,6 @@ app.get("/api/transactions", async (req, res) => {
         {
           description: {
             contains: search,
-            mode: "insensitive",
           },
         },
 
@@ -15843,7 +15139,6 @@ app.get("/api/transactions", async (req, res) => {
           project: {
             name: {
               contains: search,
-              mode: "insensitive",
             },
           },
         },
@@ -15852,7 +15147,6 @@ app.get("/api/transactions", async (req, res) => {
           category: {
             name: {
               contains: search,
-              mode: "insensitive",
             },
           },
         },
@@ -15861,7 +15155,6 @@ app.get("/api/transactions", async (req, res) => {
           worker: {
             name: {
               contains: search,
-              mode: "insensitive",
             },
           },
         },
@@ -15870,7 +15163,6 @@ app.get("/api/transactions", async (req, res) => {
           vendor: {
             name: {
               contains: search,
-              mode: "insensitive",
             },
           },
         },
@@ -15919,8 +15211,7 @@ app.get("/api/transactions", async (req, res) => {
     const totals =
       await prisma.transaction.groupBy({
         by: ["type"],
-
-        where,
+        where: { AND: [where, { source: { not: "PURCHASE" } }] },
 
         _sum: {
           amount: true,
