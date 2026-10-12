@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {allowed,permissions}=require('./access-control');
 test('procurement, warehouse and viewer roles separate money, inventory and viewing',()=>{
- assert.deepEqual(permissions('STOREKEEPER').pages,['stock-desk']);assert.deepEqual(permissions('VIEWER').writePages,[]);
+ assert.deepEqual(permissions('STOREKEEPER').pages,['stock-desk','documents']);assert.deepEqual(permissions('VIEWER').writePages,[]);
  for(const path of ['/rfq-items/1','/rfq-vendors/1','/purchase-request-items/1','/materials/1','/vendors/1','/purchase-orders/1'])assert.equal(allowed('PROCUREMENT_OFFICER',path,'PUT'),true);
  for(const path of ['/purchases/1/payments','/purchases/1/receive','/stock-movements/usage','/income','/access/users'])assert.equal(allowed('PROCUREMENT_OFFICER',path,'POST'),false);
  for(const path of ['/purchases/1/receive','/stock-movements/usage','/stock-movements/return'])assert.equal(allowed('STOREKEEPER',path,'POST'),true);

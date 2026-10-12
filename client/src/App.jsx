@@ -7,6 +7,7 @@ import PaymentRequests from './PaymentRequests';
 import FinancialRequests from './FinancialRequests';
 import AuditLog from './AuditLog';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
+import Documents from "./Documents";
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
 import ProjectProfit from "./ProjectProfit";
@@ -27569,6 +27570,7 @@ if (!currentUser) {
             <FolderKanban size={20} />
             <span>Projects</span>
           </a>
+<a href="#" onClick={e=>{e.preventDefault();setActivePage("documents");}} className={activePage === "documents" ? "active" : ""}><ClipboardList size={20}/><span>Documents</span></a>
 <a href="#" className={activePage === "site-reports" ? "active" : ""} onClick={e=>{e.preventDefault();setActivePage("site-reports");}}><ClipboardList size={20}/><span>Site Reports</span></a>
 
           <a
@@ -28720,6 +28722,7 @@ if (!currentUser) {
         {activePage === "payables" && <Payables apiUrl={API_URL} user={currentUser} onPurchases={()=>setActivePage("purchases")} onPaymentRequests={()=>setActivePage("payment-requests")} />}
         {activePage === "project-profit" && <ProjectProfit apiUrl={API_URL} />}
         {activePage === "projects" && renderProjects()}
+        {activePage === "documents" && <Documents apiUrl={API_URL} />}
         {activePage === "site-reports" && <SiteReports apiUrl={API_URL} user={currentUser} />}
         {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}

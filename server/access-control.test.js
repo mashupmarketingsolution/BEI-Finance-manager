@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {permissions,allowed}=require('./access-control');
 test('role policy covers reads, writes, nested aliases and fails closed',()=>{
- assert.ok(permissions('ADMIN').pages.includes('user-access'));assert.deepEqual(permissions('SITE_SUPERVISOR').pages,['site-reports']);
+ assert.ok(permissions('ADMIN').pages.includes('user-access'));assert.deepEqual(permissions('SITE_SUPERVISOR').pages,['site-reports','documents']);
  for(const role of ['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','VIEWER'])assert.equal(allowed(role,'/auth/me','GET'),true);
  for(const path of ['/billing/invoices','/payables','/income','/expenses','/transactions','/reports/project-profit','/labour/accounts','/users','/projects/1','/access/users'])assert.equal(allowed('SITE_SUPERVISOR',path,'GET'),false,path);
  for(const path of ['/site-tasks','/site-inspections','/site-reports/1/photos'])assert.equal(allowed('SITE_SUPERVISOR',path,'POST'),true);

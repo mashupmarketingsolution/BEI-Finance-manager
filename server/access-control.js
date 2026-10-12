@@ -10,10 +10,10 @@ function newUserData(body){
  const role=body.role===undefined?'SITE_SUPERVISOR':body.role;if(!roles.includes(role))bad('Choose a valid user role');
  return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
 }
-const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review','payment-requests','financial-requests','audit-log'];
+const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review','payment-requests','financial-requests','audit-log','documents'];
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const finance=['billing','payables','project-profit','income','expenses','transactions','workers','payment-requests','financial-requests'];
-function permissions(role){
+function basePermissions(role){
  if(!roles.includes(role))return {pages:[],writePages:[],financeWrite:false};
  if(role==='STOREKEEPER')return {pages:['stock-desk'],writePages:['stock-desk'],financeWrite:false};
  if(role==='PROCUREMENT_OFFICER')return {pages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','stock-desk','procurement-review'],writePages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','procurement-review'],financeWrite:false,projectLookup:true};
@@ -23,6 +23,7 @@ function permissions(role){
   projectLookup:role==='ACCOUNTS',vendorLookup:role==='ACCOUNTS',
   financeWrite:['ADMIN','ACCOUNTS'].includes(role)};
 }
+function permissions(role){const p=basePermissions(role);if(roles.includes(role)){if(!p.pages.includes('documents'))p.pages.push('documents');if(role!=='VIEWER'&&!p.writePages.includes('documents'))p.writePages.push('documents');}return p;}
 function resource(path,method){
  const parts=path.split('/').filter(Boolean),root=parts[0];
  if(root==='auth')return path==='/auth/me'&&method==='GET'?'self':null;

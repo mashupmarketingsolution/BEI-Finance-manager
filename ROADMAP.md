@@ -17,7 +17,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 11 | Project Job Costing | Purchase/consumption bases, weighted stock valuation with incomplete-history warnings, accrued wages and manual overhead allocation implemented; BOQ purchase variance and margin available |
 | 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; actual advance refunds, approvals and durable actor/action audit remain |
 | 13 | Site Management | Reports/photos, tasks, inspections and independent role-based inspection approval with immutable review snapshots implemented |
-| 14 | Documents / File Management | Full workflow remains |
+| 14 | Documents / File Management | Project files, versions, authenticated download, archive/restore and role/project access implemented; office formats, previews and sharing remain |
 | 15 | Approval System | Inspection/PR/PO review and gated conversion, vendor payments, wage settlements, worker advance disbursement and new ordinary expenses require independent approval with preserved posting/correction history. Advance allocation, earned-payroll/overhead allocation approval, limits and configurable multi-step approvals remain |
 | 16 | Reports & Business Intelligence | Some dashboard/report foundations exist; full management reports remain |
 | 17 | User Roles & Security | Only Admin has every page; seven role-specific allowlists and assigned-project enforcement for Project Manager/Site Supervisor/Viewer, account/access management and stale-change guards implemented. Accounts/Procurement/Storekeeper retain departmental company access; password change/reset remains |
