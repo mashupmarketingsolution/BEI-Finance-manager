@@ -5,6 +5,7 @@ import ApprovalCenter from './ApprovalCenter';
 import ProcurementReviewDesk from './ProcurementReviewDesk';
 import PaymentRequests from './PaymentRequests';
 import FinancialRequests from './FinancialRequests';
+import AuditLog from './AuditLog';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -27834,6 +27835,7 @@ if (!currentUser) {
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('procurement-review');}} className={activePage==='procurement-review'?'active':''}><FileCheck size={20}/><span>Procurement Review</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('payment-requests');}} className={activePage==='payment-requests'?'active':''}><FileCheck size={20}/><span>Payment Requests</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('financial-requests');}} className={activePage==='financial-requests'?'active':''}><FileCheck size={20}/><span>Financial Requests</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('audit-log');}} className={activePage==='audit-log'?'active':''}><FileCheck size={20}/><span>Audit Log</span></a>
         </PermissionMenu>
 
 
@@ -28738,6 +28740,7 @@ if (!currentUser) {
         {activePage === 'procurement-review' && <ProcurementReviewDesk apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'payment-requests' && <PaymentRequests apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'financial-requests' && <FinancialRequests apiUrl={API_URL} user={currentUser}/>}
+        {activePage === 'audit-log' && <AuditLog apiUrl={API_URL}/>}
 
 
         {renderProjectViewModal()}

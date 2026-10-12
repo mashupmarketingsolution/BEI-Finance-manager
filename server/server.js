@@ -371,7 +371,9 @@ app.use("/api", (req,res,next) => {
   if ((req.method === "POST" && req.path === "/auth/login") || (req.method === "GET" && req.path === "/health")) return next();
   return authMiddleware(req,res,next);
 });
+app.use('/api',require('./audit-log').auditMiddleware(prisma));
 app.use('/api',accessMiddleware);
+require('./audit-log').registerAuditLog(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);

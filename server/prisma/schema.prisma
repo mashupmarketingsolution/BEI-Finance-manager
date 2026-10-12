@@ -6,6 +6,31 @@ datasource db {
   provider = "mysql"
 }
 
+model AuditEvent {
+  id Int @id @default(autoincrement())
+  actorId Int
+  actorName String @db.VarChar(150)
+  actorUsername String @db.VarChar(50)
+  actorRole String @db.VarChar(30)
+  method String @db.VarChar(10)
+  path String @db.VarChar(300)
+  resource String @db.VarChar(80)
+  recordId Int?
+  action String @db.VarChar(40)
+  outcome String @default("PENDING") @db.VarChar(20)
+  statusCode Int?
+  changedFields Json
+  beforeSnapshot Json?
+  afterSnapshot Json?
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([resource,recordId])
+  @@index([outcome])
+  @@map("audit_events")
+}
+
 model Customer {
   id           Int          @id @default(autoincrement())
   name         String       @db.VarChar(150)
