@@ -10,16 +10,17 @@ function newUserData(body){
  const role=body.role===undefined?'SITE_SUPERVISOR':body.role;if(!roles.includes(role))bad('Choose a valid user role');
  return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
 }
-const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk'];
+const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals'];
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const finance=['billing','payables','project-profit','income','expenses','transactions','workers'];
 function permissions(role){
  if(!roles.includes(role))return {pages:[],writePages:[],financeWrite:false};
  if(role==='STOREKEEPER')return {pages:['stock-desk'],writePages:['stock-desk'],financeWrite:false};
  if(role==='PROCUREMENT_OFFICER')return {pages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','stock-desk'],writePages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders'],financeWrite:false,projectLookup:true};
- if(role==='VIEWER')return {pages,writePages:[],financeWrite:false};
- return {pages:role==='SITE_SUPERVISOR'?['site-reports']:role==='ADMIN'?[...pages,'user-access']:pages,
-  writePages:role==='ADMIN'?[...pages,'user-access']:role==='PROJECT_MANAGER'?[...operations,'stock-desk']:role==='ACCOUNTS'?finance:['site-reports'],
+ if(role==='VIEWER')return {pages:['project-profit','site-reports','stock-desk'],writePages:[],financeWrite:false};
+ return {pages:role==='SITE_SUPERVISOR'?['site-reports']:role==='ADMIN'?[...pages,'user-access']:role==='ACCOUNTS'?['dashboard',...finance,'categories']:[...operations,'stock-desk','project-profit','approvals'],
+  writePages:role==='ADMIN'?[...pages,'user-access']:role==='PROJECT_MANAGER'?[...operations,'stock-desk','approvals']:role==='ACCOUNTS'?finance:['site-reports'],
+  projectLookup:role==='ACCOUNTS',vendorLookup:role==='ACCOUNTS',
   financeWrite:['ADMIN','ACCOUNTS'].includes(role)};
 }
 function resource(path,method){
@@ -48,13 +49,15 @@ function allowed(role,path,method){
  if(r==='self')return roles.includes(role);
  if(!r)return false;
  if(role==='ADMIN')return true;
+ if(/^\/site-inspections\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
  if(role==='STOREKEEPER')return (path==='/stock-desk'&&read)||(method==='POST'&&(/^\/purchases\/\d+\/receive\/?$/.test(path)||['/stock-movements/usage','/stock-movements/return'].includes(path)));
  if(['PROJECT_MANAGER','PROCUREMENT_OFFICER'].includes(role)&&method==='DELETE'&&!['site-reports','attendance'].includes(r))return false;
  if(role==='PROCUREMENT_OFFICER'&&read&&['/projects','/categories','/categories/expense','/categories/paginated'].includes(path))return true;
+ if(role==='ACCOUNTS'&&read&&['/projects','/vendors'].includes(path))return true;
  if(role==='PROCUREMENT_OFFICER'&&!read&&(path.startsWith('/stock-movements/')||/^\/purchases\/[^/]+\/receive\/?$/.test(path)))return false;
- if(r==='people')return read&&['ACCOUNTS','PROJECT_MANAGER','VIEWER'].includes(role);
- if(r==='attendance')return read?['ACCOUNTS','PROJECT_MANAGER','VIEWER'].includes(role):['PROJECT_MANAGER','ACCOUNTS'].includes(role);
- if(r==='payroll')return read?['ACCOUNTS','PROJECT_MANAGER','VIEWER'].includes(role):path==='/labour/payroll-batches/preview'&&method==='POST'?['ACCOUNTS','PROJECT_MANAGER','VIEWER'].includes(role):role==='ACCOUNTS';
+ if(r==='people')return read&&['ACCOUNTS','PROJECT_MANAGER'].includes(role);
+ if(r==='attendance')return ['PROJECT_MANAGER','ACCOUNTS'].includes(role);
+ if(r==='payroll')return read?['ACCOUNTS','PROJECT_MANAGER'].includes(role):path==='/labour/payroll-batches/preview'&&method==='POST'?['ACCOUNTS','PROJECT_MANAGER'].includes(role):role==='ACCOUNTS';
  if(role==='SITE_SUPERVISOR'&&path==='/projects'&&read)return true; // minimal lookup only
  return (read?p.pages:p.writePages).includes(r);
 }
@@ -62,7 +65,7 @@ function accessMiddleware(req,res,next){
  if((req.path==='/auth/login'&&req.method==='POST')||(req.path==='/health'&&req.method==='GET'))return next();
  if(!allowed(req.user?.role,req.path,req.method))return res.status(403).json({success:false,message:'Your role does not allow this action',code:'ACCESS_DENIED'});
  // Site supervisors receive only project lookup fields and no financial daily activity.
- if(['SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER'].includes(req.user.role)){
+ if(['SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','ACCOUNTS'].includes(req.user.role)){
   const path=req.path,method=req.method;
   const json=res.json.bind(res);res.json=payload=>{
    if(path==='/projects'&&Array.isArray(payload.data))payload={...payload,data:payload.data.map(p=>({id:p.id,name:p.name,status:p.status}))};
@@ -79,7 +82,7 @@ function accessMiddleware(req,res,next){
 }
 function registerUserAccess(app,prisma){
  const select={id:true,name:true,username:true,status:true,role:true,accessVersion:true};
- app.get('/api/access/users',async(req,res)=>{try{res.json({success:true,data:await prisma.user.findMany({select,orderBy:{name:'asc'}}),roles});}catch{res.status(500).json({success:false,message:'Unable to load user access'});}});
+ app.get('/api/access/users',async(req,res)=>{try{res.json({success:true,data:await prisma.user.findMany({select,orderBy:{name:'asc'}}),roles,rolePages:Object.fromEntries(roles.map(role=>[role,permissions(role).pages]))});}catch{res.status(500).json({success:false,message:'Unable to load user access'});}});
  app.post('/api/access/users',async(req,res)=>{
   try{
    const input=newUserData(req.body),passwordHash=await bcrypt.hash(req.body.password,12);

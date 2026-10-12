@@ -16,11 +16,11 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 10 | Full Accounting | Not implemented: chart of accounts, balanced journals, ledger, trial balance, balance sheet and accounting cash flow |
 | 11 | Project Job Costing | Purchase/consumption bases, weighted stock valuation with incomplete-history warnings, accrued wages and manual overhead allocation implemented; BOQ purchase variance and margin available |
 | 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; actual advance refunds, approvals and durable actor/action audit remain |
-| 13 | Site Management | Daily reports/photos/activity, assigned tasks and quality inspections with checklist, corrective actions and recheck completion implemented; role-based approval workflow remains |
+| 13 | Site Management | Reports/photos, tasks, inspections and independent role-based inspection approval with immutable review snapshots implemented |
 | 14 | Documents / File Management | Full workflow remains |
-| 15 | Approval System | Full role-based multi-step approval workflow remains |
+| 15 | Approval System | Site Inspection submission, independent Admin/Project Manager decision, rejection correction and review history implemented; purchase/PO, payment and configurable multi-step approvals remain |
 | 16 | Reports & Business Intelligence | Some dashboard/report foundations exist; full management reports remain |
-| 17 | User Roles & Security | Active login and seven roles enforced across business APIs; Admin account creation/access management, procurement/warehouse/viewer separation, private Stock Desk, stale-change guards and supervisor financial redaction implemented; permissions are company-wide, not project-assignment-specific |
+| 17 | User Roles & Security | Only Admin has every page; seven role-specific page/API allowlists, account creation/access management, private Stock Desk and stale-change guards implemented; permissions are company-wide, not project-assignment-specific |
 | 18 | Audit Log / Security | Durable user action audit trail remains |
 
 Additional priority item: Mobile / PWA. No claim that all 18 phases are complete.

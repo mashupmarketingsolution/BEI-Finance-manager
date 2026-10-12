@@ -1,6 +1,7 @@
 import PaginatedTable from "./PaginatedTable";
 import UserAccess from './UserAccess';
 import StockDesk from './StockDesk';
+import ApprovalQueue from './ApprovalQueue';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -7683,7 +7684,7 @@ const editPurchaseOrder = async (poId) => {
         currentUser?.permissions?.pages.includes('expenses')&&loadExpenses(),
         currentUser?.permissions?.pages.includes('categories')&&loadCategories(),
         currentUser?.permissions?.pages.includes('workers')&&loadWorkers(),
-        currentUser?.permissions?.pages.includes('vendors')&&loadVendors(),
+        (currentUser?.permissions?.pages.includes('vendors')||currentUser?.permissions?.vendorLookup)&&loadVendors(),
         currentUser?.permissions?.pages.includes('transactions')&&loadTransactions(),
         currentUser?.permissions?.pages.includes('categories')&&loadPaginatedCategories(),
 
@@ -27866,6 +27867,7 @@ if (!currentUser) {
 
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('user-access');}} className={activePage==='user-access'?'active':''}><UserCheck size={20}/><span>User Access</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('stock-desk');}} className={activePage==='stock-desk'?'active':''}><Boxes size={20}/><span>Stock Desk</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('approvals');}} className={activePage==='approvals'?'active':''}><FileCheck size={20}/><span>Approvals</span></a>
         </PermissionMenu>
 
 
@@ -28750,7 +28752,7 @@ if (!currentUser) {
         {activePage === "payables" && <Payables apiUrl={API_URL} onPurchases={()=>setActivePage("purchases")} />}
         {activePage === "project-profit" && <ProjectProfit apiUrl={API_URL} />}
         {activePage === "projects" && renderProjects()}
-        {activePage === "site-reports" && <SiteReports apiUrl={API_URL} />}
+        {activePage === "site-reports" && <SiteReports apiUrl={API_URL} user={currentUser} />}
         {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}
         {activePage === "income" && renderIncome()}
@@ -28766,6 +28768,7 @@ if (!currentUser) {
         {activePage === "rfqs" && renderRFQs()}
         {activePage === 'user-access' && <UserAccess apiUrl={API_URL} currentUser={currentUser}/>}
         {activePage === 'stock-desk' && <StockDesk apiUrl={API_URL}/>}
+        {activePage === 'approvals' && <ApprovalQueue apiUrl={API_URL} user={currentUser}/>}
 
 
         {renderProjectViewModal()}

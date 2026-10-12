@@ -7,8 +7,8 @@ test('procurement, warehouse and viewer roles separate money, inventory and view
  for(const path of ['/purchases/1/receive','/stock-movements/usage','/stock-movements/return'])assert.equal(allowed('STOREKEEPER',path,'POST'),true);
  for(const path of ['/stock-movements/damage','/stock-movements/adjustment','/materials','/purchases','/access/users','/labour/attendance'])assert.equal(allowed('STOREKEEPER',path,'POST'),false);
  for(const role of ['STOREKEEPER','PROCUREMENT_OFFICER'])for(const path of ['/income','/dashboard','/labour/accounts','/reports/project-profit'])assert.equal(allowed(role,path,'GET'),false);
- for(const path of ['/income','/site-tasks','/stock-desk','/labour/accounts']){assert.equal(allowed('VIEWER',path,'GET'),true);assert.equal(allowed('VIEWER',path,'POST'),false);}
- assert.equal(allowed('VIEWER','/labour/payroll-batches/preview','POST'),true);assert.equal(allowed('VIEWER','/access/users','GET'),false);assert.equal(allowed(undefined,'/users','GET'),false);
+ for(const path of ['/site-tasks','/stock-desk','/reports/project-profit']){assert.equal(allowed('VIEWER',path,'GET'),true);assert.equal(allowed('VIEWER',path,'POST'),false);}
+ assert.equal(allowed('VIEWER','/income','GET'),false);assert.equal(allowed('VIEWER','/labour/accounts','GET'),false);assert.equal(allowed('VIEWER','/labour/payroll-batches/preview','POST'),false);assert.equal(allowed('VIEWER','/access/users','GET'),false);assert.equal(allowed(undefined,'/users','GET'),false);
 });
 test('local specialized roles have usable stock workflow, private amounts and read-only protection',{skip:process.env.CRM_INTEGRATION!=='1'},async()=>{
  require('dotenv').config();assert.ok(['localhost','127.0.0.1'].includes(new URL(process.env.DATABASE_URL).hostname));
@@ -33,7 +33,7 @@ test('local specialized roles have usable stock workflow, private amounts and re
   for(const role of [procurement,store])assert.equal((await call(role,'purchases/'+purchase.id+'/payments','POST',{amount:1})).status,403);
   const vendor=await call(procurement,'vendors','POST',{name:prefix+'_created'});assert.equal(vendor.status,201);vendors.push(vendor.data);
   const lookups=await call(procurement,'projects?limit=-1');assert.deepEqual(Object.keys(lookups.data.find(p=>p.id===project.id)).sort(),['id','name','status']);
-  assert.equal((await call(viewer,'income')).status,200);assert.equal((await call(viewer,'stock-desk')).status,200);assert.equal((await call(viewer,'stock-movements/usage','POST',payload)).status,403);assert.equal((await call(viewer,'vendors','POST',{name:'No creation'})).status,403);
+  assert.equal((await call(viewer,'income')).status,403);assert.equal((await call(viewer,'stock-desk')).status,200);assert.equal((await call(viewer,'stock-movements/usage','POST',payload)).status,403);assert.equal((await call(viewer,'vendors','POST',{name:'No creation'})).status,403);
   assert.equal((await call(admin,'access/users/'+viewer.id,'PUT',{role:'STOREKEEPER',status:'ACTIVE',accessVersion:viewer.accessVersion})).status,200);assert.equal((await call(viewer,'income')).status,403);assert.equal((await call(viewer,'auth/me')).data.user.role,'STOREKEEPER');
  }finally{
   if(material)await prisma.stockMovement.deleteMany({where:{materialId:material.id}});if(purchase){await prisma.purchaseItem.deleteMany({where:{purchaseId:purchase.id}});await prisma.purchase.delete({where:{id:purchase.id}});}if(material)await prisma.material.delete({where:{id:material.id}});if(project)await prisma.project.delete({where:{id:project.id}});for(const v of vendors)await prisma.vendor.delete({where:{id:v.id}});await prisma.user.deleteMany({where:{id:{in:users.map(u=>u.id)}}});await new Promise(r=>server.close(r));await prisma.$disconnect();

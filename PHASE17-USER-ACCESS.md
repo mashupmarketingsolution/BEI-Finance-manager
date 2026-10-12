@@ -1,18 +1,18 @@
 # Phase 17: User Roles and Permissions
 
-Implemented 2026-10-12. Role permissions apply across the company; this increment does not introduce project-specific access assignments or approval workflows.
+Implemented 2026-10-12. Role permissions apply across the company; project-specific access assignments remain separate. Inspection approval is now covered in PHASE15-INSPECTION-APPROVAL.md.
 
 ## Roles
 
 | Role | View | Change |
 |---|---|---|
 | Admin | Current business pages and User Access | All current business functions and existing user access |
-| Accounts | Business/operational records and financial reports | Billing, payables, income, expenses, transactions, workers, attendance, wage rates, payroll, advances and job-cost entries |
-| Project Manager | Business/operational records and financial reports | Projects, CRM, quotations, BOQ, procurement, materials/stock, vendors, workers, attendance and site work; no cash settlement or payroll posting |
+| Accounts | Financial dashboard, billing, payables, project profit, income, expenses, transactions, workers and categories | Finance, payroll, workers and job costs; other operational pages denied. Minimal project/vendor lookups support forms without exposing those pages |
+| Project Manager | Projects, site work, CRM, estimates, procurement, workers, stock, project profit and Approvals | Operational work and independent inspection review; company cash-ledger/dashboard pages and payroll posting denied |
 | Site Supervisor | Reports, photos, tasks, inspections and minimal project lookups | Site reports/photos, tasks and inspections |
 | Procurement Officer | Vendors, materials/prices, requests, RFQs, purchase orders, purchases and Stock Desk quantities; minimal project/category lookups | Vendor/material/price records and procurement workflows; no stock changes, payments, payroll or ordinary record deletion |
 | Storekeeper | Stock Desk quantities, pending receipt items and stock history | Existing purchase receiving, project issues and returns only; no costs/prices, payments, master-record edits, damage or stock adjustments |
-| Viewer / Auditor | Business records/reports, including finance, payroll and Stock Desk | No changes, user access management or account creation; payroll batch preview is a read operation |
+| Viewer / Auditor | Project profit, Site Reports and Stock Desk only | No changes; company income/expense/transaction pages, payroll and user access denied |
 
 Project Manager cannot delete ordinary business records. Site photo removal and attendance removal retain their existing guarded workflows. Payroll batch preview is a read operation despite using POST and is allowed to Project Manager; posting/reversing a batch is not. Purchase payment routes use financial permissions even though they sit under the purchases URL. Purchase accrual creation is operational; settlement is financial.
 
@@ -46,10 +46,12 @@ The subsequent Add User increment passed the full 38-test backend suite, fronten
 
 ## Specialized roles and Stock Desk
 
+The current page whitelist supersedes the broad read permissions of the initial rollout. Only Admin has every page. The User Access page displays the authoritative visible page list for all seven roles. Accounts no longer opens site/procurement pages; Project Manager no longer opens company cash/billing/payables/dashboard pages; Viewer is limited to the three report areas in the table above. Role-specific lookup APIs may serve required dropdown values without granting the corresponding full page. User role assignments are unchanged, and live tokens use the revised server policy on the next request. Approval Inbox is limited to Admin/Project Manager. Inspection creators, inspectors and submitters cannot review their own inspection.
+
 Added Procurement Officer, Storekeeper and Viewer/Auditor with migration `20261012140000_extra_user_roles`. The migration extends the role enum; it does not change existing assignments or the Site Supervisor default. Add User and Edit user access offer all seven roles. No real account was reassigned during testing.
 
-Stock Desk provides quantity balances and paginated/searchable movement history, a pending-purchase receiving form, and project issue/return forms. Admin and Project Manager can manage its entries; Storekeeper uses this page as their only main page. Accounts, Procurement Officer and Viewer can view the desk but cannot submit its stock actions. Existing locked stock APIs continue enforcing remaining receipt quantities, available stock and maximum project returns. No new stock movement or cash calculation rules were introduced. Receipt quantities display to three decimal places.
+Stock Desk provides quantity balances and paginated/searchable movement history, a pending-purchase receiving form, and project issue/return forms. Admin and Project Manager can manage its entries; Storekeeper uses this page as their only main page. Procurement Officer and Viewer can view the desk but cannot submit its stock actions; Accounts no longer has this page. Existing locked stock APIs continue enforcing remaining receipt quantities, available stock and maximum project returns. No new stock movement or cash calculation rules were introduced. Receipt quantities display to three decimal places.
 
-The Stock Desk API selects only material/project identifiers, names, units, quantities, pending receipt items and movement dates/types. Storekeeper cannot use full purchase/material/project-detail APIs, billing, payroll or user management. Stock receipt and movement write responses are also whitelisted to omit prices, unit costs, contracts and nested financial records. Procurement Officer may view purchase/material prices for their work, but cannot receive stock or access payment APIs, financial dashboards, cash ledgers or payroll. Viewer can read business financial information but cannot change it.
+The Stock Desk API selects only material/project identifiers, names, units, quantities, pending receipt items and movement dates/types. Storekeeper cannot use full purchase/material/project-detail APIs, billing, payroll or user management. Stock receipt and movement write responses are also whitelisted to omit prices, unit costs, contracts and nested financial records. Procurement Officer may view purchase/material prices for their work, but cannot receive stock or access payment APIs, financial dashboards, cash ledgers or payroll. Viewer can read project profit reports and site/stock records, but cannot change them or open company cash-ledger/payroll pages.
 
 The full 40-test suite, production build and focused StockDesk/AccessUI/UserAccess lint passed. Tests include login for all seven roles, nested procurement aliases, company financial restrictions, warehouse receipt/issue/return, insufficient-stock/excess-return guards, redacted read and write responses, Viewer mutation rejection and live role changes. Temporary stock and account fixtures were removed. Browser checks confirmed seven role choices, Stock Desk quantities/history and receipt fields without creating real accounts or stock movements. Restricted-role behavior was verified by API integration tests. Existing bundle-size warning remains; project-specific permissions, approval steps and durable action audit remain separate work.

@@ -36,6 +36,7 @@ enum CustomerType {
 }
 
 model User {
+  inspectionApprovalActions InspectionApproval[]
   role UserRole @default(SITE_SUPERVISOR)
   accessVersion Int @default(1)
   assignedSiteInspections SiteInspection[] @relation("InspectionResponsible")
@@ -235,6 +236,8 @@ model SiteTaskReport {
 }
 
 model SiteInspection {
+  approvalState String @default("NOT_SUBMITTED") @db.VarChar(20)
+  approvalEvents InspectionApproval[]
   id Int @id @default(autoincrement())
   projectId Int
   taskId Int?
@@ -260,6 +263,20 @@ model SiteInspection {
   editor User @relation("InspectionEditor", fields: [updatedById], references: [id], onDelete: Restrict)
   @@index([projectId, inspectionDate])
   @@map("site_inspections")
+}
+
+model InspectionApproval {
+  id Int @id @default(autoincrement())
+  inspectionId Int
+  actorId Int
+  actorRole String @db.VarChar(30)
+  action String @db.VarChar(20)
+  notes String? @db.Text
+  snapshot Json?
+  createdAt DateTime @default(now())
+  inspection SiteInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@map("inspection_approvals")
 }
 
 model Worker {

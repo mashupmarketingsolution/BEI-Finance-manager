@@ -39,7 +39,8 @@ test('local user roles enforce APIs, redact site finance, update live tokens and
   for(const suffix of [report.id+'/',String(report.id).split('').map(c=>'%'+c.charCodeAt(0).toString(16)).join('')])assert.equal((await call(supervisor,'site-reports/'+suffix)).data.activity.financialVisible,false);
   const projects=await call(supervisor,'projects?limit=-1');const p=projects.data.find(p=>p.id===project.id);assert.deepEqual(Object.keys(p).sort(),['id','name','status']);
   const ctx=await call(supervisor,'site-reports/context');assert.equal(ctx.status,200);assert.ok(!('passwordHash' in ctx.data.users[0]));
-  assert.equal((await call(accounts,'site-reports/'+report.id)).data.activity.attendanceWagePreview,100);
+  assert.equal((await call(accounts,'site-reports/'+report.id)).status,403);
+  assert.equal((await call(manager,'site-reports/'+report.id)).data.activity.attendanceWagePreview,100);
   assert.equal((await call(admin,'access/users/'+admin.id,'PUT',{role:'SITE_SUPERVISOR',status:'ACTIVE',accessVersion:1})).status,409);
   const changed=await call(admin,'access/users/'+manager.id,'PUT',{role:'SITE_SUPERVISOR',status:'ACTIVE',accessVersion:1});assert.equal(changed.status,200);
   assert.equal((await call(manager,'income')).status,403);assert.equal((await call(manager,'auth/me')).data.user.role,'SITE_SUPERVISOR');

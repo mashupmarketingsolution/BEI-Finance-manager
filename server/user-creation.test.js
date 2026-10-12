@@ -24,7 +24,7 @@ test('local Admin creates users with hashed passwords, roles, unique usernames a
    assert.equal(created.data.username,username);assert.equal(created.data.status,'ACTIVE');assert.equal(created.data.role,role);assert.ok(!('passwordHash' in created.data));assert.ok(!('password' in created.data));
    const saved=await prisma.user.findUnique({where:{id:created.data.id}});assert.notEqual(saved.passwordHash,password);assert.equal(await require('bcryptjs').compare(password,saved.passwordHash),true);
    const login=await call('auth/login','POST',{username,password},null);assert.equal(login.status,200);assert.equal(login.data.user.role,role);assert.ok(login.data.token);assert.ok(!('passwordHash' in login.data.user));
-   const finance=await call('income','GET',undefined,login.data.token);assert.equal(finance.status,['SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER'].includes(role)?403:200);
+   const finance=await call('income','GET',undefined,login.data.token);assert.equal(finance.status,['ADMIN','ACCOUNTS'].includes(role)?200:403);
    assert.equal((await call('auth/login','POST',{username,password:'Wrong-password'},null)).status,401);
   }
   assert.equal((await call('access/users','POST',{...input,username:prefix+'_accounts'})).status,409);

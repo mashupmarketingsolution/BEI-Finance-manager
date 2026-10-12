@@ -1,0 +1,11 @@
+import {useState} from 'react';
+export default function InspectionReview({record,user,busy,onAction}){
+ const [notes,setNotes]=useState('');
+ const reviewer=['ADMIN','PROJECT_MANAGER'].includes(user?.role),submitter=['ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR'].includes(user?.role);
+ const lastSubmit=[...(record.approvalEvents||[])].reverse().find(e=>e.action==='SUBMIT');
+ const own=[record.createdById,record.inspectorId,lastSubmit?.actorId].includes(user?.id);
+ const submit=!record.archivedAt&&record.status==='COMPLETED'&&record.approvalState==='NOT_SUBMITTED'&&submitter;
+ const review=!record.archivedAt&&record.approvalState==='SUBMITTED'&&reviewer&&!own;
+ return <section className="billing-panel"><h4>Approval: {(record.approvalState||'NOT_SUBMITTED').replaceAll('_',' ')}</h4><p>Quality completion and managerial approval are separate. Creator, inspector and submitter cannot review their own inspection.</p>{record.approvalState==='SUBMITTED'&&own&&reviewer&&<p>Another Admin or Project Manager must review this inspection.</p>}{(submit||review)&&<><label>Approval notes<textarea rows={3} maxLength={2000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Reason is required when rejecting"/></label>{submit&&<button disabled={busy} onClick={()=>onAction('submit',notes)}>Submit for approval</button>}{review&&<><button disabled={busy} onClick={()=>onAction('approve',notes)}>Approve inspection</button> <button disabled={busy||!notes.trim()} onClick={()=>onAction('reject',notes)}>Reject inspection</button></>}</>}
+ <h4>Approval history</h4>{(record.approvalEvents||[]).map(e=><div key={e.id} style={{borderBottom:'1px solid #dce5f2',padding:'8px 0'}}><p>{e.action} · {e.actor.name} ({e.actorRole.replaceAll('_',' ')}) · {e.createdAt.slice(0,19).replace('T',' ')} UTC</p>{e.notes&&<p style={{whiteSpace:'pre-wrap'}}>{e.notes}</p>}{e.snapshot&&<details><summary>Inspection snapshot</summary><p>{e.snapshot.title} · {e.snapshot.inspectionDate.slice(0,10)}</p>{e.snapshot.checklist.map(i=><p key={i.key}>{i.label}: {i.result}{i.result==='FAIL'?' · '+i.correction+' · '+i.issue+' · '+i.action+' · Recheck: '+i.verification:''}</p>)}</details>}</div>)}{!record.approvalEvents?.length&&<p>No approval actions recorded.</p>}</section>;
+}

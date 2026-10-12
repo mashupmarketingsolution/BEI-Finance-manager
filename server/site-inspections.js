@@ -33,11 +33,14 @@ function stamp(data,old,actor){
  });
 }
 const person={select:{id:true,name:true}};
-const include={project:{select:{id:true,name:true}},task:{select:{id:true,title:true,archivedAt:true}},report:{select:{id:true,title:true,reportDate:true,archivedAt:true}},inspector:person,creator:person,editor:person};
+const include={project:{select:{id:true,name:true}},task:{select:{id:true,title:true,archivedAt:true}},report:{select:{id:true,title:true,reportDate:true,archivedAt:true}},inspector:person,creator:person,editor:person,approvalEvents:{include:{actor:person},orderBy:{id:'asc'}}};
 function registerSiteInspections(app,prisma){
  const route=fn=>async(req,res,next)=>{try{await fn(req,res,next);}catch(e){res.status(e.status||(['P2003','P2034'].includes(e.code)?409:400)).json({success:false,message:e.code==='P2003'?'Choose valid linked records; inspection history protects deletion.':e.code==='P2034'?'Inspection changed concurrently. Refresh and retry.':e.message});}};
  const tx=fn=>prisma.$transaction(fn,{isolationLevel:'Serializable',timeout:20000});
  async function locked(db,value,version){await db.$queryRaw`SELECT id FROM site_inspections WHERE id=${value} FOR UPDATE`;const r=await db.siteInspection.findUnique({where:{id:value}});if(!r)fail('Inspection not found',404);if(r.version!==id(version))fail('Inspection changed. Refresh and reopen before saving.',409);return r;}
+ async function actor(db,req){await db.$queryRaw`SELECT id FROM users WHERE id=${req.user.id} FOR UPDATE`;const u=await db.user.findUnique({where:{id:req.user.id}});if(!u||u.status!=='ACTIVE'||!['ADMIN','PROJECT_MANAGER','SITE_SUPERVISOR'].includes(u.role))fail('Your access no longer allows inspection changes',403);return u;}
+ const snapshot=r=>({title:r.title,projectId:r.projectId,inspectionDate:r.inspectionDate.toISOString(),inspectorId:r.inspectorId,taskId:r.taskId,reportId:r.reportId,checklist:r.checklist,notes:r.notes,version:r.version});
+ const event=(db,r,u,action,notes=null)=>db.inspectionApproval.create({data:{inspectionId:r.id,actorId:u.id,actorRole:u.role,action,notes,snapshot:snapshot(r)}});
  async function validateLinks(db,data,old={}){
   for(const field of ['taskId','reportId'])for(const value of [...new Set([data[field],old[field]].filter(Boolean))].sort((a,b)=>a-b)){
    if(field==='taskId')await db.$queryRaw`SELECT id FROM site_tasks WHERE id=${value} FOR UPDATE`;else await db.$queryRaw`SELECT id FROM site_reports WHERE id=${value} FOR UPDATE`;
@@ -66,9 +69,25 @@ function registerSiteInspections(app,prisma){
    if(action==='complete'||action==='reopen'){
     if(r.archivedAt)fail('Restore inspection first',409);
     if(action==='complete'){if(r.status!=='DRAFT')fail('Inspection already completed');if(!ready(r.checklist))fail('Finish all checklist items and verify every failed check before completing',409);update.status='COMPLETED';update.completedAt=new Date();}
-    else{if(r.status!=='COMPLETED')fail('Only completed inspections can be reopened');update.status='DRAFT';update.completedAt=null;}
-   }else{if(action==='archive'?!!r.archivedAt:!r.archivedAt)fail('Inspection already in that state');update.archivedAt=action==='archive'?new Date():null;}
+    else{if(r.status!=='COMPLETED')fail('Only completed inspections can be reopened');if(r.approvalState==='SUBMITTED')fail('Pending inspections must be reviewed before reopening',409);const u=await actor(db,req);if(r.approvalState==='APPROVED'&&!['ADMIN','PROJECT_MANAGER'].includes(u.role))fail('Only a reviewer can reopen an approved inspection',403);const notes=text(req.body.notes,2000,r.approvalState!=='NOT_SUBMITTED');await event(db,r,u,'REOPEN',notes);update.status='DRAFT';update.completedAt=null;update.approvalState='NOT_SUBMITTED';}
+   }else{if(r.approvalState==='SUBMITTED')fail('Pending inspections cannot be archived or restored',409);if(action==='archive'?!!r.archivedAt:!r.archivedAt)fail('Inspection already in that state');update.archivedAt=action==='archive'?new Date():null;}
    return db.siteInspection.update({where:{id:r.id},data:update,include});
+  });res.json({success:true,data});
+ }));
+ app.get('/api/approvals/inspections',route(async(req,res)=>{const state=req.query.state||'SUBMITTED';if(!['SUBMITTED','APPROVED','REJECTED'].includes(state))fail('Invalid approval state');const data=await prisma.siteInspection.findMany({where:{approvalState:state,...(state==='SUBMITTED'?{archivedAt:null}:{})},include,orderBy:{updatedAt:'desc'}});res.json({success:true,data});}));
+ for(const action of ['submit','approve','reject'])app.post('/api/site-inspections/:id/'+action,route(async(req,res)=>{
+  const data=await tx(async db=>{
+   const r=await locked(db,id(req.params.id),req.body.version),u=await actor(db,req);if(r.archivedAt||r.status!=='COMPLETED')fail('Complete and restore inspection before submitting/reviewing',409);
+   const notes=text(req.body.notes,2000,action==='reject');
+   if(action==='submit'){if(r.approvalState!=='NOT_SUBMITTED'||!ready(r.checklist))fail('Reopen rejected inspections, finish corrections and complete before submitting',409);}
+   else{
+    if(!['ADMIN','PROJECT_MANAGER'].includes(u.role))fail('Only Admin or Project Manager can review inspections',403);
+    if(r.approvalState!=='SUBMITTED')fail('Inspection is not pending approval',409);
+    const submitted=await db.inspectionApproval.findFirst({where:{inspectionId:r.id,action:'SUBMIT'},orderBy:{id:'desc'}});
+    if(submitted?.actorId===u.id||r.createdById===u.id||r.inspectorId===u.id)fail('Creator, inspector and submitter cannot approve/reject their own inspection',403);
+   }
+   await event(db,r,u,action.toUpperCase(),notes);
+   return db.siteInspection.update({where:{id:r.id},data:{approvalState:action==='submit'?'SUBMITTED':action==='approve'?'APPROVED':'REJECTED',version:{increment:1},updatedById:u.id},include});
   });res.json({success:true,data});
  }));
  app.use('/api/projects/:id',route(async(req,res,next)=>{if(req.method==='DELETE'&&req.path==='/'&&await prisma.siteInspection.count({where:{projectId:id(req.params.id)}}))fail('This project has inspection history and cannot be deleted',409);next();}));
