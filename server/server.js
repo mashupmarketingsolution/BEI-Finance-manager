@@ -379,6 +379,7 @@ require("./labour").registerLabour(app, prisma);
 require("./payroll-batches").registerPayrollBatches(app, prisma);
 require("./site-reports").registerSiteReports(app, prisma);
 require("./site-tasks").registerSiteTasks(app, prisma);
+require("./site-inspections").registerSiteInspections(app, prisma);
 app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
 // =========================================
 // AUTHENTICATION ROUTES
