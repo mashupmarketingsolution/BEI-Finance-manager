@@ -73,8 +73,9 @@ function registerProjectProfit(app, prisma, auth) {
       const projects = await prisma.project.findMany({include: {customer: true,payrollAccruals:{include:{advanceAllocations:true,payments:{include:{transaction:true}}}},overheadAllocations:true, transactions: {include:{category:true,payrollPayment:true}}, purchases: {include: {payments: true,items:{include:{material:{select:{name:true}}}}}},boqs:{include:{items:{include:{material:{select:{name:true}}}}},orderBy:{id:'desc'}}}, orderBy: {name: 'asc'}});
       let consumption;
       if(req.query?.basis==='consumption'){
-        const movements=await prisma.stockMovement.findMany({include:{material:{select:{name:true}}}});
-        const purchases=await prisma.purchase.findMany({include:{items:true}});
+        // Shared warehouse valuation needs all receipts; only assigned projects are returned above.
+        const movements=await require('./project-access').companyRead(()=>prisma.stockMovement.findMany({include:{material:{select:{name:true}}}}));
+        const purchases=await require('./project-access').companyRead(()=>prisma.purchase.findMany({include:{items:true}}));
         consumption=require('./consumption-cost').consumptionCosts(movements,purchases);
       }
       res.json({success: true, data: projects.map(p=>projectProfit(p,consumption?(consumption.get(p.id)||{cost:0,incomplete:false,items:[]}):undefined))});

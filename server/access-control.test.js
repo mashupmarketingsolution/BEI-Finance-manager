@@ -26,7 +26,7 @@ test('local user roles enforce APIs, redact site finance, update live tokens and
   for(const role of ['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR'])users.push(await prisma.user.create({data:{name:prefix+role,username:prefix+role,passwordHash:'test-only',role}}));
   const defaultUser=await prisma.user.create({data:{name:prefix+'default',username:prefix+'default',passwordHash:'test-only'}});users.push(defaultUser);assert.equal(defaultUser.role,'SITE_SUPERVISOR');
   const [admin,accounts,manager,supervisor]=users;
-  project=await prisma.project.create({data:{name:prefix,contractValue:1000}});worker=await prisma.worker.create({data:{name:prefix}});
+  project=await prisma.project.create({data:{name:prefix,contractValue:1000}});await prisma.userProjectAssignment.createMany({data:users.map(u=>({userId:u.id,projectId:project.id}))});worker=await prisma.worker.create({data:{name:prefix}});
   await prisma.workerAttendance.create({data:{projectId:project.id,workerId:worker.id,workDate:new Date('2026-01-01'),dayUnits:1,overtimeHours:0,dailyRate:100,overtimeRate:0,amount:100}});
   const tokens=Object.fromEntries(users.map(u=>[u.id,require('jsonwebtoken').sign({userId:u.id,role:'ADMIN'},process.env.JWT_SECRET,{expiresIn:'5m'})])),url='http://127.0.0.1:'+server.address().port+'/api/';
   const call=async(u,path,method='GET',body)=>{const r=await fetch(url+path,{method,headers:{Authorization:'Bearer '+tokens[u.id],'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};

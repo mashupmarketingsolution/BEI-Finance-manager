@@ -9,7 +9,7 @@ test('local request/order approvals freeze content, preserve snapshots and gate 
  require('dotenv').config();assert.ok(['localhost','127.0.0.1'].includes(new URL(process.env.DATABASE_URL).hostname));const {app,prisma}=require('./server'),server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const prefix='proc_review_'+Date.now(),users=[];let project,vendor,material;
  try{
   for(const role of ['ADMIN','PROJECT_MANAGER','PROCUREMENT_OFFICER'])users.push(await prisma.user.create({data:{name:prefix+role,username:prefix+role,role,passwordHash:'test-only'}}));const [admin,manager,author]=users;
-  project=await prisma.project.create({data:{name:prefix}});vendor=await prisma.vendor.create({data:{name:prefix}});material=await prisma.material.create({data:{name:prefix,code:prefix,unit:'pcs'}});
+  project=await prisma.project.create({data:{name:prefix}});await prisma.userProjectAssignment.createMany({data:users.map(u=>({userId:u.id,projectId:project.id}))});vendor=await prisma.vendor.create({data:{name:prefix}});material=await prisma.material.create({data:{name:prefix,code:prefix,unit:'pcs'}});
   const tokens=Object.fromEntries(users.map(u=>[u.id,require('jsonwebtoken').sign({userId:u.id},process.env.JWT_SECRET,{expiresIn:'5m'})])),base='http://127.0.0.1:'+server.address().port+'/api/';
   const call=async(u,path,method='GET',body)=>{const r=await fetch(base+path,{method,headers:{Authorization:'Bearer '+tokens[u.id],'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
   const list=async kind=>(await call(author,'procurement-review?kind='+kind)).data;

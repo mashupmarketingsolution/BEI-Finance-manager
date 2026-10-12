@@ -19,6 +19,7 @@ export function PermissionSurface({user,page,children,banner=true}){
    if(/Create \/ View Purchases/.test(name))return false;
    const mutates=mutation.test(name)||!!button.querySelector('svg.lucide-pencil,svg.lucide-trash-2,svg.lucide-plus,svg.lucide-save');
    if(readOnly&&mutates)return true;
+   if(user?.projectRestricted&&page==='projects'&&/\badd project\b/i.test(name))return true;
    if(['PROJECT_MANAGER','PROCUREMENT_OFFICER'].includes(user?.role)&&/\b(delete|remove)\b/i.test(name)&&page!=='site-reports'&&!/attendance/i.test(name))return true;
    if(user?.role==='PROCUREMENT_OFFICER'&&mutates&&/\b(stock|receive|usage|return|use|damage|adjustment)\b/i.test(name))return true;
    return user?.role==='PROJECT_MANAGER'&&page==='workers'&&/\b(rate|payroll|batch|advance|allocation|wages)\b/i.test(name)&&mutates;

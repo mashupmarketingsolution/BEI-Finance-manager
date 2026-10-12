@@ -69,7 +69,7 @@ axios.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
-axios.interceptors.response.use(r=>r,e=>{if(e.response?.data?.code==='ACCESS_DENIED')window.dispatchEvent(new Event('bei-access-changed'));return Promise.reject(e);});
+axios.interceptors.response.use(r=>r,e=>{if(['ACCESS_DENIED','PROJECT_ACCESS_DENIED'].includes(e.response?.data?.code))window.dispatchEvent(new Event('bei-access-changed'));return Promise.reject(e);});
 
 const RefreshButton = ({ onRefresh }) => {
   const [isRefreshing, setIsRefreshing] =
@@ -301,7 +301,7 @@ const [dashboardData, setDashboardData] = useState({
   useEffect(()=>{if(currentUser?.permissions?.pages&&!currentUser.permissions.pages.includes(activePage))setActivePage(currentUser.permissions.pages[0]||'site-reports');},[currentUser,activePage]);
   useEffect(()=>{
     if(!currentUser?.id)return;
-    const refreshAccess=()=>axios.get(`${API_URL}/api/auth/me`).then(r=>{setCurrentUser(r.data.data.user);localStorage.setItem(AUTH_USER_KEY,JSON.stringify(r.data.data.user));}).catch(e=>{if([401,403].includes(e.response?.status)){localStorage.removeItem(AUTH_TOKEN_KEY);localStorage.removeItem(AUTH_USER_KEY);setCurrentUser(null);}});
+    const refreshAccess=()=>axios.get(`${API_URL}/api/auth/me`).then(r=>{const user=r.data.data.user,old=JSON.parse(localStorage.getItem(AUTH_USER_KEY)||'null');const changed=old&&old.id===user.id&&(old.role!==user.role||JSON.stringify(old.projectIds||[])!==JSON.stringify(user.projectIds||[]));setCurrentUser(user);localStorage.setItem(AUTH_USER_KEY,JSON.stringify(user));if(changed)window.location.reload();}).catch(e=>{if([401,403].includes(e.response?.status)){localStorage.removeItem(AUTH_TOKEN_KEY);localStorage.removeItem(AUTH_USER_KEY);setCurrentUser(null);}});
     const timer=setInterval(refreshAccess,60000);window.addEventListener('focus',refreshAccess);window.addEventListener('bei-access-changed',refreshAccess);
     return()=>{clearInterval(timer);window.removeEventListener('focus',refreshAccess);window.removeEventListener('bei-access-changed',refreshAccess);};
   },[currentUser?.id]);
@@ -10020,7 +10020,7 @@ const handleDeleteCustomer = async (id) => {
 
   useEffect(() => {
     if(!authLoading&&currentUser?.id)loadAllData();
-  }, [authLoading,currentUser?.id,currentUser?.role]);
+  }, [authLoading,currentUser?.id,currentUser?.role,JSON.stringify(currentUser?.projectIds||[])]);
 
 
   useEffect(() => {

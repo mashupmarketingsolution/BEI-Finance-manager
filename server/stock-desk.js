@@ -8,7 +8,9 @@ function registerStockDesk(app,prisma){
     prisma.purchase.findMany({select:{id:true,purchaseNo:true,project:{select:{id:true,name:true}},items:{select:{id:true,materialId:true,material:{select:{name:true}},quantity:true,receivedQuantity:true,unit:true}}},orderBy:{id:'desc'}}),
     prisma.stockMovement.findMany({select:{id:true,materialId:true,material:{select:{name:true}},projectId:true,project:{select:{name:true}},movementType:true,quantity:true,unit:true,movementDate:true},orderBy:[{movementDate:'desc'},{id:'desc'}]})
    ]);
-   const balances=materials.map(m=>({...m,available:stock(movements.filter(x=>x.materialId===m.id))/1000}));
+   // Central warehouse availability is shared; other projects' movement details stay filtered.
+   const balanceMovements=req.user.projectRestricted?await require('./project-access').companyRead(()=>prisma.stockMovement.findMany({select:{materialId:true,movementType:true,quantity:true}})):movements;
+   const balances=materials.map(m=>({...m,available:stock(balanceMovements.filter(x=>x.materialId===m.id))/1000}));
    res.json({success:true,data:{materials:balances,projects,purchases:purchases.map(p=>({...p,items:p.items.filter(i=>Number(i.quantity)>Number(i.receivedQuantity))})).filter(p=>p.items.length),movements}});
   }catch{res.status(500).json({success:false,message:'Unable to load stock desk'});}
  });

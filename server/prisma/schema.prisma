@@ -61,6 +61,7 @@ enum CustomerType {
 }
 
 model User {
+  projectAssignments UserProjectAssignment[]
   financialRequests FinancialRequest[] @relation("FinancialRequester")
   financialActions FinancialEvent[]
   paymentRequests VendorPaymentRequest[] @relation("PaymentRequester")
@@ -159,6 +160,7 @@ enum LeadStatus {
 }
 
 model Project {
+  userAssignments UserProjectAssignment[]
   siteInspections SiteInspection[]
   siteTasks SiteTask[]
   siteReports SiteReport[]
@@ -188,6 +190,16 @@ model Project {
 
   @@index([customerId])
   @@map("projects")
+}
+
+model UserProjectAssignment {
+  userId Int
+  projectId Int
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  @@id([userId,projectId])
+  @@index([projectId])
+  @@map("user_project_assignments")
 }
 
 model SiteReport {

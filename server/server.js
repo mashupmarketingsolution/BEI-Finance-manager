@@ -57,7 +57,7 @@ const adapter = new PrismaMariaDb({
   idleTimeout: 300,
 });
 
-const prisma = new PrismaClient({ adapter });
+const prisma = require('./project-access').scopedClient(new PrismaClient({ adapter }));
 
 
 // =========================================
@@ -373,6 +373,7 @@ app.use("/api", (req,res,next) => {
 });
 app.use('/api',require('./audit-log').auditMiddleware(prisma));
 app.use('/api',accessMiddleware);
+app.use('/api',require('./project-access').middleware);
 require('./audit-log').registerAuditLog(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
@@ -530,6 +531,7 @@ async function authMiddleware(req, res, next) {
         phone: true,
         status: true,
         role: true,
+        projectAssignments: {select:{projectId:true}},
       },
     });
 

@@ -1,6 +1,6 @@
 # Phase 17: User Roles and Permissions
 
-Implemented 2026-10-12. Role permissions apply across the company; project-specific access assignments remain separate. Inspection approval is now covered in PHASE15-INSPECTION-APPROVAL.md.
+Implemented 2026-10-12, extended 2026-10-13. Assigned-project access for Project Manager/Site Supervisor/Viewer is documented in PHASE17-PROJECT-ACCESS.md and supersedes the original company-wide visibility for those roles. Accounts/Procurement/Storekeeper retain their departmental company access. Inspection approval is covered in PHASE15-INSPECTION-APPROVAL.md.
 
 ## Roles
 
