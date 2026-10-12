@@ -106,6 +106,8 @@ enum LeadStatus {
 }
 
 model Project {
+  workerRates WorkerRate[]
+  attendance WorkerAttendance[]
   payrollAccruals PayrollAccrual[]
   overheadAllocations OverheadAllocation[]
   invoices         ClientInvoice[]
@@ -132,6 +134,8 @@ model Project {
 }
 
 model Worker {
+  rates WorkerRate[]
+  attendance WorkerAttendance[]
   payrollAccruals PayrollAccrual[]
   id           Int           @id @default(autoincrement())
   name         String        @db.VarChar(150)
@@ -218,6 +222,7 @@ model Transaction {
 }
 
 model PayrollAccrual {
+  attendance WorkerAttendance?
   id Int @id @default(autoincrement())
   projectId Int
   workerId Int
@@ -230,6 +235,39 @@ model PayrollAccrual {
   payments PayrollPayment[]
   createdAt DateTime @default(now())
   @@map("payroll_accruals")
+}
+
+model WorkerRate {
+  id Int @id @default(autoincrement())
+  workerId Int
+  projectId Int
+  effectiveDate DateTime
+  dailyRate Decimal @db.Decimal(15, 2)
+  overtimeRate Decimal @db.Decimal(15, 2)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  @@unique([workerId, projectId, effectiveDate])
+  @@map("worker_rates")
+}
+
+model WorkerAttendance {
+  id Int @id @default(autoincrement())
+  workerId Int
+  projectId Int
+  workDate DateTime
+  dayUnits Decimal @db.Decimal(3, 2)
+  overtimeHours Decimal @db.Decimal(4, 2)
+  dailyRate Decimal @db.Decimal(15, 2)
+  overtimeRate Decimal @db.Decimal(15, 2)
+  amount Decimal @db.Decimal(15, 2)
+  notes String? @db.VarChar(500)
+  payrollAccrualId Int? @unique
+  payrollAccrual PayrollAccrual? @relation(fields: [payrollAccrualId], references: [id], onDelete: Restrict)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  @@unique([workerId, workDate])
+  @@map("worker_attendance")
 }
 
 model PayrollPayment {

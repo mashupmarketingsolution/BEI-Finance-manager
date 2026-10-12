@@ -18,6 +18,7 @@ function registerJobCosting(app,prisma) {
     res.status(201).json({success:true,data});
   }));
   app.delete('/api/job-costing/payroll/:id',route(async(req,res)=>{
+    if(await prisma.workerAttendance.count({where:{payrollAccrualId:id(req.params.id)}}))fail('Undo attendance-generated payroll from Workers → Attendance history');
     await tx(async db=>{const record=id(req.params.id);await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${record} FOR UPDATE`;if(await db.payrollPayment.count({where:{accrualId:record}}))fail('Reverse payroll payments before removing this accrual');await db.payrollAccrual.delete({where:{id:record}});});res.json({success:true});
   }));
   app.post('/api/job-costing/payroll/:id/payments',route(async(req,res)=>{

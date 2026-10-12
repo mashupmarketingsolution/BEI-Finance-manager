@@ -1,4 +1,5 @@
 import PaginatedTable from "./PaginatedTable";
+import Labour from "./Labour";
 import ProjectProfit from "./ProjectProfit";
 import Billing from "./Billing";
 import Payables from "./Payables";
@@ -28735,7 +28736,7 @@ if (!currentUser) {
         {activePage === "boqs" && renderBOQs()}
         {activePage === "income" && renderIncome()}
         {activePage === "expenses" && renderExpenses()}
-        {activePage === "workers" && renderWorkers()}
+        {activePage === "workers" && <>{renderWorkers()}<Labour apiUrl={API_URL} /></>}
         {activePage === "vendors" && renderVendors()}
         {activePage === "categories" && renderCategories()}
         {activePage === "transactions" && renderTransactions()}
