@@ -4,9 +4,9 @@ import PaginatedTable from './PaginatedTable';
 import './Billing.css';
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Dhaka'});
 const money=v=>'৳ '+Number(v||0).toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2});
-export default function WorkerAccounts({apiUrl}){
+export default function WorkerAccounts({apiUrl,refreshKey}){
   const [data,setData]=useState({workers:[],projects:[]}),[version,setVersion]=useState(0),[projectId,setProjectId]=useState(''),[selectedId,setSelectedId]=useState(''),[search,setSearch]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[allocation,setAllocation]=useState(null);
-  useEffect(()=>{let live=true;axios.get(apiUrl+'/api/labour/accounts',{params:{projectId:projectId||undefined}}).then(r=>{if(live)setData(r.data.data);}).catch(e=>{if(live)setError(e.response?.data?.message||'Unable to load worker statements');});return()=>{live=false;};},[apiUrl,version,projectId]);
+  useEffect(()=>{let live=true;axios.get(apiUrl+'/api/labour/accounts',{params:{projectId:projectId||undefined}}).then(r=>{if(live)setData(r.data.data);}).catch(e=>{if(live)setError(e.response?.data?.message||'Unable to load worker statements');});return()=>{live=false;};},[apiUrl,version,projectId,refreshKey]);
   async function run(method,path,body,message,after=()=>{}){if(busy)return;setBusy(true);setError('');setNotice('');try{await axios({method,url:apiUrl+'/api/labour/'+path,data:body});setVersion(v=>v+1);setNotice(message);after();}catch(e){setError(e.response?.data?.message||'Unable to save');}finally{setBusy(false);}}
   const rows=data.workers.filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
   const worker=data.workers.find(w=>String(w.id)===selectedId),advance=worker?.advances.find(a=>a.id===allocation);

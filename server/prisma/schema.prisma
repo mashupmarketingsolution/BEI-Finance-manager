@@ -226,6 +226,8 @@ model Transaction {
 }
 
 model PayrollAccrual {
+  batchId Int?
+  batch PayrollBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
   advanceAllocations WorkerAdvanceAllocation[]
   attendance WorkerAttendance?
   id Int @id @default(autoincrement())
@@ -240,6 +242,20 @@ model PayrollAccrual {
   payments PayrollPayment[]
   createdAt DateTime @default(now())
   @@map("payroll_accruals")
+}
+
+model PayrollBatch {
+  id Int @id @default(autoincrement())
+  reference String @unique @db.VarChar(100)
+  fromDate DateTime
+  toDate DateTime
+  projectId Int?
+  workerId Int?
+  snapshot Json
+  createdAt DateTime @default(now())
+  reversedAt DateTime?
+  accruals PayrollAccrual[]
+  @@map("payroll_batches")
 }
 
 model WorkerAdvance {

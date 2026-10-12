@@ -50,6 +50,7 @@ function registerLabour(app,prisma){
       const record=id(req.params.id);await db.$queryRaw`SELECT id FROM worker_attendance WHERE id=${record} FOR UPDATE`;
       const a=await db.workerAttendance.findUnique({where:{id:record}});if(!a?.payrollAccrualId)fail('Generated payroll not found');
       await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${a.payrollAccrualId} FOR UPDATE`;
+      const p=await db.payrollAccrual.findUnique({where:{id:a.payrollAccrualId}});if(p?.batchId)fail('Undo this payroll batch from Workers → Payroll Batches',409);
       if(await db.payrollPayment.count({where:{accrualId:a.payrollAccrualId}}))fail('Reverse wage payments in Project Profit & Loss before undoing payroll',409);
       if(await db.workerAdvanceAllocation.count({where:{accrualId:a.payrollAccrualId}}))fail('Undo advance allocations in Workers before undoing payroll',409);
       await db.workerAttendance.update({where:{id:record},data:{payrollAccrualId:null}});await db.payrollAccrual.delete({where:{id:a.payrollAccrualId}});

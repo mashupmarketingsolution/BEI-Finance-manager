@@ -15,7 +15,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 9 | Vendor Payables | Core statements/payments/reversal tested; unlinked historical payments cannot be automatically reversed |
 | 10 | Full Accounting | Not implemented: chart of accounts, balanced journals, ledger, trial balance, balance sheet and accounting cash flow |
 | 11 | Project Job Costing | Purchase/consumption bases, weighted stock valuation with incomplete-history warnings, accrued wages and manual overhead allocation implemented; BOQ purchase variance and margin available |
-| 12 | Worker / Labour Management | Wage rates, attendance/overtime, payroll posting, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; payroll batches, actual advance refunds, approvals and durable correction audit remain |
+| 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; actual advance refunds, approvals and durable actor/action audit remain |
 | 13 | Site Management | Full workflow remains |
 | 14 | Documents / File Management | Full workflow remains |
 | 15 | Approval System | Full role-based multi-step approval workflow remains |
