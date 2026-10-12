@@ -1,4 +1,5 @@
 import PaginatedTable from "./PaginatedTable";
+import SiteReports from "./SiteReports";
 import Labour from "./Labour";
 import ProjectProfit from "./ProjectProfit";
 import Billing from "./Billing";
@@ -27591,6 +27592,8 @@ if (!currentUser) {
             <FolderKanban size={20} />
             <span>Projects</span>
           </a>
+<a href="#" className={activePage === "site-reports" ? "active" : ""} onClick={e=>{e.preventDefault();setActivePage("site-reports");}}><ClipboardList size={20}/><span>Site Reports</span></a>
+
           <a
             href="#"
             onClick={(e) => {
@@ -28732,6 +28735,7 @@ if (!currentUser) {
         {activePage === "payables" && <Payables apiUrl={API_URL} onPurchases={()=>setActivePage("purchases")} />}
         {activePage === "project-profit" && <ProjectProfit apiUrl={API_URL} />}
         {activePage === "projects" && renderProjects()}
+        {activePage === "site-reports" && <SiteReports apiUrl={API_URL} />}
         {activePage === "quotations" && renderQuotations()}
         {activePage === "boqs" && renderBOQs()}
         {activePage === "income" && renderIncome()}

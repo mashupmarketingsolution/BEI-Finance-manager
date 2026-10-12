@@ -36,6 +36,9 @@ enum CustomerType {
 }
 
 model User {
+  assignedSiteReports SiteReport[] @relation("SiteResponsible")
+  createdSiteReports SiteReport[] @relation("SiteCreator")
+  updatedSiteReports SiteReport[] @relation("SiteEditor")
   id           Int          @id @default(autoincrement())
   name         String       @db.VarChar(150)
   username     String       @unique @db.VarChar(50)
@@ -106,6 +109,7 @@ enum LeadStatus {
 }
 
 model Project {
+  siteReports SiteReport[]
   workerAdvances WorkerAdvance[]
   workerRates WorkerRate[]
   attendance WorkerAttendance[]
@@ -132,6 +136,43 @@ model Project {
 
   @@index([customerId])
   @@map("projects")
+}
+
+model SiteReport {
+  id Int @id @default(autoincrement())
+  projectId Int
+  reportDate DateTime
+  title String @db.VarChar(150)
+  workSummary String @db.Text
+  progress Decimal @db.Decimal(5,2)
+  issues String? @db.Text
+  nextPlan String? @db.Text
+  responsibleId Int?
+  createdById Int
+  updatedById Int
+  version Int @default(1)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  responsible User? @relation("SiteResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  creator User @relation("SiteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  editor User @relation("SiteEditor", fields: [updatedById], references: [id], onDelete: Restrict)
+  photos SitePhoto[]
+  @@unique([projectId, reportDate])
+  @@map("site_reports")
+}
+
+model SitePhoto {
+  id Int @id @default(autoincrement())
+  reportId Int
+  name String @db.VarChar(150)
+  mime String @db.VarChar(30)
+  size Int
+  data Bytes @db.MediumBlob
+  createdAt DateTime @default(now())
+  report SiteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  @@map("site_photos")
 }
 
 model Worker {
