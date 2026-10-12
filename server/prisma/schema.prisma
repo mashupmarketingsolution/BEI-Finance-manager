@@ -36,6 +36,9 @@ enum CustomerType {
 }
 
 model User {
+  assignedSiteTasks SiteTask[] @relation("TaskResponsible")
+  createdSiteTasks SiteTask[] @relation("TaskCreator")
+  updatedSiteTasks SiteTask[] @relation("TaskEditor")
   assignedSiteReports SiteReport[] @relation("SiteResponsible")
   createdSiteReports SiteReport[] @relation("SiteCreator")
   updatedSiteReports SiteReport[] @relation("SiteEditor")
@@ -109,6 +112,7 @@ enum LeadStatus {
 }
 
 model Project {
+  siteTasks SiteTask[]
   siteReports SiteReport[]
   workerAdvances WorkerAdvance[]
   workerRates WorkerRate[]
@@ -139,6 +143,7 @@ model Project {
 }
 
 model SiteReport {
+  tasks SiteTaskReport[]
   id Int @id @default(autoincrement())
   projectId Int
   reportDate DateTime
@@ -173,6 +178,42 @@ model SitePhoto {
   createdAt DateTime @default(now())
   report SiteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   @@map("site_photos")
+}
+
+model SiteTask {
+  id Int @id @default(autoincrement())
+  projectId Int
+  title String @db.VarChar(150)
+  description String? @db.Text
+  blockers String? @db.Text
+  startDate DateTime
+  dueDate DateTime
+  status String @default("PENDING") @db.VarChar(20)
+  priority String @default("NORMAL") @db.VarChar(10)
+  responsibleId Int?
+  createdById Int
+  updatedById Int
+  completedAt DateTime?
+  archivedAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  responsible User? @relation("TaskResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  creator User @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  editor User @relation("TaskEditor", fields: [updatedById], references: [id], onDelete: Restrict)
+  reports SiteTaskReport[]
+  @@index([projectId, status, dueDate])
+  @@map("site_tasks")
+}
+
+model SiteTaskReport {
+  taskId Int
+  reportId Int
+  task SiteTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  report SiteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  @@id([taskId, reportId])
+  @@map("site_task_reports")
 }
 
 model Worker {
