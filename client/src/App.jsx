@@ -1,5 +1,6 @@
 import PaginatedTable from "./PaginatedTable";
 import UserAccess from './UserAccess';
+import StockDesk from './StockDesk';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -7676,7 +7677,7 @@ const editPurchaseOrder = async (poId) => {
       setLoading(true);
 
       await Promise.all([
-        currentUser?.permissions?.pages.includes('projects')&&loadProjects(),
+        (currentUser?.permissions?.pages.includes('projects')||currentUser?.permissions?.projectLookup)&&loadProjects(),
         currentUser?.permissions?.pages.includes('dashboard')&&loadDashboard(),
         currentUser?.permissions?.pages.includes('income')&&loadIncome(),
         currentUser?.permissions?.pages.includes('expenses')&&loadExpenses(),
@@ -27864,6 +27865,7 @@ if (!currentUser) {
 
 
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('user-access');}} className={activePage==='user-access'?'active':''}><UserCheck size={20}/><span>User Access</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('stock-desk');}} className={activePage==='stock-desk'?'active':''}><Boxes size={20}/><span>Stock Desk</span></a>
         </PermissionMenu>
 
 
@@ -28763,6 +28765,7 @@ if (!currentUser) {
         {activePage === "purchase-orders" && renderPurchaseOrders()}
         {activePage === "rfqs" && renderRFQs()}
         {activePage === 'user-access' && <UserAccess apiUrl={API_URL} currentUser={currentUser}/>}
+        {activePage === 'stock-desk' && <StockDesk apiUrl={API_URL}/>}
 
 
         {renderProjectViewModal()}

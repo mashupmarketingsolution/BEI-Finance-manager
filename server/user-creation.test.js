@@ -19,12 +19,12 @@ test('local Admin creates users with hashed passwords, roles, unique usernames a
   const input={...body,username:prefix+'_staff',name:'Test staff'};
   assert.equal((await call('access/users','POST',input,null)).status,401);assert.equal((await call('access/users','POST',input,limited)).status,403);
   assert.equal((await call('access/users','POST',{...input,confirmPassword:'different'})).status,400);
-  for(const role of ['SITE_SUPERVISOR','ACCOUNTS','PROJECT_MANAGER','ADMIN']){
+  for(const role of ['SITE_SUPERVISOR','ACCOUNTS','PROJECT_MANAGER','ADMIN','PROCUREMENT_OFFICER','STOREKEEPER','VIEWER']){
    const username=prefix+'_'+role.toLowerCase();const created=await call('access/users','POST',{...input,username:username.toUpperCase(),role,passwordHash:'untrusted',status:'INACTIVE'});assert.equal(created.status,201);ids.push(created.data.id);
    assert.equal(created.data.username,username);assert.equal(created.data.status,'ACTIVE');assert.equal(created.data.role,role);assert.ok(!('passwordHash' in created.data));assert.ok(!('password' in created.data));
    const saved=await prisma.user.findUnique({where:{id:created.data.id}});assert.notEqual(saved.passwordHash,password);assert.equal(await require('bcryptjs').compare(password,saved.passwordHash),true);
    const login=await call('auth/login','POST',{username,password},null);assert.equal(login.status,200);assert.equal(login.data.user.role,role);assert.ok(login.data.token);assert.ok(!('passwordHash' in login.data.user));
-   const finance=await call('income','GET',undefined,login.data.token);assert.equal(finance.status,role==='SITE_SUPERVISOR'?403:200);
+   const finance=await call('income','GET',undefined,login.data.token);assert.equal(finance.status,['SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER'].includes(role)?403:200);
    assert.equal((await call('auth/login','POST',{username,password:'Wrong-password'},null)).status,401);
   }
   assert.equal((await call('access/users','POST',{...input,username:prefix+'_accounts'})).status,409);

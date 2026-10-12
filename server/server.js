@@ -372,6 +372,7 @@ app.use("/api", (req,res,next) => {
 });
 app.use('/api',accessMiddleware);
 registerUserAccess(app,prisma);
+require('./stock-desk').registerStockDesk(app,prisma);
 require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);

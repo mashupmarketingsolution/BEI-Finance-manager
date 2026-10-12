@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {permissions,allowed}=require('./access-control');
 test('role policy covers reads, writes, nested aliases and fails closed',()=>{
  assert.ok(permissions('ADMIN').pages.includes('user-access'));assert.deepEqual(permissions('SITE_SUPERVISOR').pages,['site-reports']);
- for(const role of ['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR'])assert.equal(allowed(role,'/auth/me','GET'),true);
+ for(const role of ['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','VIEWER'])assert.equal(allowed(role,'/auth/me','GET'),true);
  for(const path of ['/billing/invoices','/payables','/income','/expenses','/transactions','/reports/project-profit','/labour/accounts','/users','/projects/1','/access/users'])assert.equal(allowed('SITE_SUPERVISOR',path,'GET'),false,path);
  for(const path of ['/site-tasks','/site-inspections','/site-reports/1/photos'])assert.equal(allowed('SITE_SUPERVISOR',path,'POST'),true);
  for(const path of ['/rfq-items/1','/rfq-vendors/1','/purchase-request-items/1','/quotation-items/1','/boq-items/1','/material-prices/1'])assert.equal(allowed('PROJECT_MANAGER',path,'PUT'),true,path);
@@ -11,7 +11,7 @@ test('role policy covers reads, writes, nested aliases and fails closed',()=>{
  assert.equal(allowed('ACCOUNTS','/labour/attendance/1/payroll','POST'),true);assert.equal(allowed('ACCOUNTS','/site-tasks','POST'),false);
  assert.equal(allowed('ADMIN','/unknown-business-route','POST'),false);assert.equal(allowed(undefined,'/projects','GET'),false);
  const fs=require('node:fs'),path=require('node:path');
- for(const file of ['server.js','billing.js','payables.js','project-profit.js','worker-advances.js','job-costing.js','labour.js','payroll-batches.js','site-reports.js','site-tasks.js','site-inspections.js','stock-safe.js','quotation-workflow.js']){
+ for(const file of ['server.js','billing.js','payables.js','project-profit.js','worker-advances.js','job-costing.js','labour.js','payroll-batches.js','site-reports.js','site-tasks.js','site-inspections.js','stock-safe.js','stock-desk.js','quotation-workflow.js']){
   const source=fs.readFileSync(path.join(__dirname,file),'utf8');
   for(const match of source.matchAll(/app\.(get|post|put|patch|delete)\(\s*['"](\/api\/[^'"]+)['"]/g)){
    const route=match[2].slice(4);if(['/health','/auth/login'].includes(route))continue;

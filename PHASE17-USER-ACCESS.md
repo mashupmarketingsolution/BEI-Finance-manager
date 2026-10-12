@@ -10,6 +10,9 @@ Implemented 2026-10-12. Role permissions apply across the company; this incremen
 | Accounts | Business/operational records and financial reports | Billing, payables, income, expenses, transactions, workers, attendance, wage rates, payroll, advances and job-cost entries |
 | Project Manager | Business/operational records and financial reports | Projects, CRM, quotations, BOQ, procurement, materials/stock, vendors, workers, attendance and site work; no cash settlement or payroll posting |
 | Site Supervisor | Reports, photos, tasks, inspections and minimal project lookups | Site reports/photos, tasks and inspections |
+| Procurement Officer | Vendors, materials/prices, requests, RFQs, purchase orders, purchases and Stock Desk quantities; minimal project/category lookups | Vendor/material/price records and procurement workflows; no stock changes, payments, payroll or ordinary record deletion |
+| Storekeeper | Stock Desk quantities, pending receipt items and stock history | Existing purchase receiving, project issues and returns only; no costs/prices, payments, master-record edits, damage or stock adjustments |
+| Viewer / Auditor | Business records/reports, including finance, payroll and Stock Desk | No changes, user access management or account creation; payroll batch preview is a read operation |
 
 Project Manager cannot delete ordinary business records. Site photo removal and attendance removal retain their existing guarded workflows. Payroll batch preview is a read operation despite using POST and is allowed to Project Manager; posting/reversing a batch is not. Purchase payment routes use financial permissions even though they sit under the purchases URL. Purchase accrual creation is operational; settlement is financial.
 
@@ -40,3 +43,13 @@ Browser verification confirmed the current user's Admin menu, User Access list a
 ## Add User verification
 
 The subsequent Add User increment passed the full 38-test backend suite, frontend build and focused UserAccess lint. Dedicated tests cover validation, bcrypt password comparison, all four roles, working login, rejected wrong passwords, anonymous/non-Admin creation denial, duplicate/concurrent usernames and private response fields. Temporary accounts were removed. Browser checks confirmed Add User, masked password/confirmation inputs, role choices and Cancel without entering real credentials or creating a real account. No database migration was needed for this increment.
+
+## Specialized roles and Stock Desk
+
+Added Procurement Officer, Storekeeper and Viewer/Auditor with migration `20261012140000_extra_user_roles`. The migration extends the role enum; it does not change existing assignments or the Site Supervisor default. Add User and Edit user access offer all seven roles. No real account was reassigned during testing.
+
+Stock Desk provides quantity balances and paginated/searchable movement history, a pending-purchase receiving form, and project issue/return forms. Admin and Project Manager can manage its entries; Storekeeper uses this page as their only main page. Accounts, Procurement Officer and Viewer can view the desk but cannot submit its stock actions. Existing locked stock APIs continue enforcing remaining receipt quantities, available stock and maximum project returns. No new stock movement or cash calculation rules were introduced. Receipt quantities display to three decimal places.
+
+The Stock Desk API selects only material/project identifiers, names, units, quantities, pending receipt items and movement dates/types. Storekeeper cannot use full purchase/material/project-detail APIs, billing, payroll or user management. Stock receipt and movement write responses are also whitelisted to omit prices, unit costs, contracts and nested financial records. Procurement Officer may view purchase/material prices for their work, but cannot receive stock or access payment APIs, financial dashboards, cash ledgers or payroll. Viewer can read business financial information but cannot change it.
+
+The full 40-test suite, production build and focused StockDesk/AccessUI/UserAccess lint passed. Tests include login for all seven roles, nested procurement aliases, company financial restrictions, warehouse receipt/issue/return, insufficient-stock/excess-return guards, redacted read and write responses, Viewer mutation rejection and live role changes. Temporary stock and account fixtures were removed. Browser checks confirmed seven role choices, Stock Desk quantities/history and receipt fields without creating real accounts or stock movements. Restricted-role behavior was verified by API integration tests. Existing bundle-size warning remains; project-specific permissions, approval steps and durable action audit remain separate work.
