@@ -45,9 +45,9 @@ function projectProfit(project, consumption) {
   const purchases = project.purchases || [];
   // Purchases are the cost source; their accounting mirrors and settlements are excluded.
   const cashExpenses = transactions.filter(t => t.type === 'EXPENSE' && !['PURCHASE', 'PURCHASE_PAYMENT'].includes(t.source));
-  const expenses = cashExpenses.filter(t => !t.payrollPayment);
+  const expenses = cashExpenses.filter(t => !t.payrollPayment && t.source !== 'WORKER_ADVANCE');
   const payroll = sum(project.payrollAccruals || []);
-  const payrollPaid = (project.payrollAccruals || []).reduce((s,a)=>s+(a.payments||[]).reduce((n,p)=>n+toCents(p.transaction.amount),0),0);
+  const payrollPaid = (project.payrollAccruals || []).reduce((s,a)=>s+(a.payments||[]).reduce((n,p)=>n+toCents(p.transaction.amount),0)+sum(a.advanceAllocations||[]),0);
   const overhead = sum(project.overheadAllocations || []);
   const purchaseCost = sum(purchases, 'grandTotal');
   const labourCost = sum(expenses.filter(t => t.workerId));
@@ -70,7 +70,7 @@ function projectProfit(project, consumption) {
 function registerProjectProfit(app, prisma, auth) {
   app.get('/api/reports/project-profit', auth, async (req, res) => {
     try {
-      const projects = await prisma.project.findMany({include: {customer: true,payrollAccruals:{include:{payments:{include:{transaction:true}}}},overheadAllocations:true, transactions: {include:{category:true,payrollPayment:true}}, purchases: {include: {payments: true,items:{include:{material:{select:{name:true}}}}}},boqs:{include:{items:{include:{material:{select:{name:true}}}}},orderBy:{id:'desc'}}}, orderBy: {name: 'asc'}});
+      const projects = await prisma.project.findMany({include: {customer: true,payrollAccruals:{include:{advanceAllocations:true,payments:{include:{transaction:true}}}},overheadAllocations:true, transactions: {include:{category:true,payrollPayment:true}}, purchases: {include: {payments: true,items:{include:{material:{select:{name:true}}}}}},boqs:{include:{items:{include:{material:{select:{name:true}}}}},orderBy:{id:'desc'}}}, orderBy: {name: 'asc'}});
       let consumption;
       if(req.query?.basis==='consumption'){
         const movements=await prisma.stockMovement.findMany({include:{material:{select:{name:true}}}});

@@ -9,7 +9,7 @@ function registerJobCosting(app,prisma) {
   app.get('/api/job-costing/context',route(async(req,res)=>{
     const [workers,payroll,overheads]=await Promise.all([
       prisma.worker.findMany({where:{status:'ACTIVE'},orderBy:{name:'asc'}}),
-      prisma.payrollAccrual.findMany({include:{worker:true,payments:{include:{transaction:true}}},orderBy:{id:'desc'}}),
+      prisma.payrollAccrual.findMany({include:{worker:true,advanceAllocations:{include:{advance:true}},payments:{include:{transaction:true}}},orderBy:{id:'desc'}}),
       prisma.transaction.findMany({where:{type:'EXPENSE',source:'MANUAL',projectId:null,workerId:null},include:{overheadAllocations:true},orderBy:{transactionDate:'desc'}})
     ]);res.json({success:true,data:{workers,payroll,overheads}});
   }));
@@ -19,6 +19,7 @@ function registerJobCosting(app,prisma) {
   }));
   app.delete('/api/job-costing/payroll/:id',route(async(req,res)=>{
     if(await prisma.workerAttendance.count({where:{payrollAccrualId:id(req.params.id)}}))fail('Undo attendance-generated payroll from Workers → Attendance history');
+    if(await prisma.workerAdvanceAllocation.count({where:{accrualId:id(req.params.id)}}))fail('Undo worker advance allocations before removing these wages');
     await tx(async db=>{const record=id(req.params.id);await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${record} FOR UPDATE`;if(await db.payrollPayment.count({where:{accrualId:record}}))fail('Reverse payroll payments before removing this accrual');await db.payrollAccrual.delete({where:{id:record}});});res.json({success:true});
   }));
   app.post('/api/job-costing/payroll/:id/payments',route(async(req,res)=>{
@@ -26,9 +27,9 @@ function registerJobCosting(app,prisma) {
     if(!['CASH','BANK','MOBILE_BANKING','OTHER'].includes(b.paymentMethod))fail('Choose a payment method');
     const data=await tx(async db=>{
       await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${record} FOR UPDATE`;
-      const accrual=await db.payrollAccrual.findUnique({where:{id:record},include:{payments:{include:{transaction:true}}}});if(!accrual)fail('Payroll record not found');
+      const accrual=await db.payrollAccrual.findUnique({where:{id:record},include:{advanceAllocations:true,payments:{include:{transaction:true}}}});if(!accrual)fail('Payroll record not found');
       if(date<accrual.earnedDate)fail('Payment date cannot precede earned date');
-      if(amount>money(accrual.amount)-accrual.payments.reduce((s,p)=>s+money(p.transaction.amount),0))fail('Payment exceeds payroll balance');
+      if(amount>money(accrual.amount)-accrual.payments.reduce((s,p)=>s+money(p.transaction.amount),0)-accrual.advanceAllocations.reduce((s,a)=>s+money(a.amount),0))fail('Payment exceeds payroll balance after advance allocations');
       const payment=await db.transaction.create({data:{type:'EXPENSE',source:'MANUAL',projectId:accrual.projectId,workerId:accrual.workerId,amount:amount/100,transactionDate:date,paymentMethod:b.paymentMethod,description:'Payroll: '+accrual.reference}});
       return db.payrollPayment.create({data:{accrualId:record,transactionId:payment.id}});
     });res.status(201).json({success:true,data});

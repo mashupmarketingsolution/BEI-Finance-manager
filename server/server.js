@@ -373,6 +373,7 @@ require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
 require("./project-profit").registerProjectProfit(app, prisma, authMiddleware);
+require("./worker-advances").registerWorkerAdvances(app, prisma);
 require("./job-costing").registerJobCosting(app, prisma);
 require("./labour").registerLabour(app, prisma);
 app.use(["/api/quotations", "/api/quotation-items", "/api/quotation-payment-milestones"], authMiddleware);
@@ -814,7 +815,7 @@ app.get("/api/projects/:id", async (req, res) => {
 
      if (
       transaction.type === "EXPENSE" &&
-      transaction.source !== "PURCHASE_PAYMENT"
+      !["PURCHASE_PAYMENT", "WORKER_ADVANCE"].includes(transaction.source)
           ) {
             totalExpenses += amount;
           }

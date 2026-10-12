@@ -106,6 +106,7 @@ enum LeadStatus {
 }
 
 model Project {
+  workerAdvances WorkerAdvance[]
   workerRates WorkerRate[]
   attendance WorkerAttendance[]
   payrollAccruals PayrollAccrual[]
@@ -134,6 +135,7 @@ model Project {
 }
 
 model Worker {
+  advances WorkerAdvance[]
   rates WorkerRate[]
   attendance WorkerAttendance[]
   payrollAccruals PayrollAccrual[]
@@ -182,6 +184,7 @@ model Category {
 }
 
 enum TransactionSource {
+  WORKER_ADVANCE
   CLIENT_PAYMENT
   MANUAL
   PURCHASE
@@ -189,6 +192,7 @@ enum TransactionSource {
 }
 
 model Transaction {
+  workerAdvance WorkerAdvance?
   payrollPayment PayrollPayment?
   overheadAllocations OverheadAllocation[]
   purchasePayment PurchasePayment?
@@ -222,6 +226,7 @@ model Transaction {
 }
 
 model PayrollAccrual {
+  advanceAllocations WorkerAdvanceAllocation[]
   attendance WorkerAttendance?
   id Int @id @default(autoincrement())
   projectId Int
@@ -235,6 +240,37 @@ model PayrollAccrual {
   payments PayrollPayment[]
   createdAt DateTime @default(now())
   @@map("payroll_accruals")
+}
+
+model WorkerAdvance {
+  id Int @id @default(autoincrement())
+  workerId Int
+  projectId Int
+  transactionId Int? @unique
+  reference String @unique @db.VarChar(100)
+  paymentDate DateTime
+  amount Decimal @db.Decimal(15,2)
+  paymentMethod PaymentMethod
+  notes String? @db.VarChar(500)
+  reversedAt DateTime?
+  createdAt DateTime @default(now())
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  allocations WorkerAdvanceAllocation[]
+  @@map("worker_advances")
+}
+
+model WorkerAdvanceAllocation {
+  id Int @id @default(autoincrement())
+  advanceId Int
+  accrualId Int
+  amount Decimal @db.Decimal(15,2)
+  allocationDate DateTime
+  advance WorkerAdvance @relation(fields: [advanceId], references: [id], onDelete: Restrict)
+  accrual PayrollAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict)
+  @@unique([advanceId, accrualId])
+  @@map("worker_advance_allocations")
 }
 
 model WorkerRate {

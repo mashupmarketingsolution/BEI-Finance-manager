@@ -21,6 +21,7 @@ Under **Payroll & overhead entries**:
 - Valuation replays current dated history, not a locked period ledger. Backdated receipts and purchase edits can change historical costs. Reconciliation and period closing remain future work.
 - Consumption replaces purchase grand totals with net issue value. Direct manual material expenses remain additional costs. Purchase basis includes unused/unreceived purchases. Do not separately expense materials already represented by purchases or stock.
 - Both bases include earned wages once, direct expenses and allocated overhead. Linked payroll settlements are excluded from cost. Unlinked historical worker expenses remain costs; historical matching is not guessed.
+- Worker advances reduce cash when issued and are excluded from labour cost. Applied advances reduce unpaid payroll without adding cost or cash payment. Correct advances and allocations from Workers → Worker Advance & Statement.
 - Cash paid includes purchase payment history, direct expense transactions (including payroll settlements) and attributed overhead. Unpaid wages do not reduce cash. Allocation changes attribution only, not company cash totals.
 - Projected profit = contract minus recorded cost. Future costs are excluded. Zero contract has no margin. Customer due compares contract with receipts and may differ from invoices.
 
