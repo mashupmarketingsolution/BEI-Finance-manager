@@ -595,7 +595,7 @@ app.get("/api/health", async (req, res) => {
 // GET ALL PROJECTS WITH PAGINATION
 app.get("/api/projects", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -603,9 +603,9 @@ app.get("/api/projects", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.project.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -1165,15 +1165,15 @@ app.get("/api/users", authMiddleware, async (req, res) => {
 // GET ALL LEADS WITH PAGINATION
 app.get("/api/leads", authMiddleware, async (req, res) => {
   try {
-    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(1, Math.floor(Number(req.query.page) || 1));
     if (!Number.isSafeInteger(page)) return res.status(400).json({success:false,message:"Invalid page"});
 
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(limitValue)
+    const limit = limitValue === -1 ? Math.max(1, await prisma.lead.count()) : allowedLimits.includes(limitValue)
       ? limitValue
       : 10;
 
@@ -1922,15 +1922,15 @@ app.post(
 // GET ALL CUSTOMERS WITH PAGINATION
 app.get("/api/customers", authMiddleware, async (req, res) => {
   try {
-    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(1, Math.floor(Number(req.query.page) || 1));
     if (!Number.isSafeInteger(page)) return res.status(400).json({success:false,message:"Invalid page"});
 
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(limitValue)
+    const limit = limitValue === -1 ? Math.max(1, await prisma.customer.count()) : allowedLimits.includes(limitValue)
       ? limitValue
       : 10;
 
@@ -2701,7 +2701,7 @@ app.get("/api/categories/expense", async (req, res) => {
 // GET ACTIVE MATERIAL CATEGORIES WITH PAGINATION
 app.get("/api/material-categories", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -2709,15 +2709,9 @@ app.get("/api/material-categories", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 5;
 
-    const allowedLimits = [
-      5,
-      10,
-      20,
-      50,
-      100,
-    ];
+    const allowedLimits = [5, 10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.materialCategory.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -2981,7 +2975,7 @@ app.delete(
 // GET ALL ACTIVE MATERIALS WITH PAGINATION
 app.get("/api/materials", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -2989,9 +2983,9 @@ app.get("/api/materials", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.material.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -13708,7 +13702,7 @@ app.delete(
 // GET ALL INCOME WITH PAGINATION
 app.get("/api/income", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -13716,9 +13710,9 @@ app.get("/api/income", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.transaction.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -14114,7 +14108,7 @@ app.delete("/api/income/:id", async (req, res) => {
 // GET ALL EXPENSES WITH PAGINATION
 app.get("/api/expenses", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -14122,9 +14116,9 @@ app.get("/api/expenses", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.transaction.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -14537,7 +14531,7 @@ app.delete("/api/expenses/:id", async (req, res) => {
 // GET ALL ACTIVE WORKERS WITH PAGINATION
 app.get("/api/workers", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -14545,9 +14539,9 @@ app.get("/api/workers", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.worker.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -14768,7 +14762,7 @@ app.delete("/api/workers/:id", async (req, res) => {
 // GET ALL ACTIVE VENDORS WITH PAGINATION
 app.get("/api/vendors", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -14776,9 +14770,9 @@ app.get("/api/vendors", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.vendor.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -15027,7 +15021,7 @@ app.get("/api/transactions", async (req, res) => {
     // PAGINATION
     // -----------------------------------------
 
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -15035,9 +15029,9 @@ app.get("/api/transactions", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.transaction.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue
@@ -15523,7 +15517,7 @@ app.delete(
 // GET CATEGORIES WITH PAGINATION
 app.get("/api/categories/paginated", async (req, res) => {
   try {
-    const page = Math.max(
+    const page = Number(req.query.limit) === -1 ? 1 : Math.max(
       Number(req.query.page) || 1,
       1
     );
@@ -15531,9 +15525,9 @@ app.get("/api/categories/paginated", async (req, res) => {
     const limitValue =
       Number(req.query.limit) || 10;
 
-    const allowedLimits = [10, 20, 50, 100];
+    const allowedLimits = [5, 10, 20, 25, 50, 100];
 
-    const limit = allowedLimits.includes(
+    const limit = limitValue === -1 ? Math.max(1, await prisma.category.count()) : allowedLimits.includes(
       limitValue
     )
       ? limitValue

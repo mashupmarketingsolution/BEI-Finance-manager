@@ -1,3 +1,4 @@
+import PaginatedTable from "./PaginatedTable";
 import ProjectProfit from "./ProjectProfit";
 import Billing from "./Billing";
 import Payables from "./Payables";
@@ -413,6 +414,7 @@ const [dashboardData, setDashboardData] = useState({
 
   const [purchaseLimit, setPurchaseLimit] =
     useState(10);
+  const purchaseDisplayLimit = purchaseLimit === -1 ? Math.max(1, purchases.length) : purchaseLimit;
 
   const [showPurchaseModal, setShowPurchaseModal] =
     useState(false);
@@ -5435,7 +5437,7 @@ const renderQuotationViewModal = () => {
 
             <div className="table-wrapper">
 
-              <table>
+              <PaginatedTable>
 
                 <thead>
                   <tr>
@@ -5597,7 +5599,7 @@ const renderQuotationViewModal = () => {
 
                 </tbody>
 
-              </table>
+              </PaginatedTable>
 
             </div>
 
@@ -5768,7 +5770,7 @@ const renderQuotationViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -5859,7 +5861,7 @@ const renderQuotationViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -11355,23 +11357,13 @@ const renderCustomers = () => {
             }}
           >
 
-            <option value={10}>
-              10
-            </option>
-
-            <option value={20}>
-              20
-            </option>
-
-            <option value={50}>
-              50
-            </option>
-
-            <option value={100}>
-              100
-            </option>
-
-          </select>
+            <option value={10}>10</option>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
           <span>
             customers per page
@@ -11867,9 +11859,12 @@ const renderLeads = () => {
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
             entries
           </label>
         </div>
@@ -12716,10 +12711,12 @@ const renderLeadDetailsModal = () => {
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               projects per page
@@ -13253,7 +13250,7 @@ const renderProjectViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -13296,7 +13293,7 @@ const renderProjectViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -13329,7 +13326,7 @@ const renderProjectViewModal = () => {
 
     <div className="table-wrapper">
 
-      <table>
+      <PaginatedTable>
 
         <thead>
           <tr>
@@ -13398,7 +13395,7 @@ const renderProjectViewModal = () => {
 
         </tbody>
 
-      </table>
+      </PaginatedTable>
 
     </div>
 
@@ -13432,7 +13429,7 @@ const renderProjectViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -13505,7 +13502,7 @@ const renderProjectViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -13540,7 +13537,7 @@ const renderProjectViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -13612,7 +13609,7 @@ const renderProjectViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -13647,7 +13644,7 @@ const renderProjectViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -13717,7 +13714,7 @@ const renderProjectViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -13752,7 +13749,7 @@ const renderProjectViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -13805,7 +13802,7 @@ const renderProjectViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -14047,7 +14044,7 @@ const renderPurchaseOrderViewModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -14114,7 +14111,7 @@ const renderPurchaseOrderViewModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -14274,7 +14271,7 @@ const renderQuotations = () => {
 
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
 
@@ -14393,7 +14390,7 @@ const renderQuotations = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
 
@@ -14512,7 +14509,7 @@ const renderBOQs = () => {
 
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
 
@@ -14617,7 +14614,7 @@ const renderBOQs = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
 
@@ -15195,7 +15192,7 @@ const renderBOQDetailsModal = () => {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -15303,7 +15300,7 @@ const renderBOQDetailsModal = () => {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
@@ -16549,10 +16546,12 @@ const quotationGrandTotal =
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               transactions per page
@@ -16847,10 +16846,12 @@ const quotationGrandTotal =
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               transactions per page
@@ -17164,10 +17165,12 @@ const quotationGrandTotal =
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               materials per page
@@ -19961,7 +19964,7 @@ const quotationGrandTotal =
 
                     <div className="material-price-table-wrapper">
 
-                      <table className="material-price-table">
+                      <PaginatedTable className="material-price-table">
 
                         <thead>
                           <tr>
@@ -20078,7 +20081,7 @@ const quotationGrandTotal =
 
                         </tbody>
 
-                      </table>
+                      </PaginatedTable>
 
                     </div>
 
@@ -20185,10 +20188,12 @@ const quotationGrandTotal =
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               purchases per page
@@ -20261,9 +20266,9 @@ const quotationGrandTotal =
                   {purchases
                     .slice(
                       (purchasePage - 1) *
-                      purchaseLimit,
+                      purchaseDisplayLimit,
                       purchasePage *
-                      purchaseLimit
+                      purchaseDisplayLimit
                     )
                     .map(
                       (purchase) => (
@@ -20404,14 +20409,14 @@ const quotationGrandTotal =
               {purchases.length === 0
                 ? 0
                 : (purchasePage - 1) *
-                purchaseLimit +
+                purchaseDisplayLimit +
                 1}
 
               {" - "}
 
               {Math.min(
                 purchasePage *
-                purchaseLimit,
+                purchaseDisplayLimit,
                 purchases.length
               )}
 
@@ -20451,7 +20456,7 @@ const quotationGrandTotal =
                   1,
                   Math.ceil(
                     purchases.length /
-                    purchaseLimit
+                    purchaseDisplayLimit
                   )
                 )}
 
@@ -20464,7 +20469,7 @@ const quotationGrandTotal =
                   purchasePage >=
                   Math.ceil(
                     purchases.length /
-                    purchaseLimit
+                    purchaseDisplayLimit
                   )
                 }
                 onClick={() =>
@@ -21365,7 +21370,7 @@ const renderPurchaseRequests = () => {
 
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
                 <tr>
@@ -21475,7 +21480,7 @@ const renderPurchaseRequests = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
 
@@ -21623,7 +21628,7 @@ const renderPurchaseOrders = () => {
 
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
                 <tr>
@@ -21790,7 +21795,7 @@ const renderPurchaseOrders = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
 
@@ -21876,7 +21881,7 @@ const renderRFQs = () => {
 
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
                 <tr>
@@ -21971,7 +21976,7 @@ const renderRFQs = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
 
@@ -22094,7 +22099,7 @@ const renderPurchaseRequestViewModal = () => {
             {request.items?.length > 0 ? (
 
               <div className="table-wrapper">
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -22155,7 +22160,7 @@ const renderPurchaseRequestViewModal = () => {
                     )}
                   </tbody>
 
-                </table>
+                </PaginatedTable>
               </div>
 
             ) : (
@@ -24151,7 +24156,7 @@ const renderRFQModal = () => {
         {rfqPriceComparison.vendors?.length > 0 && (
           <div className="table-wrapper">
 
-            <table>
+            <PaginatedTable>
 
               <thead>
                 <tr>
@@ -24197,7 +24202,7 @@ const renderRFQModal = () => {
 
               </tbody>
 
-            </table>
+            </PaginatedTable>
 
           </div>
         )}
@@ -24326,7 +24331,7 @@ const renderRFQViewModal = () => {
             {rfq.items?.length > 0 ? (
 
               <div className="table-wrapper">
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -24378,7 +24383,7 @@ const renderRFQViewModal = () => {
                     )}
                   </tbody>
 
-                </table>
+                </PaginatedTable>
               </div>
 
             ) : (
@@ -24407,7 +24412,7 @@ const renderRFQViewModal = () => {
             {rfq.vendors?.length > 0 ? (
 
               <div className="table-wrapper">
-                <table>
+                <PaginatedTable>
 
                   <thead>
                     <tr>
@@ -24482,7 +24487,7 @@ const renderRFQViewModal = () => {
                     )}
                   </tbody>
 
-                </table>
+                </PaginatedTable>
               </div>
 
             ) : (
@@ -24609,7 +24614,7 @@ const renderRFQViewModal = () => {
 
                 <div className="table-wrapper">
 
-                  <table>
+                  <PaginatedTable>
 
                     <thead>
                       <tr>
@@ -24657,7 +24662,7 @@ const renderRFQViewModal = () => {
 
                     </tbody>
 
-                  </table>
+                  </PaginatedTable>
 
                 </div>
 
@@ -25027,7 +25032,7 @@ const renderRFQEditModal = () => {
 
                 <div className="table-wrapper">
 
-                  <table>
+                  <PaginatedTable>
 
                     <thead>
                       <tr>
@@ -25108,7 +25113,7 @@ const renderRFQEditModal = () => {
 
                     </tbody>
 
-                  </table>
+                  </PaginatedTable>
 
                 </div>
 
@@ -25245,7 +25250,7 @@ const renderRFQEditModal = () => {
 
                 <div className="table-wrapper">
 
-                  <table>
+                  <PaginatedTable>
 
                     <thead>
                       <tr>
@@ -25333,7 +25338,7 @@ const renderRFQEditModal = () => {
 
                     </tbody>
 
-                  </table>
+                  </PaginatedTable>
 
                 </div>
 
@@ -25449,10 +25454,12 @@ const renderRFQEditModal = () => {
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               workers per page
@@ -25726,10 +25733,12 @@ const renderRFQEditModal = () => {
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               vendors per page
@@ -26055,11 +26064,13 @@ const renderRFQEditModal = () => {
                   }}
                 >
                   <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+<option value={10}>10</option>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
                 <span>
                   income categories per page
@@ -26259,11 +26270,13 @@ const renderRFQEditModal = () => {
                   }}
                 >
                   <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+<option value={10}>10</option>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
                 <span>
                   expense categories per page
@@ -26494,11 +26507,13 @@ const renderRFQEditModal = () => {
                   }}
                 >
                   <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
+<option value={10}>10</option>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
                 <span>
                   material categories per page
@@ -27115,10 +27130,12 @@ const renderRFQEditModal = () => {
               }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+<option value={20}>20</option>
+<option value={25}>25</option>
+<option value={50}>50</option>
+<option value={100}>100</option>
+<option value={-1}>All</option>
+</select>
 
             <span>
               transactions per page
@@ -28893,7 +28910,7 @@ if (!currentUser) {
 
                   <div className="purchase-details-table-wrapper">
 
-                    <table>
+                    <PaginatedTable>
 
                       <thead>
 
@@ -29010,7 +29027,7 @@ if (!currentUser) {
 
                       </tbody>
 
-                    </table>
+                    </PaginatedTable>
 
 
                   </div>
@@ -32026,12 +32043,12 @@ if (!currentUser) {
             <p>Project outstanding is contract value less recorded income. Invoice balances below include only receipts allocated to each invoice.</p>
             <h4>Client invoices</h4>
             <button type="button" onClick={()=>{setShowCustomerDetailsModal(false);setActivePage("billing");}}>Open Client Billing</button>
-            <div className="table-wrapper"><table><thead><tr><th>Invoice</th><th>Status</th><th>Amount</th><th>Paid</th><th>Due</th></tr></thead><tbody>
+            <div className="table-wrapper"><PaginatedTable><thead><tr><th>Invoice</th><th>Status</th><th>Amount</th><th>Paid</th><th>Due</th></tr></thead><tbody>
             {(selectedCustomer.invoices || []).map(i=><tr key={i.id}><td>{i.invoiceNo}</td><td>{i.status} / {i.paymentStatus}</td><td>{Number(i.amount).toLocaleString()}</td><td>{Number(i.paidAmount).toLocaleString()}</td><td>{Number(i.dueAmount).toLocaleString()}</td></tr>)}
             {!selectedCustomer.invoices?.length && <tr><td colSpan={5}>No invoices created</td></tr>}
-            </tbody></table></div>
+            </tbody></PaginatedTable></div>
             <h4>Quotations</h4>
-            <div className="table-wrapper"><table><thead><tr><th>Quotation</th><th>Status</th><th>Total</th></tr></thead><tbody>
+            <div className="table-wrapper"><PaginatedTable><thead><tr><th>Quotation</th><th>Status</th><th>Total</th></tr></thead><tbody>
             {(selectedCustomer.quotations || []).map(q=><tr key={q.id}><td>{q.quotationNo}</td><td>{q.status}</td><td>{Number(q.grandTotal).toLocaleString()}{q.status === 'ACCEPTED' && !q.projectId && <button type="button" className="btn btn-primary" onClick={async () => {
               const name = window.prompt('Name for the project created from this accepted quotation:', selectedCustomer.name + ' - ' + q.quotationNo);
               if (!name?.trim()) return;
@@ -32039,12 +32056,12 @@ if (!currentUser) {
               catch(error) { window.alert(error.response?.data?.message || 'Project creation failed'); }
             }}>Create Project</button>}</td></tr>)}
             {!selectedCustomer.quotations?.length && <tr><td colSpan={3}>No quotations linked</td></tr>}
-            </tbody></table></div>
+            </tbody></PaginatedTable></div>
             <h4>Project receipt history</h4>
-            <div className="table-wrapper"><table><thead><tr><th>Date</th><th>Project</th><th>Amount</th><th>Method</th></tr></thead><tbody>
+            <div className="table-wrapper"><PaginatedTable><thead><tr><th>Date</th><th>Project</th><th>Amount</th><th>Method</th></tr></thead><tbody>
             {(selectedCustomer.financials?.payments || []).map(p=><tr key={p.id}><td>{new Date(p.transactionDate).toLocaleDateString()}</td><td>{p.projectName}</td><td>{Number(p.amount).toLocaleString()}</td><td>{p.paymentMethod}</td></tr>)}
             {!selectedCustomer.financials?.payments?.length && <tr><td colSpan={4}>No project receipts recorded</td></tr>}
-            </tbody></table></div>
+            </tbody></PaginatedTable></div>
           </section>
           {/* PROJECTS */}
 
@@ -32068,7 +32085,7 @@ if (!currentUser) {
 
               <div className="table-wrapper">
 
-                <table>
+                <PaginatedTable>
 
                   <thead>
 
@@ -32148,7 +32165,7 @@ if (!currentUser) {
 
                   </tbody>
 
-                </table>
+                </PaginatedTable>
 
               </div>
 
