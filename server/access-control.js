@@ -1,4 +1,15 @@
+const bcrypt=require('bcryptjs');
 const roles=['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR'];
+function newUserData(body){
+ const bad=message=>{throw Object.assign(new Error(message),{status:400});};
+ if(!body||typeof body!=='object'||Array.isArray(body))bad('User account details are required');
+ if(typeof body.name!=='string'||!body.name.trim()||body.name.trim().length>150||/[\x00-\x1f\x7f]/.test(body.name))bad('Name must have 1–150 characters without control characters');
+ if(typeof body.username!=='string'||! /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,49}$/.test(body.username.trim()))bad('Username must have 3–50 letters, numbers, dots, hyphens or underscores and start with a letter or number');
+ if(typeof body.password!=='string'||Array.from(body.password).length<8||Buffer.byteLength(body.password,'utf8')>72||body.password.includes('\0'))bad('Password must have at least 8 characters and at most 72 UTF-8 bytes');
+ if(body.password!==body.confirmPassword)bad('Passwords do not match');
+ const role=body.role===undefined?'SITE_SUPERVISOR':body.role;if(!roles.includes(role))bad('Choose a valid user role');
+ return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
+}
 const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const finance=['billing','payables','project-profit','income','expenses','transactions','workers'];
@@ -57,6 +68,18 @@ function accessMiddleware(req,res,next){
 function registerUserAccess(app,prisma){
  const select={id:true,name:true,username:true,status:true,role:true,accessVersion:true};
  app.get('/api/access/users',async(req,res)=>{try{res.json({success:true,data:await prisma.user.findMany({select,orderBy:{name:'asc'}}),roles});}catch{res.status(500).json({success:false,message:'Unable to load user access'});}});
+ app.post('/api/access/users',async(req,res)=>{
+  try{
+   const input=newUserData(req.body),passwordHash=await bcrypt.hash(req.body.password,12);
+   const data=await prisma.$transaction(async db=>{
+    await db.$queryRaw`SELECT id FROM users ORDER BY id FOR UPDATE`;
+    const actor=await db.user.findUnique({where:{id:req.user.id}});
+    if(actor?.role!=='ADMIN'||actor.status!=='ACTIVE')throw Object.assign(new Error('Admin access changed. Sign in again.'),{status:403});
+    return db.user.create({data:{...input,passwordHash,status:'ACTIVE'},select});
+   },{isolationLevel:'Serializable',timeout:20000});
+   res.status(201).json({success:true,message:'User account created',data});
+  }catch(e){res.status(e.status||(e.code==='P2002'||e.code==='P2034'?409:500)).json({success:false,message:e.status?e.message:e.code==='P2002'?'Username already exists. Choose another username.':e.code==='P2034'?'User access changed concurrently. Refresh and retry.':'Unable to create user'});}
+ });
  app.put('/api/access/users/:id',async(req,res)=>{
   try{
    const target=Number(req.params.id),{role,status,accessVersion}=req.body;
@@ -75,4 +98,4 @@ function registerUserAccess(app,prisma){
   }catch(e){res.status(e.status||(e.code==='P2034'?409:500)).json({success:false,message:e.status?e.message:e.code==='P2034'?'Access changed concurrently. Refresh and retry.':'Unable to update access'});}
  });
 }
-module.exports={permissions,allowed,resource,accessMiddleware,registerUserAccess};
+module.exports={permissions,allowed,resource,accessMiddleware,registerUserAccess,newUserData};

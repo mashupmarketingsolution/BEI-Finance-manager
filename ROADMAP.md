@@ -20,7 +20,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 14 | Documents / File Management | Full workflow remains |
 | 15 | Approval System | Full role-based multi-step approval workflow remains |
 | 16 | Reports & Business Intelligence | Some dashboard/report foundations exist; full management reports remain |
-| 17 | User Roles & Security | Active login and four roles enforced across business APIs; Admin access management, stale-change guards and supervisor financial redaction implemented; permissions are company-wide, not project-assignment-specific |
+| 17 | User Roles & Security | Active login and four roles enforced across business APIs; Admin account creation/access management, stale-change guards and supervisor financial redaction implemented; permissions are company-wide, not project-assignment-specific |
 | 18 | Audit Log / Security | Durable user action audit trail remains |
 
 Additional priority item: Mobile / PWA. No claim that all 18 phases are complete.
