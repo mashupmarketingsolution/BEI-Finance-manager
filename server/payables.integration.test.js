@@ -4,7 +4,7 @@ test('payables statements, metadata, concurrent partial payments, protections an
   const {app,prisma}=require('./server');const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const prefix='ap_test_'+Date.now();let user,vendor;const ids=[];
   try{
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});vendor=await prisma.vendor.create({data:{name:prefix}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});vendor=await prisma.vendor.create({data:{name:prefix}});
     const base=`http://127.0.0.1:${server.address().port}/api`,token=jwt.sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
     const request=async(path,method='GET',body)=>{const res=await fetch(base+path,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:res.status,...await res.json()};};
     const api=async(path,method,body,expected=200)=>{const r=await request(path,method,body);assert.equal(r.status,expected,JSON.stringify(r));return r.data;};

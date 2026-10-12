@@ -10,7 +10,7 @@ test('quotation API: pricing, milestones, SENT decision, revision snapshot and p
   const prefix='quote_test_'+Date.now();
   let user,customer,projectId; const ids=[];
   try {
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});
     customer=await prisma.customer.create({data:{name:prefix}});
     const base=`http://127.0.0.1:${server.address().port}/api`;
     const token=jwt.sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});

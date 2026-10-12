@@ -10,8 +10,8 @@ test('local task assignment, concurrent updates, overdue filters, report integri
  const {app,prisma}=require('./server'),server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
  const prefix='task_'+Date.now();let user,inactive,project,other;
  try{
-  user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});
-  inactive=await prisma.user.create({data:{name:prefix+'_inactive',username:prefix+'_inactive',passwordHash:'test-only',status:'INACTIVE'}});
+  user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});
+  inactive=await prisma.user.create({data:{name:prefix+'_inactive',username:prefix+'_inactive',role:'ADMIN',passwordHash:'test-only',status:'INACTIVE'}});
   project=await prisma.project.create({data:{name:prefix}});other=await prisma.project.create({data:{name:prefix+'_other'}});
   const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'}),url='http://127.0.0.1:'+server.address().port+'/api/';
   const call=async(path,method='GET',body)=>{const r=await fetch(url+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};

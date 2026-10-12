@@ -8,7 +8,7 @@ test('billing lifecycle, partial receipts, linking, overpayment rollback, guards
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   const prefix='billing_test_'+Date.now();let user,customer,project;const ids=[];
   try {
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});
     customer=await prisma.customer.create({data:{name:prefix}});
     project=await prisma.project.create({data:{name:prefix,customerId:customer.id,contractValue:1000}});
     const base=`http://127.0.0.1:${server.address().port}/api`,token=jwt.sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});

@@ -11,7 +11,7 @@ test('local CRM API: pipeline, conversion, quotation to project, receipts and li
   const prefix='crm_test_'+Date.now();
   let user, leadId, customerId, quotationId, projectId;
   try {
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'not-a-login-password'}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'not-a-login-password'}});
     const token=jwt.sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
     async function api(path,method='GET',body,expected=200) {
       const response=await fetch(`http://127.0.0.1:${server.address().port}/api${path}`,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});

@@ -12,7 +12,7 @@ test('local report lifecycle, live activity, optimistic edits, protected photos 
   const {app,prisma}=require('./server');const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const prefix='site_'+Date.now();let user,project,worker,vendor,purchase;
   try{
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});project=await prisma.project.create({data:{name:prefix}});worker=await prisma.worker.create({data:{name:prefix}});vendor=await prisma.vendor.create({data:{name:prefix}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});project=await prisma.project.create({data:{name:prefix}});worker=await prisma.worker.create({data:{name:prefix}});vendor=await prisma.vendor.create({data:{name:prefix}});
     await prisma.workerAttendance.create({data:{workerId:worker.id,projectId:project.id,workDate:new Date('2026-01-01'),dayUnits:0.5,overtimeHours:0,dailyRate:1200,overtimeRate:0,amount:600}});
     await prisma.transaction.createMany({data:[{type:'INCOME',source:'MANUAL',amount:200},{type:'EXPENSE',source:'MANUAL',amount:30},{type:'EXPENSE',source:'WORKER_ADVANCE',amount:40},{type:'EXPENSE',source:'PURCHASE',amount:100},{type:'EXPENSE',source:'PURCHASE_PAYMENT',amount:20}].map(t=>({...t,projectId:project.id,transactionDate:new Date('2026-01-01')}))});
     purchase=await prisma.purchase.create({data:{purchaseNo:prefix,purchaseDate:new Date('2026-01-01'),vendorId:vendor.id,projectId:project.id,subtotal:100,grandTotal:100,paidAmount:20,dueAmount:80,payments:{create:{paymentDate:new Date('2026-01-01'),amount:20,paymentMethod:'CASH'}}}});

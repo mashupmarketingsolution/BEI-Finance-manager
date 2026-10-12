@@ -4,7 +4,7 @@ test('All and numeric page sizes preserve list filters and return complete API l
   const {app,prisma}=require('./server');const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   let user;const prefix='pagination_'+Date.now();
   try{
-    user=await prisma.user.create({data:{name:'Pagination test',username:prefix,passwordHash:'test-only'}});
+    user=await prisma.user.create({data:{name:'Pagination test',username:prefix,role:'ADMIN',passwordHash:'test-only'}});
     await prisma.worker.createMany({data:Array.from({length:26},(_,i)=>({name:prefix+'_'+i}))});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
     const get=async path=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{headers:{Authorization:'Bearer '+token}});assert.equal(r.status,200,path);return r.json();};

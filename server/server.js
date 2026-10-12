@@ -9,6 +9,7 @@ const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 const { validateContact, customerFinancials } = require("./crm");
 const { categories: quotationCategories, validateFinalization, registerQuotationWorkflow } = require("./quotation-workflow");
 const app = express();
+const {permissions,accessMiddleware,registerUserAccess} = require('./access-control');
 const PORT = process.env.PORT || 5000;
 
 // =========================================
@@ -369,6 +370,8 @@ app.use("/api", (req,res,next) => {
   if ((req.method === "POST" && req.path === "/auth/login") || (req.method === "GET" && req.path === "/health")) return next();
   return authMiddleware(req,res,next);
 });
+app.use('/api',accessMiddleware);
+registerUserAccess(app,prisma);
 require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
@@ -457,6 +460,8 @@ app.post("/api/auth/login", async (req, res) => {
           email: user.email,
           phone: user.phone,
           status: user.status,
+          role: user.role,
+          permissions: permissions(user.role),
         },
       },
     });
@@ -517,6 +522,7 @@ async function authMiddleware(req, res, next) {
         email: true,
         phone: true,
         status: true,
+        role: true,
       },
     });
 
@@ -534,7 +540,7 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    req.user = user;
+    req.user = {...user,permissions:permissions(user.role)};
 
     next();
   } catch (error) {

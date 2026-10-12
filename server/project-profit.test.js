@@ -52,7 +52,7 @@ test('local database report endpoint returns finite totals and rejects anonymous
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   let user,project,material;
   try {
-    user=await prisma.user.create({data:{name:'Report test',username:'profit_test_'+Date.now(),passwordHash:'test-only'}});
+    user=await prisma.user.create({data:{name:'Report test',username:'profit_test_'+Date.now(),role:'ADMIN',passwordHash:'test-only'}});
     material=await prisma.material.create({data:{name:'Costing test',code:'costing_'+user.id,unit:'pcs'}});
     project=await prisma.project.create({data:{name:'costing_'+user.id,contractValue:100,boqs:{create:{boqNo:'costing_'+user.id,name:'Budget',status:'APPROVED',items:{create:{materialId:material.id,quantity:2,unit:'pcs',estimatedUnitPrice:15,estimatedTotal:30}}}}}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});

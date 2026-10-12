@@ -11,7 +11,7 @@ test('local advances, settlement caps, protections, statement and reversals',{sk
   const {app,prisma}=require('./server');const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const prefix='advance_'+Date.now();let user,worker,otherWorker,project,otherProject;
   try{
-    user=await prisma.user.create({data:{name:prefix,username:prefix,passwordHash:'test-only'}});worker=await prisma.worker.create({data:{name:prefix}});otherWorker=await prisma.worker.create({data:{name:prefix+'_other'}});project=await prisma.project.create({data:{name:prefix,contractValue:1000}});otherProject=await prisma.project.create({data:{name:prefix+'_other'}});
+    user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});worker=await prisma.worker.create({data:{name:prefix}});otherWorker=await prisma.worker.create({data:{name:prefix+'_other'}});project=await prisma.project.create({data:{name:prefix,contractValue:1000}});otherProject=await prisma.project.create({data:{name:prefix+'_other'}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
     const call=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
     assert.equal((await fetch('http://127.0.0.1:'+server.address().port+'/api/labour/accounts')).status,401);

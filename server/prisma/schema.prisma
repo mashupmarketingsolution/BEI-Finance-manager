@@ -36,6 +36,8 @@ enum CustomerType {
 }
 
 model User {
+  role UserRole @default(SITE_SUPERVISOR)
+  accessVersion Int @default(1)
   assignedSiteInspections SiteInspection[] @relation("InspectionResponsible")
   createdSiteInspections SiteInspection[] @relation("InspectionCreator")
   updatedSiteInspections SiteInspection[] @relation("InspectionEditor")
@@ -60,6 +62,13 @@ model User {
   @@index([status])
   @@index([phone])
   @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTS
+  PROJECT_MANAGER
+  SITE_SUPERVISOR
 }
 
 model Lead {

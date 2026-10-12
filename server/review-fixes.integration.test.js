@@ -9,7 +9,7 @@ test('review fixes: auth, project ownership, receive consistency, concurrent sto
   try{
     for(const path of ['/projects','/income','/expenses','/purchases','/materials','/stock-movements','/dashboard','/transactions','/vendors','/boqs'])assert.equal((await fetch(base+path)).status,401,path);
     assert.equal((await fetch(base+'/projects/1',{method:'PUT',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
-    user=await prisma.user.create({data:{name:key,username:key,passwordHash:'test-only'}});
+    user=await prisma.user.create({data:{name:key,username:key,role:'ADMIN',passwordHash:'test-only'}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
     const request=async(path,method='GET',body)=>{const r=await fetch(base+path,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
     customer=await prisma.customer.create({data:{name:key}});

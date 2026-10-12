@@ -1,4 +1,6 @@
 import PaginatedTable from "./PaginatedTable";
+import UserAccess from './UserAccess';
+import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
 import ProjectProfit from "./ProjectProfit";
@@ -61,6 +63,7 @@ axios.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+axios.interceptors.response.use(r=>r,e=>{if(e.response?.data?.code==='ACCESS_DENIED')window.dispatchEvent(new Event('bei-access-changed'));return Promise.reject(e);});
 
 const RefreshButton = ({ onRefresh }) => {
   const [isRefreshing, setIsRefreshing] =
@@ -289,6 +292,13 @@ const [dashboardData, setDashboardData] = useState({
 });
 
   const [activePage, setActivePage] = useState("dashboard");
+  useEffect(()=>{if(currentUser?.permissions?.pages&&!currentUser.permissions.pages.includes(activePage))setActivePage(currentUser.permissions.pages[0]||'site-reports');},[currentUser,activePage]);
+  useEffect(()=>{
+    if(!currentUser?.id)return;
+    const refreshAccess=()=>axios.get(`${API_URL}/api/auth/me`).then(r=>{setCurrentUser(r.data.data.user);localStorage.setItem(AUTH_USER_KEY,JSON.stringify(r.data.data.user));}).catch(e=>{if([401,403].includes(e.response?.status)){localStorage.removeItem(AUTH_TOKEN_KEY);localStorage.removeItem(AUTH_USER_KEY);setCurrentUser(null);}});
+    const timer=setInterval(refreshAccess,60000);window.addEventListener('focus',refreshAccess);window.addEventListener('bei-access-changed',refreshAccess);
+    return()=>{clearInterval(timer);window.removeEventListener('focus',refreshAccess);window.removeEventListener('bei-access-changed',refreshAccess);};
+  },[currentUser?.id]);
 
   const [income, setIncome] = useState([]);
   const [incomePage, setIncomePage] = useState(1);
@@ -7666,15 +7676,15 @@ const editPurchaseOrder = async (poId) => {
       setLoading(true);
 
       await Promise.all([
-        loadProjects(),
-        loadDashboard(),
-        loadIncome(),
-        loadExpenses(),
-        loadCategories(),
-        loadWorkers(),
-        loadVendors(),
-        loadTransactions(),
-        loadPaginatedCategories(),
+        currentUser?.permissions?.pages.includes('projects')&&loadProjects(),
+        currentUser?.permissions?.pages.includes('dashboard')&&loadDashboard(),
+        currentUser?.permissions?.pages.includes('income')&&loadIncome(),
+        currentUser?.permissions?.pages.includes('expenses')&&loadExpenses(),
+        currentUser?.permissions?.pages.includes('categories')&&loadCategories(),
+        currentUser?.permissions?.pages.includes('workers')&&loadWorkers(),
+        currentUser?.permissions?.pages.includes('vendors')&&loadVendors(),
+        currentUser?.permissions?.pages.includes('transactions')&&loadTransactions(),
+        currentUser?.permissions?.pages.includes('categories')&&loadPaginatedCategories(),
 
       ]);
     } finally {
@@ -10003,8 +10013,8 @@ const handleDeleteCustomer = async (id) => {
   // =========================================
 
   useEffect(() => {
-    loadAllData();
-  }, []);
+    if(!authLoading&&currentUser?.id)loadAllData();
+  }, [authLoading,currentUser?.id,currentUser?.role]);
 
 
   useEffect(() => {
@@ -27539,6 +27549,7 @@ if (!currentUser) {
   );
 }
   return (
+    <PermissionSurface user={currentUser} page={activePage} banner={false}>
     <div className="app">
       {/* =========================================
           SIDEBAR
@@ -27557,7 +27568,7 @@ if (!currentUser) {
           </div>
         </div>
 
-        <nav className="menu">
+        <PermissionMenu permissions={currentUser.permissions}>
 
           <a
             href="#"
@@ -27852,7 +27863,8 @@ if (!currentUser) {
 
 
 
-        </nav>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('user-access');}} className={activePage==='user-access'?'active':''}><UserCheck size={20}/><span>User Access</span></a>
+        </PermissionMenu>
 
 
 
@@ -27943,6 +27955,7 @@ if (!currentUser) {
 
 
         {/* DASHBOARD */}
+        <PermissionSurface user={currentUser} page={activePage}>
         {activePage === "dashboard" && (
           <section className="dashboard">
 
@@ -28749,6 +28762,7 @@ if (!currentUser) {
         {activePage === "purchase-requests" && renderPurchaseRequests()}
         {activePage === "purchase-orders" && renderPurchaseOrders()}
         {activePage === "rfqs" && renderRFQs()}
+        {activePage === 'user-access' && <UserAccess apiUrl={API_URL} currentUser={currentUser}/>}
 
 
         {renderProjectViewModal()}
@@ -28775,6 +28789,7 @@ if (!currentUser) {
 
         {renderLeadModal()}
         {renderLeadDetailsModal()}
+        </PermissionSurface>
       </main>
 
 
@@ -32993,6 +33008,7 @@ if (!currentUser) {
       )}
 
     </div>
+    </PermissionSurface>
   );
 }
 

@@ -23,7 +23,7 @@ test('local payroll lifecycle, over-allocation and transaction protections',{ski
   const {app,prisma}=require('./server');const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   let user,project,worker,expense,accrual;const stamp=Date.now();
   try{
-    user=await prisma.user.create({data:{name:'Job cost test',username:'jc_'+stamp,passwordHash:'test'}});
+    user=await prisma.user.create({data:{name:'Job cost test',username:'jc_'+stamp,role:'ADMIN',passwordHash:'test'}});
     project=await prisma.project.create({data:{name:'jc_'+stamp,contractValue:1000}});
     worker=await prisma.worker.create({data:{name:'jc_'+stamp}});
     expense=await prisma.transaction.create({data:{type:'EXPENSE',amount:100,transactionDate:new Date('2026-01-01'),description:'test overhead'}});
