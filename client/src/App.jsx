@@ -3,6 +3,7 @@ import UserAccess from './UserAccess';
 import StockDesk from './StockDesk';
 import ApprovalCenter from './ApprovalCenter';
 import ProcurementReviewDesk from './ProcurementReviewDesk';
+import PaymentRequests from './PaymentRequests';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -27833,6 +27834,7 @@ if (!currentUser) {
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('stock-desk');}} className={activePage==='stock-desk'?'active':''}><Boxes size={20}/><span>Stock Desk</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('approvals');}} className={activePage==='approvals'?'active':''}><FileCheck size={20}/><span>Approvals</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('procurement-review');}} className={activePage==='procurement-review'?'active':''}><FileCheck size={20}/><span>Procurement Review</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('payment-requests');}} className={activePage==='payment-requests'?'active':''}><FileCheck size={20}/><span>Payment Requests</span></a>
         </PermissionMenu>
 
 
@@ -28714,7 +28716,7 @@ if (!currentUser) {
         {activePage === "leads" && renderLeads()}
         {activePage === "customers" && renderCustomers()}
         {activePage === "billing" && <Billing apiUrl={API_URL} />}
-        {activePage === "payables" && <Payables apiUrl={API_URL} onPurchases={()=>setActivePage("purchases")} />}
+        {activePage === "payables" && <Payables apiUrl={API_URL} user={currentUser} onPurchases={()=>setActivePage("purchases")} onPaymentRequests={()=>setActivePage("payment-requests")} />}
         {activePage === "project-profit" && <ProjectProfit apiUrl={API_URL} />}
         {activePage === "projects" && renderProjects()}
         {activePage === "site-reports" && <SiteReports apiUrl={API_URL} user={currentUser} />}
@@ -28735,6 +28737,7 @@ if (!currentUser) {
         {activePage === 'stock-desk' && <StockDesk apiUrl={API_URL}/>}
         {activePage === 'approvals' && <ApprovalCenter apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'procurement-review' && <ProcurementReviewDesk apiUrl={API_URL} user={currentUser}/>}
+        {activePage === 'payment-requests' && <PaymentRequests apiUrl={API_URL} user={currentUser}/>}
 
 
         {renderProjectViewModal()}

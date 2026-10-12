@@ -7,7 +7,7 @@ Implemented 2026-10-12. Role permissions apply across the company; project-speci
 | Role | View | Change |
 |---|---|---|
 | Admin | Current business pages and User Access | All current business functions and existing user access |
-| Accounts | Financial dashboard, billing, payables, project profit, income, expenses, transactions, workers and categories | Finance, payroll, workers and job costs; other operational pages denied. Minimal project/vendor lookups support forms without exposing those pages |
+| Accounts | Financial dashboard, billing, payables, Payment Requests, project profit, income, expenses, transactions, workers and categories | Finance, payroll, workers and job costs; can submit/post approved vendor payments, but cannot approve them or reverse new approval-managed payments. Other operational pages denied. Minimal project/vendor lookups support forms without exposing those pages |
 | Project Manager | Projects, site work, CRM, estimates, procurement, Procurement Review, workers, stock, project profit and Approvals | Operational work and independent inspection/PR/PO review; company cash-ledger/dashboard pages and payroll posting denied |
 | Site Supervisor | Reports, photos, tasks, inspections and minimal project lookups | Site reports/photos, tasks and inspections |
 | Procurement Officer | Vendors, materials/prices, requests, RFQs, purchase orders, purchases, Procurement Review and Stock Desk quantities; minimal project/category lookups | Vendor/material/price records and procurement submission; no approval decisions, stock changes, payments, payroll or ordinary record deletion |

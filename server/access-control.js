@@ -10,9 +10,9 @@ function newUserData(body){
  const role=body.role===undefined?'SITE_SUPERVISOR':body.role;if(!roles.includes(role))bad('Choose a valid user role');
  return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
 }
-const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review'];
+const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review','payment-requests'];
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
-const finance=['billing','payables','project-profit','income','expenses','transactions','workers'];
+const finance=['billing','payables','project-profit','income','expenses','transactions','workers','payment-requests'];
 function permissions(role){
  if(!roles.includes(role))return {pages:[],writePages:[],financeWrite:false};
  if(role==='STOREKEEPER')return {pages:['stock-desk'],writePages:['stock-desk'],financeWrite:false};
@@ -49,6 +49,7 @@ function allowed(role,path,method){
  if(r==='self')return roles.includes(role);
  if(!r)return false;
  if(role==='ADMIN')return true;
+ if(/^\/payment-requests\/[^/]+\/(approve|reject)\/?$/.test(path))return false;
  if(/^\/procurement-review\/[^/]+\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
  if(/^\/site-inspections\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
  if(role==='STOREKEEPER')return (path==='/stock-desk'&&read)||(method==='POST'&&(/^\/purchases\/\d+\/receive\/?$/.test(path)||['/stock-movements/usage','/stock-movements/return'].includes(path)));

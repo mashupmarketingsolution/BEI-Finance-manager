@@ -11,7 +11,7 @@ test('role policy covers reads, writes, nested aliases and fails closed',()=>{
  assert.equal(allowed('ACCOUNTS','/labour/attendance/1/payroll','POST'),true);assert.equal(allowed('ACCOUNTS','/site-tasks','POST'),false);
  assert.equal(allowed('ADMIN','/unknown-business-route','POST'),false);assert.equal(allowed(undefined,'/projects','GET'),false);
  const fs=require('node:fs'),path=require('node:path');
- for(const file of ['server.js','billing.js','payables.js','project-profit.js','worker-advances.js','job-costing.js','labour.js','payroll-batches.js','site-reports.js','site-tasks.js','site-inspections.js','stock-safe.js','stock-desk.js','quotation-workflow.js','procurement-approval.js']){
+ for(const file of ['server.js','billing.js','payables.js','project-profit.js','worker-advances.js','job-costing.js','labour.js','payroll-batches.js','site-reports.js','site-tasks.js','site-inspections.js','stock-safe.js','stock-desk.js','quotation-workflow.js','procurement-approval.js','payment-approval.js']){
   const source=fs.readFileSync(path.join(__dirname,file),'utf8');
   for(const match of source.matchAll(/app\.(get|post|put|patch|delete)\(\s*['"](\/api\/[^'"]+)['"]/g)){
    const route=match[2].slice(4);if(['/health','/auth/login'].includes(route))continue;

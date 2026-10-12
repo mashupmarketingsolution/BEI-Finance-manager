@@ -374,6 +374,7 @@ app.use("/api", (req,res,next) => {
 app.use('/api',accessMiddleware);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
+require('./payment-approval').registerPaymentApproval(app,prisma);
 require('./stock-desk').registerStockDesk(app,prisma);
 require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
@@ -12236,6 +12237,7 @@ app.delete("/api/purchases/:id", async (req, res) => {
         // 1. FIND AUTOMATIC PURCHASE EXPENSE
         // -----------------------------------------
 
+        await require('./payment-approval').guardBillEdit(tx,id,true);
         const automaticExpense =
           await tx.transaction.findFirst({
             where: {
@@ -12311,6 +12313,7 @@ app.delete("/api/purchases/:id", async (req, res) => {
     });
 
   } catch (error) {
+    if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Delete Purchase Error:",
       error
@@ -12566,6 +12569,7 @@ app.put("/api/purchases/:id", async (req, res) => {
           // 1. CALCULATE PAYMENT SUMMARY FROM HISTORY
           // -----------------------------------------
 
+          await require('./payment-approval').guardBillEdit(tx,id);
           const paymentSummary =
             await tx.purchasePayment.aggregate({
               where: {
@@ -12894,6 +12898,7 @@ app.put("/api/purchases/:id", async (req, res) => {
     });
 
   } catch (error) {
+    if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Update Purchase Error:",
       error
