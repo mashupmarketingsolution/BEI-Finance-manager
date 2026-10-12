@@ -26,11 +26,7 @@ function registerWorkerAdvances(app,prisma){
     if(typeof b.reference!=='string'||!b.reference.trim()||b.reference.trim().length>100)fail('Enter a unique reference (maximum 100 characters)');
     if(b.notes!=null&&(typeof b.notes!=='string'||b.notes.length>500))fail('Notes must be at most 500 characters');
     if(!['CASH','BANK','MOBILE_BANKING','OTHER'].includes(b.paymentMethod))fail('Choose a payment method');
-    const data=await tx(async db=>{
-      const worker=await db.worker.findUnique({where:{id:workerId}});if(!worker||worker.status!=='ACTIVE')fail('Choose an active worker');
-      const transaction=await db.transaction.create({data:{type:'EXPENSE',source:'WORKER_ADVANCE',workerId,projectId,amount:amount/100,transactionDate:paymentDate,paymentMethod:b.paymentMethod,description:'Worker advance: '+b.reference.trim()}});
-      return db.workerAdvance.create({data:{workerId,projectId,amount:amount/100,paymentDate,paymentMethod:b.paymentMethod,reference:b.reference.trim(),notes:b.notes?.trim()||null,transactionId:transaction.id}});
-    });res.status(201).json({success:true,data});
+    const data=await require('./financial-approval').postApproved(prisma,req.user,b.approvalRequestId,b.version,'ADVANCE',b);res.status(201).json({success:true,data});
   }));
   app.post('/api/labour/advances/:id/allocations',route(async(req,res)=>{
     const advanceId=id(req.params.id),accrualId=id(req.body.accrualId),amount=cents(req.body.amount),allocationDate=dateOf(req.body.allocationDate);
@@ -52,8 +48,14 @@ function registerWorkerAdvances(app,prisma){
     await tx(async db=>{const a=await db.workerAdvanceAllocation.findUnique({where:{id:id(req.params.id)}});if(!a)fail('Allocation not found',404);await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${a.accrualId} FOR UPDATE`;await db.$queryRaw`SELECT id FROM worker_advances WHERE id=${a.advanceId} FOR UPDATE`;await db.workerAdvanceAllocation.delete({where:{id:a.id}});});res.json({success:true});
   }));
   app.post('/api/labour/advances/:id/reverse',route(async(req,res)=>{
-    await tx(async db=>{const record=id(req.params.id);await db.$queryRaw`SELECT id FROM worker_advances WHERE id=${record} FOR UPDATE`;const a=await db.workerAdvance.findUnique({where:{id:record},include:{allocations:true}});if(!a||a.reversedAt||!a.transactionId)fail('Active advance not found');if(a.allocations.length)fail('Undo all advance allocations before reversing this entry',409);await db.workerAdvance.update({where:{id:record},data:{reversedAt:new Date(),transactionId:null}});await db.transaction.delete({where:{id:a.transactionId}});});res.json({success:true});
+    await tx(async db=>{const record=id(req.params.id);await db.$queryRaw`SELECT id FROM worker_advances WHERE id=${record} FOR UPDATE`;const a=await db.workerAdvance.findUnique({where:{id:record},include:{allocations:true}});if(!a||a.reversedAt||!a.transactionId)fail('Active advance not found');if(a.allocations.length)fail('Undo all advance allocations before reversing this entry',409);await require('./financial-approval').recordReversal(db,req.user,a.transactionId,req.body?.notes);await db.workerAdvance.update({where:{id:record},data:{reversedAt:new Date(),transactionId:null}});await db.transaction.delete({where:{id:a.transactionId}});});res.json({success:true});
   }));
   app.use(['/api/expenses/:id','/api/income/:id','/api/transactions/:id'],route(async(req,res,next)=>{if(!['PUT','PATCH','DELETE'].includes(req.method))return next();if(await prisma.workerAdvance.count({where:{transactionId:id(req.params.id)}}))fail('Correct worker advances through Workers → Advance & Statement',409);next();}));
 }
-module.exports={registerWorkerAdvances,account};
+async function postWorkerAdvance(db,b){
+ const workerId=id(b.workerId),projectId=id(b.projectId),amount=cents(b.amount),paymentDate=dateOf(b.paymentDate);
+ const worker=await db.worker.findUnique({where:{id:workerId}});if(!worker||worker.status!=='ACTIVE')fail('Choose an active worker');
+ const transaction=await db.transaction.create({data:{type:'EXPENSE',source:'WORKER_ADVANCE',workerId,projectId,amount:amount/100,transactionDate:paymentDate,paymentMethod:b.paymentMethod,description:'Worker advance: '+b.reference}});
+ return db.workerAdvance.create({data:{workerId,projectId,amount:amount/100,paymentDate,paymentMethod:b.paymentMethod,reference:b.reference,notes:b.notes,transactionId:transaction.id}});
+}
+module.exports={registerWorkerAdvances,account,postWorkerAdvance};
