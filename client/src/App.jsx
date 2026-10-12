@@ -4,6 +4,7 @@ import StockDesk from './StockDesk';
 import ApprovalCenter from './ApprovalCenter';
 import ProcurementReviewDesk from './ProcurementReviewDesk';
 import PaymentRequests from './PaymentRequests';
+import FinancialRequests from './FinancialRequests';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -10721,10 +10722,7 @@ const viewProject = async (id) => {
           payload
         );
       } else {
-        response = await axios.post(
-          `${API_URL}/api/expenses`,
-          payload
-        );
+        response = await axios.post(API_URL+'/api/financial-requests',{kind:'EXPENSE',payload});
       }
 
       if (response.data.success) {
@@ -10739,7 +10737,7 @@ const viewProject = async (id) => {
         setMessage(
           editingExpenseId
             ? "✅ Expense successfully updated!"
-            : "✅ Expense successfully added!"
+            : "✅ Expense request submitted. Follow approval from Financial Requests."
         );
 
         setTimeout(() => {
@@ -27835,6 +27833,7 @@ if (!currentUser) {
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('approvals');}} className={activePage==='approvals'?'active':''}><FileCheck size={20}/><span>Approvals</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('procurement-review');}} className={activePage==='procurement-review'?'active':''}><FileCheck size={20}/><span>Procurement Review</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('payment-requests');}} className={activePage==='payment-requests'?'active':''}><FileCheck size={20}/><span>Payment Requests</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('financial-requests');}} className={activePage==='financial-requests'?'active':''}><FileCheck size={20}/><span>Financial Requests</span></a>
         </PermissionMenu>
 
 
@@ -28738,6 +28737,7 @@ if (!currentUser) {
         {activePage === 'approvals' && <ApprovalCenter apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'procurement-review' && <ProcurementReviewDesk apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'payment-requests' && <PaymentRequests apiUrl={API_URL} user={currentUser}/>}
+        {activePage === 'financial-requests' && <FinancialRequests apiUrl={API_URL} user={currentUser}/>}
 
 
         {renderProjectViewModal()}
@@ -30645,7 +30645,7 @@ if (!currentUser) {
                     ? "Saving..."
                     : editingExpenseId
                       ? "Update Expense"
-                      : "Save Expense"}
+                      : "Submit Expense Request"}
                 </button>
 
               </div>

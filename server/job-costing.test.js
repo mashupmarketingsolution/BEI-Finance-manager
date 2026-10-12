@@ -1,3 +1,4 @@
+const {wrapFinancialCalls,cleanupFinancialTest}=require('./financial-test-helper');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {consumptionCosts}=require('./consumption-cost');
 const {projectProfit}=require('./project-profit');
@@ -28,7 +29,8 @@ test('local payroll lifecycle, over-allocation and transaction protections',{ski
     worker=await prisma.worker.create({data:{name:'jc_'+stamp}});
     expense=await prisma.transaction.create({data:{type:'EXPENSE',amount:100,transactionDate:new Date('2026-01-01'),description:'test overhead'}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
-    const call=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const raw=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const call=wrapFinancialCalls(prisma,user,server,raw);
     const a=await call('job-costing/payroll','POST',{projectId:project.id,workerId:worker.id,reference:'jc_'+stamp,description:'Earned wages',earnedDate:'2026-01-01',amount:80});assert.equal(a.status,201);accrual=a.data;
     const pay=()=>call('job-costing/payroll/'+accrual.id+'/payments','POST',{amount:50,paymentDate:'2026-01-02',paymentMethod:'CASH'});
     const payments=await Promise.all([pay(),pay()]);assert.equal(payments.filter(p=>p.status===201).length,1);
@@ -41,9 +43,12 @@ test('local payroll lifecycle, over-allocation and transaction protections',{ski
     const report=(await call('reports/project-profit?basis=consumption')).data.find(p=>p.id===project.id);
     assert.equal(report.cost,105);assert.equal(report.cashOut,75);assert.equal(report.unpaidPayroll,30);
     assert.equal((await call('job-costing/payments/'+paid.id,'DELETE')).status,200);
+    const open=(await call('financial-requests')).data.filter(r=>r.accrualId===accrual.id&&['SUBMITTED','APPROVED'].includes(r.state));
+    for(const r of open)assert.equal((await call('financial-requests/'+r.id+'/cancel','POST',{version:r.version,notes:'Test cancellation before wage removal'})).status,200);
     assert.equal((await call('job-costing/payroll/'+accrual.id,'DELETE')).status,200);accrual=null;
     assert.equal((await call('job-costing/overheads/'+expense.id,'PUT',{allocations:[]})).status,200);
   }finally{
+    await cleanupFinancialTest(prisma,user);
     if(project){const ps=await prisma.payrollPayment.findMany({where:{accrual:{projectId:project.id}}});await prisma.payrollPayment.deleteMany({where:{id:{in:ps.map(p=>p.id)}}});await prisma.transaction.deleteMany({where:{id:{in:ps.map(p=>p.transactionId)}}});await prisma.payrollAccrual.deleteMany({where:{projectId:project.id}});await prisma.overheadAllocation.deleteMany({where:{projectId:project.id}});await prisma.project.delete({where:{id:project.id}});}
     if(expense)await prisma.transaction.delete({where:{id:expense.id}});if(worker)await prisma.worker.delete({where:{id:worker.id}});if(user)await prisma.user.delete({where:{id:user.id}});
     await new Promise(r=>server.close(r));await prisma.$disconnect();

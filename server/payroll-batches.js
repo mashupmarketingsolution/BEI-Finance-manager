@@ -63,6 +63,7 @@ function registerPayrollBatches(app,prisma){
       const accruals=await db.payrollAccrual.findMany({where:{batchId},orderBy:{id:'asc'}});
       if(accruals.length!==b.snapshot.length)fail('Batch records no longer match its snapshot; review required',409);
       for(const p of accruals){await db.$queryRaw`SELECT id FROM payroll_accruals WHERE id=${p.id} FOR UPDATE`;if(await db.payrollPayment.count({where:{accrualId:p.id}})||await db.workerAdvanceAllocation.count({where:{accrualId:p.id}}))fail('Reverse all wage payments and undo advance allocations before undoing this batch',409);}
+      for(const p of accruals)await require('./financial-approval').guardAccrualRemoval(db,p.id);
       await db.workerAttendance.updateMany({where:{payrollAccrualId:{in:accruals.map(p=>p.id)}},data:{payrollAccrualId:null}});
       await db.payrollAccrual.deleteMany({where:{batchId}});await db.payrollBatch.update({where:{id:batchId},data:{reversedAt:new Date()}});
     });res.json({success:true});

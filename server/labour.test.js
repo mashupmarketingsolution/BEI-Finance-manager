@@ -1,3 +1,4 @@
+const {wrapFinancialCalls,cleanupFinancialTest}=require('./financial-test-helper');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {earned}=require('./labour');
 test('daily, half-day and overtime wages round once and reject invalid work time',()=>{
@@ -13,7 +14,8 @@ test('attendance snapshots, duplicate protection and linked payroll lifecycle',{
   try{
     user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});worker=await prisma.worker.create({data:{name:prefix}});project=await prisma.project.create({data:{name:prefix,contractValue:1000}});other=await prisma.project.create({data:{name:prefix+'_other'}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
-    const call=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const raw=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const call=wrapFinancialCalls(prisma,user,server,raw);
     assert.equal((await fetch('http://127.0.0.1:'+server.address().port+'/api/labour')).status,401);
     const base={projectId:project.id,workerId:worker.id,workDate:'2026-01-02',dayUnits:'0.5',overtimeHours:'2'};
     assert.equal((await call('labour/attendance','POST',base)).status,400);
@@ -40,6 +42,7 @@ test('attendance snapshots, duplicate protection and linked payroll lifecycle',{
     ctx=await call('labour');assert.equal(Number(ctx.data.attendance.find(a=>a.id===attendance.id).amount),500);
     assert.equal((await call('labour/attendance/'+attendance.id,'DELETE')).status,200);
   }finally{
+    await cleanupFinancialTest(prisma,user);
     if(worker){const accruals=await prisma.payrollAccrual.findMany({where:{workerId:worker.id}});const payments=await prisma.payrollPayment.findMany({where:{accrualId:{in:accruals.map(a=>a.id)}}});await prisma.workerAttendance.deleteMany({where:{workerId:worker.id}});await prisma.payrollPayment.deleteMany({where:{id:{in:payments.map(p=>p.id)}}});await prisma.transaction.deleteMany({where:{id:{in:payments.map(p=>p.transactionId)}}});await prisma.payrollAccrual.deleteMany({where:{workerId:worker.id}});await prisma.workerRate.deleteMany({where:{workerId:worker.id}});await prisma.worker.delete({where:{id:worker.id}});}
     if(project)await prisma.project.delete({where:{id:project.id}});if(other)await prisma.project.delete({where:{id:other.id}});if(user)await prisma.user.delete({where:{id:user.id}});
     await new Promise(r=>server.close(r));await prisma.$disconnect();

@@ -375,6 +375,7 @@ app.use('/api',accessMiddleware);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);
+require('./financial-approval').registerFinancialApproval(app,prisma);
 require('./stock-desk').registerStockDesk(app,prisma);
 require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);

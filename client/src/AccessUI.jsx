@@ -5,6 +5,7 @@ names['Stock Desk']='stock-desk';
 names['Approvals']='approvals';
 names['Procurement Review']='procurement-review';
 names['Payment Requests']='payment-requests';
+names['Financial Requests']='financial-requests';
 export function PermissionMenu({permissions,children}){return <nav className="menu">{Children.toArray(children).filter(c=>isValidElement(c)&&permissions?.pages?.includes(names[text(c).trim()]))}</nav>;}
 const mutation=/\b(add|create|save|edit|delete|remove|record|generate|post|undo|reverse|allocate|issue|void|accept|reject|send|convert|award|receive|usage|return|use|damage|adjust|archive|restore|complete|reopen|link|apply to wages)\b/i;
 // This is presentation assistance for legacy forms. The server is the authority.

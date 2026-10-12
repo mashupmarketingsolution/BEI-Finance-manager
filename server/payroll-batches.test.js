@@ -1,3 +1,4 @@
+const {wrapFinancialCalls,cleanupFinancialTest}=require('./financial-test-helper');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {preview,presentBatch}=require('./payroll-batches');
 test('batch preview separates pending wages, posted settlements and unused advances',()=>{
@@ -13,7 +14,8 @@ test('local payroll batches are atomic, race-safe and reversible with preserved 
   try{
     user=await prisma.user.create({data:{name:prefix,username:prefix,role:'ADMIN',passwordHash:'test-only'}});project=await prisma.project.create({data:{name:prefix,contractValue:1000}});worker=await prisma.worker.create({data:{name:prefix}});other=await prisma.worker.create({data:{name:prefix+'_other'}});
     const token=require('jsonwebtoken').sign({userId:user.id},process.env.JWT_SECRET,{expiresIn:'5m'});
-    const call=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const raw=async(path,method='GET',body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,...await r.json()};};
+    const call=wrapFinancialCalls(prisma,user,server,raw);
     assert.equal((await fetch('http://127.0.0.1:'+server.address().port+'/api/labour/payroll-batches')).status,401);
     const attend=(day,amount,workerId=worker.id)=>prisma.workerAttendance.create({data:{workerId,projectId:project.id,workDate:new Date('2026-01-0'+day),dayUnits:amount?1:0,overtimeHours:0,dailyRate:amount||100,overtimeRate:0,amount}});
     const [a1,a2,a3,a4,a5]=await Promise.all([attend(1,200),attend(2,300),attend(3,150),attend(4,0),attend(2,400,other.id)]);
@@ -32,6 +34,9 @@ test('local payroll batches are atomic, race-safe and reversible with preserved 
     assert.equal((await make([a5.id],prefix,{workerId:''})).status,409);assert.equal((await prisma.workerAttendance.findUnique({where:{id:a5.id}})).payrollAccrualId,null);
     const race=await Promise.all([make([a5.id],prefix+'_race1',{workerId:''}),make([a5.id],prefix+'_race2',{workerId:''})]);assert.equal(race.filter(r=>r.status===201).length,1);
     const p=batch.accruals.find(p=>p.reference==='ATT-'+a2.id);
+    const pending=await call('financial-requests','POST',{kind:'PAYROLL',payload:{accrualId:p.id,amount:10,paymentDate:'2026-01-04',paymentMethod:'CASH'}});assert.equal(pending.status,201);
+    assert.equal((await call('labour/payroll-batches/'+batchId+'/reverse','POST',{})).status,409);
+    assert.equal((await call('financial-requests/'+pending.data.id+'/cancel','POST',{version:pending.data.version,notes:'Cancel before test batch correction'})).status,200);
     assert.equal((await call('labour/attendance/'+a2.id+'/payroll','DELETE')).status,409);assert.equal((await call('job-costing/payroll/'+p.id,'DELETE')).status,400);
     const payment=await call('job-costing/payroll/'+p.id+'/payments','POST',{amount:100,paymentDate:'2026-01-04',paymentMethod:'CASH'});assert.equal(payment.status,201);
     const allocation=await call('labour/advances/'+advance.data.id+'/allocations','POST',{accrualId:p.id,amount:50,allocationDate:'2026-01-04'});assert.equal(allocation.status,201);
@@ -43,6 +48,7 @@ test('local payroll batches are atomic, race-safe and reversible with preserved 
     assert.equal((await prisma.workerAttendance.findUnique({where:{id:a2.id}})).payrollAccrualId,null);assert.equal((await call('labour/attendance/'+a2.id+'/payroll','POST',{})).status,201);
     const projectReport=(await call('reports/project-profit?basis=consumption')).data.find(p=>p.id===project.id);assert.equal(projectReport.cost,900);assert.equal(projectReport.cashOut,150);assert.equal(projectReport.unpaidPayroll,830);
   }finally{
+    await cleanupFinancialTest(prisma,user);
     const ids=[worker?.id,other?.id].filter(Boolean);const accruals=await prisma.payrollAccrual.findMany({where:{workerId:{in:ids}}});const advances=await prisma.workerAdvance.findMany({where:{workerId:{in:ids}}});
     await prisma.workerAttendance.deleteMany({where:{workerId:{in:ids}}});await prisma.workerAdvanceAllocation.deleteMany({where:{advanceId:{in:advances.map(a=>a.id)}}});await prisma.workerAdvance.deleteMany({where:{id:{in:advances.map(a=>a.id)}}});await prisma.payrollPayment.deleteMany({where:{accrualId:{in:accruals.map(a=>a.id)}}});await prisma.transaction.deleteMany({where:{workerId:{in:ids}}});await prisma.payrollAccrual.deleteMany({where:{workerId:{in:ids}}});await prisma.payrollBatch.deleteMany({where:{reference:{startsWith:prefix}}});await prisma.worker.deleteMany({where:{id:{in:ids}}});if(project)await prisma.project.delete({where:{id:project.id}});if(user)await prisma.user.delete({where:{id:user.id}});await new Promise(r=>server.close(r));await prisma.$disconnect();
   }

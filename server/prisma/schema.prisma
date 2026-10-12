@@ -36,6 +36,8 @@ enum CustomerType {
 }
 
 model User {
+  financialRequests FinancialRequest[] @relation("FinancialRequester")
+  financialActions FinancialEvent[]
   paymentRequests VendorPaymentRequest[] @relation("PaymentRequester")
   paymentReviewActions VendorPaymentEvent[]
   procurementCreated ProcurementApproval[] @relation("ProcurementCreator")
@@ -341,6 +343,7 @@ enum TransactionSource {
 }
 
 model Transaction {
+  financialRequest FinancialRequest?
   workerAdvance WorkerAdvance?
   payrollPayment PayrollPayment?
   overheadAllocations OverheadAllocation[]
@@ -375,6 +378,7 @@ model Transaction {
 }
 
 model PayrollAccrual {
+  financialRequests FinancialRequest[]
   batchId Int?
   batch PayrollBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
   advanceAllocations WorkerAdvanceAllocation[]
@@ -478,6 +482,43 @@ model PayrollPayment {
   accrual PayrollAccrual @relation(fields: [accrualId], references: [id], onDelete: Restrict)
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   @@map("payroll_payments")
+}
+
+model FinancialRequest {
+  id Int @id @default(autoincrement())
+  kind String @db.VarChar(20)
+  creatorId Int
+  accrualId Int?
+  payload Json
+  snapshot Json
+  targetFingerprint String? @db.VarChar(64)
+  state String @default("SUBMITTED") @db.VarChar(20)
+  version Int @default(1)
+  transactionId Int? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  creator User @relation("FinancialRequester",fields:[creatorId],references:[id],onDelete:Restrict)
+  accrual PayrollAccrual? @relation(fields:[accrualId],references:[id],onDelete:SetNull)
+  transaction Transaction? @relation(fields:[transactionId],references:[id],onDelete:SetNull)
+  events FinancialEvent[]
+  @@index([state,kind])
+  @@index([accrualId])
+  @@map("financial_requests")
+}
+
+model FinancialEvent {
+  id Int @id @default(autoincrement())
+  requestId Int
+  actorId Int
+  actorRole String @db.VarChar(30)
+  action String @db.VarChar(20)
+  notes String? @db.Text
+  snapshot Json
+  createdAt DateTime @default(now())
+  request FinancialRequest @relation(fields:[requestId],references:[id],onDelete:Cascade)
+  actor User @relation(fields:[actorId],references:[id],onDelete:Restrict)
+  @@index([requestId])
+  @@map("financial_events")
 }
 
 model OverheadAllocation {

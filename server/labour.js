@@ -53,7 +53,7 @@ function registerLabour(app,prisma){
       const p=await db.payrollAccrual.findUnique({where:{id:a.payrollAccrualId}});if(p?.batchId)fail('Undo this payroll batch from Workers → Payroll Batches',409);
       if(await db.payrollPayment.count({where:{accrualId:a.payrollAccrualId}}))fail('Reverse wage payments in Project Profit & Loss before undoing payroll',409);
       if(await db.workerAdvanceAllocation.count({where:{accrualId:a.payrollAccrualId}}))fail('Undo advance allocations in Workers before undoing payroll',409);
-      await db.workerAttendance.update({where:{id:record},data:{payrollAccrualId:null}});await db.payrollAccrual.delete({where:{id:a.payrollAccrualId}});
+      await require('./financial-approval').guardAccrualRemoval(db,a.payrollAccrualId);await db.workerAttendance.update({where:{id:record},data:{payrollAccrualId:null}});await db.payrollAccrual.delete({where:{id:a.payrollAccrualId}});
     });res.json({success:true});
   }));
 }
