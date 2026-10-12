@@ -8,9 +8,9 @@ Implemented 2026-10-12. Role permissions apply across the company; project-speci
 |---|---|---|
 | Admin | Current business pages and User Access | All current business functions and existing user access |
 | Accounts | Financial dashboard, billing, payables, project profit, income, expenses, transactions, workers and categories | Finance, payroll, workers and job costs; other operational pages denied. Minimal project/vendor lookups support forms without exposing those pages |
-| Project Manager | Projects, site work, CRM, estimates, procurement, workers, stock, project profit and Approvals | Operational work and independent inspection review; company cash-ledger/dashboard pages and payroll posting denied |
+| Project Manager | Projects, site work, CRM, estimates, procurement, Procurement Review, workers, stock, project profit and Approvals | Operational work and independent inspection/PR/PO review; company cash-ledger/dashboard pages and payroll posting denied |
 | Site Supervisor | Reports, photos, tasks, inspections and minimal project lookups | Site reports/photos, tasks and inspections |
-| Procurement Officer | Vendors, materials/prices, requests, RFQs, purchase orders, purchases and Stock Desk quantities; minimal project/category lookups | Vendor/material/price records and procurement workflows; no stock changes, payments, payroll or ordinary record deletion |
+| Procurement Officer | Vendors, materials/prices, requests, RFQs, purchase orders, purchases, Procurement Review and Stock Desk quantities; minimal project/category lookups | Vendor/material/price records and procurement submission; no approval decisions, stock changes, payments, payroll or ordinary record deletion |
 | Storekeeper | Stock Desk quantities, pending receipt items and stock history | Existing purchase receiving, project issues and returns only; no costs/prices, payments, master-record edits, damage or stock adjustments |
 | Viewer / Auditor | Project profit, Site Reports and Stock Desk only | No changes; company income/expense/transaction pages, payroll and user access denied |
 

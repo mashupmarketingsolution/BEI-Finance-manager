@@ -36,6 +36,8 @@ enum CustomerType {
 }
 
 model User {
+  procurementCreated ProcurementApproval[] @relation("ProcurementCreator")
+  procurementActions ProcurementApprovalEvent[]
   inspectionApprovalActions InspectionApproval[]
   role UserRole @default(SITE_SUPERVISOR)
   accessVersion Int @default(1)
@@ -799,6 +801,7 @@ model VendorMaterialPrice {
 }
 
 model PurchaseRequest {
+  approval ProcurementApproval? @relation("RequestApproval")
   id          Int                     @id @default(autoincrement())
   requestNo   String                  @unique @db.VarChar(50)
   requestDate DateTime
@@ -893,6 +896,7 @@ model RFQItem {
 }
 
 model PurchaseOrder {
+  approval ProcurementApproval? @relation("OrderApproval")
   id            Int                 @id @default(autoincrement())
   poNo          String              @unique @db.VarChar(50)
   poDate        DateTime
@@ -921,6 +925,37 @@ model PurchaseOrder {
   @@index([status])
   @@index([poDate])
   @@map("purchase_orders")
+}
+
+model ProcurementApproval {
+  id Int @id @default(autoincrement())
+  requestId Int? @unique
+  orderId Int? @unique
+  creatorId Int?
+  state String @default("NOT_SUBMITTED") @db.VarChar(20)
+  version Int @default(1)
+  approvedFingerprint String? @db.VarChar(64)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  request PurchaseRequest? @relation("RequestApproval", fields: [requestId], references: [id], onDelete: Cascade)
+  order PurchaseOrder? @relation("OrderApproval", fields: [orderId], references: [id], onDelete: Cascade)
+  creator User? @relation("ProcurementCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  events ProcurementApprovalEvent[]
+  @@map("procurement_approvals")
+}
+
+model ProcurementApprovalEvent {
+  id Int @id @default(autoincrement())
+  approvalId Int
+  actorId Int
+  actorRole String @db.VarChar(30)
+  action String @db.VarChar(20)
+  notes String? @db.Text
+  snapshot Json
+  createdAt DateTime @default(now())
+  approval ProcurementApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@map("procurement_approval_events")
 }
 
 model PurchaseOrderItem {

@@ -18,7 +18,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; actual advance refunds, approvals and durable actor/action audit remain |
 | 13 | Site Management | Reports/photos, tasks, inspections and independent role-based inspection approval with immutable review snapshots implemented |
 | 14 | Documents / File Management | Full workflow remains |
-| 15 | Approval System | Site Inspection submission, independent Admin/Project Manager decision, rejection correction and review history implemented; purchase/PO, payment and configurable multi-step approvals remain |
+| 15 | Approval System | Site Inspection and Purchase Request/PO submission, independent Admin/Project Manager decision, correction/reopening, immutable review history and gated PR/PO conversion implemented; payment and configurable multi-step approvals remain |
 | 16 | Reports & Business Intelligence | Some dashboard/report foundations exist; full management reports remain |
 | 17 | User Roles & Security | Only Admin has every page; seven role-specific page/API allowlists, account creation/access management, private Stock Desk and stale-change guards implemented; permissions are company-wide, not project-assignment-specific |
 | 18 | Audit Log / Security | Durable user action audit trail remains |

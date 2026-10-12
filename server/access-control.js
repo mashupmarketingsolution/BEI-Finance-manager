@@ -10,16 +10,16 @@ function newUserData(body){
  const role=body.role===undefined?'SITE_SUPERVISOR':body.role;if(!roles.includes(role))bad('Choose a valid user role');
  return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
 }
-const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals'];
+const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review'];
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const finance=['billing','payables','project-profit','income','expenses','transactions','workers'];
 function permissions(role){
  if(!roles.includes(role))return {pages:[],writePages:[],financeWrite:false};
  if(role==='STOREKEEPER')return {pages:['stock-desk'],writePages:['stock-desk'],financeWrite:false};
- if(role==='PROCUREMENT_OFFICER')return {pages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','stock-desk'],writePages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders'],financeWrite:false,projectLookup:true};
+ if(role==='PROCUREMENT_OFFICER')return {pages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','stock-desk','procurement-review'],writePages:['vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','procurement-review'],financeWrite:false,projectLookup:true};
  if(role==='VIEWER')return {pages:['project-profit','site-reports','stock-desk'],writePages:[],financeWrite:false};
- return {pages:role==='SITE_SUPERVISOR'?['site-reports']:role==='ADMIN'?[...pages,'user-access']:role==='ACCOUNTS'?['dashboard',...finance,'categories']:[...operations,'stock-desk','project-profit','approvals'],
-  writePages:role==='ADMIN'?[...pages,'user-access']:role==='PROJECT_MANAGER'?[...operations,'stock-desk','approvals']:role==='ACCOUNTS'?finance:['site-reports'],
+ return {pages:role==='SITE_SUPERVISOR'?['site-reports']:role==='ADMIN'?[...pages,'user-access']:role==='ACCOUNTS'?['dashboard',...finance,'categories']:[...operations,'stock-desk','project-profit','approvals','procurement-review'],
+  writePages:role==='ADMIN'?[...pages,'user-access']:role==='PROJECT_MANAGER'?[...operations,'stock-desk','approvals','procurement-review']:role==='ACCOUNTS'?finance:['site-reports'],
   projectLookup:role==='ACCOUNTS',vendorLookup:role==='ACCOUNTS',
   financeWrite:['ADMIN','ACCOUNTS'].includes(role)};
 }
@@ -49,6 +49,7 @@ function allowed(role,path,method){
  if(r==='self')return roles.includes(role);
  if(!r)return false;
  if(role==='ADMIN')return true;
+ if(/^\/procurement-review\/[^/]+\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
  if(/^\/site-inspections\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
  if(role==='STOREKEEPER')return (path==='/stock-desk'&&read)||(method==='POST'&&(/^\/purchases\/\d+\/receive\/?$/.test(path)||['/stock-movements/usage','/stock-movements/return'].includes(path)));
  if(['PROJECT_MANAGER','PROCUREMENT_OFFICER'].includes(role)&&method==='DELETE'&&!['site-reports','attendance'].includes(r))return false;

@@ -1,7 +1,8 @@
 import PaginatedTable from "./PaginatedTable";
 import UserAccess from './UserAccess';
 import StockDesk from './StockDesk';
-import ApprovalQueue from './ApprovalQueue';
+import ApprovalCenter from './ApprovalCenter';
+import ProcurementReviewDesk from './ProcurementReviewDesk';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import SiteReports from "./SiteReports";
 import Labour from "./Labour";
@@ -2295,7 +2296,7 @@ const editPurchaseRequest = async (id) => {
           : "",
 
       status:
-        request.status || "DRAFT",
+        "DRAFT",
 
       priority:
         request.priority || "NORMAL",
@@ -22403,27 +22404,8 @@ const renderPurchaseRequestEditModal = () => {
                   DRAFT
                 </option>
 
-                <option value="PENDING">
-                  PENDING
-                </option>
-
-                <option value="APPROVED">
-                  APPROVED
-                </option>
-
-                <option value="REJECTED">
-                  REJECTED
-                </option>
-
-                <option value="CONVERTED">
-                  CONVERTED
-                </option>
-
-                <option value="CANCELLED">
-                  CANCELLED
-                </option>
-
               </select>
+              <small>Reopen reviewed requests in Procurement Review before editing.</small>
 
             </div>
 
@@ -22918,26 +22900,8 @@ const renderPurchaseRequestModal = () => {
                   DRAFT
                 </option>
 
-                <option value="PENDING">
-                  PENDING
-                </option>
-
-                <option value="APPROVED">
-                  APPROVED
-                </option>
-
-                <option value="REJECTED">
-                  REJECTED
-                </option>
-
-                <option value="CONVERTED">
-                  CONVERTED
-                </option>
-
-                <option value="CANCELLED">
-                  CANCELLED
-                </option>
               </select>
+              <small>Submit and review requests from Procurement Review.</small>
             </div>
 
             <div className="form-group">
@@ -27868,6 +27832,7 @@ if (!currentUser) {
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('user-access');}} className={activePage==='user-access'?'active':''}><UserCheck size={20}/><span>User Access</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('stock-desk');}} className={activePage==='stock-desk'?'active':''}><Boxes size={20}/><span>Stock Desk</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('approvals');}} className={activePage==='approvals'?'active':''}><FileCheck size={20}/><span>Approvals</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('procurement-review');}} className={activePage==='procurement-review'?'active':''}><FileCheck size={20}/><span>Procurement Review</span></a>
         </PermissionMenu>
 
 
@@ -28768,7 +28733,8 @@ if (!currentUser) {
         {activePage === "rfqs" && renderRFQs()}
         {activePage === 'user-access' && <UserAccess apiUrl={API_URL} currentUser={currentUser}/>}
         {activePage === 'stock-desk' && <StockDesk apiUrl={API_URL}/>}
-        {activePage === 'approvals' && <ApprovalQueue apiUrl={API_URL} user={currentUser}/>}
+        {activePage === 'approvals' && <ApprovalCenter apiUrl={API_URL} user={currentUser}/>}
+        {activePage === 'procurement-review' && <ProcurementReviewDesk apiUrl={API_URL} user={currentUser}/>}
 
 
         {renderProjectViewModal()}

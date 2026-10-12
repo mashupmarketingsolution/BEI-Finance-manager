@@ -9,6 +9,7 @@ const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 const { validateContact, customerFinancials } = require("./crm");
 const { categories: quotationCategories, validateFinalization, registerQuotationWorkflow } = require("./quotation-workflow");
 const app = express();
+const procurementApproval = require('./procurement-approval');
 const {permissions,accessMiddleware,registerUserAccess} = require('./access-control');
 const PORT = process.env.PORT || 5000;
 
@@ -372,6 +373,7 @@ app.use("/api", (req,res,next) => {
 });
 app.use('/api',accessMiddleware);
 registerUserAccess(app,prisma);
+procurementApproval.registerProcurementApproval(app,prisma);
 require('./stock-desk').registerStockDesk(app,prisma);
 require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
@@ -7433,6 +7435,7 @@ app.post("/api/purchase-requests", async (req, res) => {
     const purchaseRequest =
       await prisma.purchaseRequest.create({
         data: {
+          approval: {create: {creatorId: req.user.id}},
           requestNo:
             requestNo.trim(),
 
@@ -7472,6 +7475,7 @@ app.post("/api/purchase-requests", async (req, res) => {
     });
 
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Create Purchase Request Error:",
       error
@@ -7588,7 +7592,7 @@ app.post(
       // ==============================
 
       const item =
-        await prisma.purchaseRequestItem.create({
+        await procurementApproval.guardedMutation(prisma,'requests',purchaseRequestId,db=>db.purchaseRequestItem.create({
           data: {
             purchaseRequestId,
             materialId: Number(materialId),
@@ -7611,7 +7615,7 @@ app.post(
               },
             },
           },
-        });
+        }));
 
       res.status(201).json({
         success: true,
@@ -7620,6 +7624,7 @@ app.post(
         data: item,
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Create Purchase Request Item Error:",
         error
@@ -7705,7 +7710,7 @@ app.put(
       }
 
       const item =
-        await prisma.purchaseRequestItem.update({
+        await procurementApproval.guardedItemMutation(prisma,id,db=>db.purchaseRequestItem.update({
           where: { id },
 
           data: {
@@ -7726,7 +7731,7 @@ app.put(
               },
             },
           },
-        });
+        }));
 
       res.json({
         success: true,
@@ -7735,6 +7740,7 @@ app.put(
         data: item,
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update Purchase Request Item Error:",
         error
@@ -7780,9 +7786,9 @@ app.delete(
         });
       }
 
-      await prisma.purchaseRequestItem.delete({
+      await procurementApproval.guardedItemMutation(prisma,id,db=>db.purchaseRequestItem.delete({
         where: { id },
-      });
+      }));
 
       res.json({
         success: true,
@@ -7790,6 +7796,7 @@ app.delete(
           "Purchase request item deleted successfully",
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete Purchase Request Item Error:",
         error
@@ -7962,7 +7969,7 @@ app.put(
       // ==============================
 
       const updatedRequest =
-        await prisma.purchaseRequest.update({
+        await procurementApproval.guardedMutation(prisma,'requests',id,db=>db.purchaseRequest.update({
           where: {
             id,
           },
@@ -8002,7 +8009,7 @@ app.put(
               },
             },
           },
-        });
+        }));
 
       res.json({
         success: true,
@@ -8011,6 +8018,7 @@ app.put(
         data: updatedRequest,
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update Purchase Request Error:",
         error
@@ -8062,11 +8070,11 @@ app.delete(
         });
       }
 
-      await prisma.purchaseRequest.delete({
+      await procurementApproval.guardedMutation(prisma,'requests',id,db=>db.purchaseRequest.delete({
         where: {
           id,
         },
-      });
+      }),true);
 
       res.json({
         success: true,
@@ -8074,6 +8082,7 @@ app.delete(
           "Purchase request deleted successfully",
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete Purchase Request Error:",
         error
@@ -8139,6 +8148,7 @@ app.get(
         data: purchaseRequest,
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Get Purchase Request Details Error:",
         error
@@ -8189,6 +8199,7 @@ app.get("/api/rfqs", async (req, res) => {
       data: rfqs,
     });
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Get RFQs Error:",
       error
@@ -8329,6 +8340,7 @@ app.post("/api/rfqs", async (req, res) => {
     });
 
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Create RFQ Error:",
       error
@@ -8481,6 +8493,7 @@ app.post(
       const rfq =
         await prisma.$transaction(
           async (tx) => {
+            await procurementApproval.guardConversion(tx,'requests',purchaseRequest);
 
             const createdRFQ =
               await tx.rFQ.create({
@@ -8609,6 +8622,7 @@ app.post(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
 
       console.error(
         "Convert Purchase Request To RFQ Error:",
@@ -8818,6 +8832,7 @@ app.put(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update RFQ Error:",
         error
@@ -8913,6 +8928,7 @@ app.delete(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete RFQ Error:",
         error
@@ -9058,6 +9074,7 @@ app.post(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Create RFQ Item Error:",
         error
@@ -9207,6 +9224,7 @@ app.put(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update RFQ Item Error:",
         error
@@ -9264,6 +9282,7 @@ app.delete(
         message: "RFQ item deleted successfully",
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete RFQ Item Error:",
         error
@@ -9443,6 +9462,7 @@ app.post(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Add RFQ Vendor Error:",
         error
@@ -9648,6 +9668,7 @@ app.put(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update RFQ Vendor Error:",
         error
@@ -9713,6 +9734,7 @@ app.delete(
         message: "RFQ vendor deleted successfully",
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete RFQ Vendor Error:",
         error
@@ -9908,6 +9930,7 @@ app.get(
         },
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "RFQ Price Comparison Error:",
         error
@@ -10069,6 +10092,7 @@ app.post(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Award RFQ Error:",
         error
@@ -10140,6 +10164,7 @@ app.get("/api/rfqs/:id", async (req, res) => {
       data: rfq,
     });
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Get RFQ Details Error:",
       error
@@ -10435,6 +10460,7 @@ app.post("/api/purchase-orders", async (req, res) => {
     const purchaseOrder =
       await prisma.purchaseOrder.create({
         data: {
+          approval: {create: {creatorId: req.user.id}},
           poNo:
             poNo.trim(),
 
@@ -10516,6 +10542,7 @@ app.post("/api/purchase-orders", async (req, res) => {
     });
 
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Create Purchase Order Error:",
       error
@@ -10566,6 +10593,7 @@ app.get("/api/purchase-orders", async (req, res) => {
       data: purchaseOrders,
     });
   } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
     console.error(
       "Get Purchase Orders Error:",
       error
@@ -10632,6 +10660,7 @@ app.get(
         data: purchaseOrder,
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Get Single Purchase Order Error:",
         error
@@ -10954,6 +10983,8 @@ app.put(
       const updatedPO =
         await prisma.$transaction(
           async (tx) => {
+            await procurementApproval.editable(tx,'orders',id);
+            await tx.procurementApproval.updateMany({where:{orderId:id},data:{version:{increment:1}}});
             await tx.purchaseOrder.update({
               where: {
                 id,
@@ -11078,6 +11109,7 @@ app.put(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update Purchase Order Error:",
         error
@@ -11132,11 +11164,11 @@ app.delete(
         });
       }
 
-      await prisma.purchaseOrder.delete({
+      await procurementApproval.guardedMutation(prisma,'orders',id,db=>db.purchaseOrder.delete({
         where: {
           id,
         },
-      });
+      }),true);
 
       res.json({
         success: true,
@@ -11144,6 +11176,7 @@ app.delete(
           "Purchase order deleted successfully",
       });
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Delete Purchase Order Error:",
         error
@@ -11285,7 +11318,7 @@ app.patch(
       // ==============================
 
       const updatedPurchaseOrder =
-        await prisma.purchaseOrder.update({
+        await procurementApproval.guardedStatus(prisma,id,status,db=>db.purchaseOrder.update({
           where: {
             id,
           },
@@ -11305,7 +11338,7 @@ app.patch(
               },
             },
           },
-        });
+        }),currentStatus);
 
       res.json({
         success: true,
@@ -11315,6 +11348,7 @@ app.patch(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Update Purchase Order Status Error:",
         error
@@ -11444,6 +11478,7 @@ app.post(
       const result =
         await prisma.$transaction(
           async (tx) => {
+            await procurementApproval.guardConversion(tx,'orders',purchaseOrder);
             // ---------------------------------
             // CREATE PURCHASE
             // ---------------------------------
@@ -11654,6 +11689,7 @@ app.post(
       });
 
     } catch (error) {
+      if(error.status)return res.status(error.status).json({success:false,message:error.message});
       console.error(
         "Convert Purchase Order Error:",
         error
