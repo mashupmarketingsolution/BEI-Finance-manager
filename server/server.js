@@ -389,6 +389,7 @@ require("./worker-advances").registerWorkerAdvances(app, prisma);
 require("./job-costing").registerJobCosting(app, prisma);
 require("./labour").registerLabour(app, prisma);
 require("./payroll-batches").registerPayrollBatches(app, prisma);
+require("./material-price-review").registerPriceValidation(app);
 require("./documents").registerDocuments(app, prisma);
 require("./site-reports").registerSiteReports(app, prisma);
 require("./site-tasks").registerSiteTasks(app, prisma);
@@ -13343,46 +13344,14 @@ app.get(
           ],
         });
 
-      const priceValues = prices.map(
-        (item) =>
-          Number(item.unitPrice) || 0
-      );
-
-      const lowestPrice =
-        priceValues.length > 0
-          ? Math.min(...priceValues)
-          : 0;
-
-      const highestPrice =
-        priceValues.length > 0
-          ? Math.max(...priceValues)
-          : 0;
-
-      const averagePrice =
-        priceValues.length > 0
-          ? priceValues.reduce(
-              (sum, price) =>
-                sum + price,
-              0
-            ) / priceValues.length
-          : 0;
-
-      const bestVendor =
-        prices.length > 0
-          ? prices[0].vendor
-          : null;
+      const summary = require("./material-price-review").comparePrices(prices,material.unit);
 
       res.json({
         success: true,
 
         data: prices,
 
-        summary: {
-          lowestPrice,
-          highestPrice,
-          averagePrice,
-          bestVendor,
-        },
+        summary,
       });
 
     } catch (error) {

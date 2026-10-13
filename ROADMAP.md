@@ -5,7 +5,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | Phase | Original scope | Current status / remaining work |
 |---|---|---|
 | 1 | Materials Master | Core implemented; photo and full source checklist still need completion/verification |
-| 2 | Vendor Price Comparison | Vendor prices and lead times implemented; complete recommendation/history scope needs verification |
+| 2 | Vendor Price Comparison | Same-unit current-price summaries now exclude obsolete/future quotes and inactive vendors; price validation and CRUD verified. Full quantity-aware recommendation/history scope remains |
 | 3 | BOQ / Estimation | Estimation and selected-BOQ purchase-cost/variance comparison implemented; consumption valuation remains outside scope |
 | 4 | Purchase Request → RFQ → PO | Core workflow exists; receiving integrity fixes included in this review |
 | 5 | Inventory / Stock | Receive/usage/return/damage/adjustment exist; reservation and transfer remain |
@@ -15,7 +15,7 @@ Source: “BEI Finance Manager Phases আলাদা করা”, Pasted markd
 | 9 | Vendor Payables | Core statements/payments/reversal tested; unlinked historical payments cannot be automatically reversed |
 | 10 | Full Accounting | Not implemented: chart of accounts, balanced journals, ledger, trial balance, balance sheet and accounting cash flow |
 | 11 | Project Job Costing | Purchase/consumption bases, weighted stock valuation with incomplete-history warnings, accrued wages and manual overhead allocation implemented; BOQ purchase variance and margin available |
-| 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; actual advance refunds, approvals and durable actor/action audit remain |
+| 12 | Worker / Labour Management | Wage rates, attendance/overtime, atomic pay-period batches, advance allocation/reversal and worker statements implemented; wage partial payment/reversal retained; payroll/advance approval and authenticated action audit implemented; actual advance refunds and allocation approval remain |
 | 13 | Site Management | Reports/photos, tasks, inspections and independent role-based inspection approval with immutable review snapshots implemented |
 | 14 | Documents / File Management | Project files, versions, authenticated download, archive/restore and role/project access implemented; office formats, previews and sharing remain |
 | 15 | Approval System | Inspection/PR/PO review and gated conversion, vendor payments, wage settlements, worker advance disbursement and new ordinary expenses require independent approval with preserved posting/correction history. Advance allocation, earned-payroll/overhead allocation approval, limits and configurable multi-step approvals remain |

@@ -19609,6 +19609,7 @@ const quotationGrandTotal =
 
 
                 {/* PRICE SUMMARY */}
+                <p>Comparison: {materialPriceSummary.comparisonUnit || selectedMaterial?.unit}. Latest effective quote per active vendor as of {materialPriceSummary.asOfDate || 'today'}; {materialPriceSummary.eligibleCount || 0} comparable vendors. Other units and price history remain in the table. Check minimum quantity and lead time before choosing.</p>
 
                 <div className="material-price-summary">
 
@@ -19623,7 +19624,7 @@ const quotationGrandTotal =
                     </strong>
 
                     <small>
-                      Lowest vendor price
+                      Lowest current price for this unit
                     </small>
                   </div>
 
@@ -19639,7 +19640,7 @@ const quotationGrandTotal =
                     </strong>
 
                     <small>
-                      Highest quotation
+                      Highest current price for this unit
                     </small>
                   </div>
 
@@ -19660,7 +19661,7 @@ const quotationGrandTotal =
                     </strong>
 
                     <small>
-                      Average vendor price
+                      Average current price for this unit
                     </small>
                   </div>
 
