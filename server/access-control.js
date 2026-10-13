@@ -30,7 +30,7 @@ function resource(path,method){
  if(root==='access')return 'user-access';
  if(root==='users')return method==='GET'&&parts.length===1?'people':null;
  if(['site-reports','site-photos','site-tasks','site-inspections'].includes(root))return 'site-reports';
- if(root==='reports')return path==='/reports/project-profit'?'project-profit':null;
+ if(root==='reports')return ['/reports/project-profit','/reports/project-profit/export'].includes(path)?'project-profit':null;
  if(root==='job-costing')return 'project-profit';
  if(root==='labour'){
   if(root&&parts[1]==='attendance'&&!parts[3])return 'attendance';

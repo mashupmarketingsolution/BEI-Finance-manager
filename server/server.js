@@ -384,6 +384,7 @@ require("./stock-safe").registerStock(app, prisma);
 require("./billing").registerBilling(app, prisma, authMiddleware);
 require("./payables").registerPayables(app, prisma, authMiddleware);
 require("./project-profit").registerProjectProfit(app, prisma, authMiddleware);
+require("./project-profit-export").registerProjectProfitExport(app, prisma);
 require("./worker-advances").registerWorkerAdvances(app, prisma);
 require("./job-costing").registerJobCosting(app, prisma);
 require("./labour").registerLabour(app, prisma);

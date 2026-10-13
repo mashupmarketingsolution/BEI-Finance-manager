@@ -8,12 +8,12 @@ const money = value => '৳ ' + Number(value || 0).toLocaleString('en-BD', {mini
 const metrics = [['Contract value','contract'],['Recorded cost','cost'],['Projected profit / loss','projectedProfit'],['Cash balance','cashBalance']];
 const groupLabels={materials:'Materials',labour:'Labour (including earned wages)',transport:'Transport',design:'Design',vendor:'Other vendor expenses',other:'Other expenses',overhead:'Allocated overhead'};
 
-function CostingDetails({detail,onClose}) {
+function CostingDetails({detail,onClose,onExport,exporting}) {
   const [boqId,setBoqId]=useState('');
   const boq=detail.boqs.find(b=>String(b.id)===boqId);
   const variance=boq?Math.round((boq.estimatedCost-detail.cost)*100)/100:null;
   return <section className="billing-panel">
-    <header><h3>{detail.name} — Job Costing</h3><button onClick={onClose}>Close details</button></header>
+    <header><h3>{detail.name} — Job Costing</h3><div className="billing-actions"><button disabled={exporting} onClick={()=>onExport('pdf',detail.id)}>Project PDF</button><button disabled={exporting} onClick={()=>onExport('xlsx',detail.id)}>Project Excel</button><button onClick={onClose}>Close details</button></div></header>
     <div className="billing-grid">{Object.entries(groupLabels).map(([key,label])=><div key={key}>{label}<strong style={{display:'block'}}>{money(detail.breakdown[key])}</strong></div>)}</div>
     <p><strong>Total recorded cost: {money(detail.cost)}</strong> · Projected profit: {money(detail.projectedProfit)} · Margin: {detail.profitMargin==null?'Not available (zero contract value)':detail.profitMargin.toFixed(2)+'%'}</p>
     <p>Vendor payments: {money(detail.purchasePaid)} · Vendor due: {money(detail.vendorDue)} · Customer credit: {money(detail.customerCredit)}</p>
@@ -41,6 +41,17 @@ export default function ProjectProfit({apiUrl}) {
   const [rows,setRows] = useState([]), [search,setSearch] = useState(''), [selected,setSelected] = useState(null);
   const [loading,setLoading] = useState(true), [error,setError] = useState(''), [version,setVersion] = useState(0);
   const [basis,setBasis]=useState('consumption');
+  const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
+  const exportReport=async(format,projectId)=>{
+    setExporting(true);setExportError('');
+    try{
+      const response=await axios.get(apiUrl+'/api/reports/project-profit/export',{params:{format,basis,...(projectId?{projectId}:{search})},responseType:'blob'});
+      const url=URL.createObjectURL(response.data),link=document.createElement('a');link.href=url;
+      link.download=response.headers['content-disposition']?.match(/filename="([^"]+)"/)?.[1]||'project-profit-'+basis+(projectId?'-'+projectId:'')+'.'+format;
+      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){let message='Unable to export report. Please retry.';try{message=JSON.parse(await e.response.data.text()).message||message;}catch{/* Network errors do not contain a report response. */}setExportError(message);}
+    finally{setExporting(false);}
+  };
   useEffect(() => {
     let active = true;
     axios.get(apiUrl + '/api/reports/project-profit',{params:{basis}}).then(r => {if(active) setRows(r.data.data);}).catch(() => {if(active) setError('Unable to load report. Please retry.');}).finally(() => {if(active) setLoading(false);});
@@ -55,12 +66,13 @@ export default function ProjectProfit({apiUrl}) {
     <label>Material cost basis<select value={basis} onChange={e=>{setBasis(e.target.value);setLoading(true);setError('');}}><option value="consumption">Stock consumed (net of returns)</option><option value="purchase">Purchases (including unused stock)</option></select></label>
     <p>Consumption uses moving weighted average receipt costs. Unassigned expenses are excluded unless allocated. Existing worker expenses remain costs; enter only wages not already expensed.</p>
     <label>Search project or customer<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Project or customer name" /></label>
+    {exportError&&<p role="alert" className="billing-error">{exportError}</p>}
     {loading ? <p role="status">Loading report…</p> : error ? <p className="billing-error" role="alert">{error}</p> : <>
-      <p>{filtered.length} projects shown. Summary totals follow your search.</p>
+      <p>{filtered.length} projects shown. Summary totals follow your search. Exports include all matching projects across pages.</p><div className="billing-actions"><button disabled={exporting} onClick={()=>exportReport('pdf')}>{exporting?'Preparing export…':'Export PDF'}</button><button disabled={exporting} onClick={()=>exportReport('xlsx')}>Export Excel</button></div>
       {filtered.some(r=>r.consumption?.incomplete)&&<p role="alert" className="billing-error">Some stock costs are incomplete. Summary cost and profit are provisional; open project details to review.</p>}
       <div className="billing-summary">{metrics.map(([label,key]) => <div key={key}><span>{label}</span><strong className={total(key) < 0 ? 'billing-error' : ''}>{money(total(key))}</strong></div>)}</div>
       <div className="billing-table"><PaginatedTable><thead><tr><th>Project</th><th>Status</th><th>Contract</th><th>Cost</th><th>Projected profit / loss</th><th>Received</th><th>Customer due</th><th>Cash paid</th><th>Cash balance</th><th>Profit margin</th><th>Action</th></tr></thead><tbody>{filtered.map(row => <tr key={row.id}><td>{row.name}<small>{row.customer}</small>{row.consumption?.incomplete&&<small className="billing-error">Incomplete stock cost</small>}</td><td>{row.status}</td>{['contract','cost','projectedProfit','receipts','customerDue','cashOut','cashBalance'].map(key => <td key={key} className={row[key] < 0 ? 'billing-error' : ''}>{money(row[key])}</td>)}<td>{row.profitMargin == null ? "—" : row.profitMargin.toFixed(2) + "%"}</td><td><button onClick={() => setSelected(row.id)}>Details</button></td></tr>)}{!filtered.length && <tr><td colSpan={11}>No matching projects.</td></tr>}</tbody></PaginatedTable></div>
-      {detail && <CostingDetails key={detail.id} detail={detail} onClose={() => setSelected(null)} />}
+      {detail && <CostingDetails key={detail.id} detail={detail} onClose={() => setSelected(null)} onExport={exportReport} exporting={exporting} />}
       <JobCostingEntries apiUrl={apiUrl} projects={rows} onChange={()=>{setError('');setVersion(v=>v+1);}} />
     </>}
   </section>;
