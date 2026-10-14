@@ -32,3 +32,5 @@ After a successful restore, review the restored data, preserve the current datab
 - Production restore is intentionally not run until the owner creates and configures a dedicated empty target. This feature does not overwrite the production database as a deployment test.
 
 Live deployment on 2026-10-14: Admin browser upload of the original encrypted production backup passed authenticated decryption/table/migration preview (54 tables, 39 records). Source rollback archive was retained privately before release. Dedicated production restore target remains unconfigured; no production import or cutover was performed. Build/lint passed; 16 UI tests passed; backend fixture/regression tests and the real isolated local importer test passed.
+
+Owner approved and cPanel Wizard successfully created the empty robilea1_pos_restore database on 2026-10-14. Wizard Step 2 is handed to the owner for a new dedicated database user/password and grants only to this database. RESTORE_DATABASE_URL and a production restore test remain pending owner private configuration.
