@@ -2,6 +2,8 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import App from './App';
+import {createRequire} from 'node:module';
+const {permissions}=createRequire(import.meta.url)('../../server/access-control.js');
 const http=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),put:vi.fn(),delete:vi.fn()}));
 vi.mock('axios',()=>({default:{...http,interceptors:{request:{use:vi.fn()},response:{use:vi.fn()}}}}));
 vi.mock('./SiteReports',()=>({default:()=> <h2>Assigned site reports</h2>}));
@@ -16,10 +18,21 @@ beforeEach(()=>{
   if(url.endsWith('/auth/me'))return {data:{success:true,data:{user:sessionUser}}};
   if(url.includes('/dashboard'))return {data:{success:true,data:{totalProjects:0,totalIncome:0,totalExpenses:0,currentBalance:0,totalCustomers:0,activeCustomers:0,inactiveCustomers:0,customersWithProjects:0,customersWithoutProjects:0,totalCashPaid:0,recentTransactions:[]}}};
   if(url.endsWith('/categories/paginated'))return {data:{success:true,data:{income:[],expense:[]},pagination:{income:pagination,expense:pagination}}};
+  if(url.endsWith('/stock-desk'))return {data:{success:true,data:{materials:[],projects:[],purchases:[],movements:[]}}};
+  if(url.endsWith('/job-costing/context'))return {data:{success:true,data:{workers:[],payroll:[],overheads:[]}}};
   return {data:{success:true,data:[],pagination,summary:{totalIncome:0,totalExpenses:0,currentBalance:0}}};
  });
 });
 afterEach(()=>{cleanup();localStorage.clear();});
+const menuLabels={dashboard:'Dashboard',projects:'Projects',documents:'Documents','site-reports':'Site Reports',leads:'Leads',customers:'Customers',billing:'Client Billing','project-profit':'Project Profit & Loss',payables:'Vendor Payables',quotations:'Quotations',boqs:'BOQ',income:'Income',expenses:'Expenses',transactions:'Transactions',workers:'Workers',vendors:'Vendors',materials:'Materials',purchases:'Purchases','purchase-requests':'Purchase Requests',rfqs:'RFQ','purchase-orders':'Purchase Orders',categories:'Categories','user-access':'User Access','stock-desk':'Stock Desk',approvals:'Approvals','procurement-review':'Procurement Review','payment-requests':'Payment Requests','financial-requests':'Financial Requests','audit-log':'Audit Log'};
+it.each(['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','VIEWER'])('renders exactly the authorized menu for %s',async role=>{
+ sessionUser={...sessionUser,role,permissions:permissions(role)};
+ localStorage.setItem('bei_auth_user',JSON.stringify(sessionUser));render(<App/>);
+ await waitFor(()=>expect(http.get.mock.calls.some(([url])=>url.endsWith('/auth/me'))).toBe(true));
+ await act(async()=>{});
+ for(const [page,label] of Object.entries(menuLabels))expect(screen.queryByRole('link',{name:label,exact:true})!==null,label).toBe(sessionUser.permissions.pages.includes(page));
+ expect(http.post).not.toHaveBeenCalled();
+});
 it('opens the allowed page immediately for a restricted role',async()=>{
  sessionUser={...sessionUser,role:'SITE_SUPERVISOR',projectIds:[5],permissions:{pages:['site-reports'],writePages:['site-reports']}};localStorage.setItem('bei_auth_user',JSON.stringify(sessionUser));render(<App/>);await screen.findByRole('heading',{name:'Assigned site reports'});expect(screen.queryByRole('link',{name:'Dashboard',exact:true})).toBeNull();expect(count('/projects')).toBe(0);
 });

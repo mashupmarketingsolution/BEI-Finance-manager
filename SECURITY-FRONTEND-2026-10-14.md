@@ -1,5 +1,7 @@
 # Security and frontend follow-up — 2026-10-14
 
+Subsequent browser exports and focused access/approval verification are recorded in BROWSER-ACCESS-APPROVAL-QA-2026-10-14.md. The browser timeout below is the historical result of the earlier attempt.
+
 This completes the dependency and legacy frontend cleanup identified by REVIEW-2026-10-14.md. Direct browser verification remains separately qualified below.
 
 ## Dependency changes
