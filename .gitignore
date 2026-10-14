@@ -8,6 +8,7 @@ node_modules/
 # Database backups
 BEI_Railway_Backup_*.sql
 server/BEI_Railway_Backup_*/
+server/local-backups/
 
 # Logs
 *.log
