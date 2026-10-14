@@ -11,3 +11,5 @@ Use a new dedicated empty MySQL database and a least-privilege database user. Th
 For a fresh database, apply migrations with `npx prisma migrate deploy`; provision the existing authorized Admin from a private clean database export, or an owner-controlled setup. Do not reset/import over another site's database. Verify `/api/health`, login, empty balances and protected routes before declaring deployment complete.
 
 `app.cjs` returns a generic 503 until database and JWT settings exist. This is an installation state, not a working deployment. Google Drive/cron configuration follows AUTOMATIC-BACKUPS.md after deployment.
+
+Deployment verification (2026-10-14): Node 24 production app installed in the private root; clean database imported into robilea1_pos_finance. Owner configured database/JWT credentials in cPanel. Live /api/health returned database Connected and the production login page loaded. Production root now serves the frontend rather than the development API greeting. Owner login and authenticated empty-balance checks remain pending; Drive/cron configuration is not enabled yet.

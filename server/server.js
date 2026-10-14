@@ -579,7 +579,8 @@ async function authMiddleware(req, res, next) {
 // HOME ROUTE
 // =========================================
 
-app.get("/", (req, res) => {
+app.get("/", (req, res, next) => {
+  if (process.env.NODE_ENV === "production") return res.sendFile(require("path").join(__dirname, "public", "index.html"));
   res.json({
     success: true,
     message: "BE Interior Finance Manager API is running!",
