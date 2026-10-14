@@ -14,7 +14,7 @@ import ProjectProfit from "./ProjectProfit";
 import Billing from "./Billing";
 import Payables from "./Payables";
 import { milestoneAmount, quotationCategories } from "./quotation-utils";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import axios from "axios";
 import {
@@ -239,14 +239,8 @@ const handleLogin = async (e) => {
       JSON.stringify(user)
     );
 
-    setCurrentUser(user);
-
-    setLoginForm({
-      username: "",
-      password: "",
-    });
-
-    setLoginMessage("");
+    // A fresh page prevents the previous account's cached project rows from surviving sign-in.
+    window.location.reload();
   } catch (error) {
     console.error("Login Error:", error);
 
@@ -298,8 +292,9 @@ const [dashboardData, setDashboardData] = useState({
   customersWithoutProjects: 0,
 });
 
-  const [activePage, setActivePage] = useState("dashboard");
-  useEffect(()=>{if(currentUser?.permissions?.pages&&!currentUser.permissions.pages.includes(activePage))setActivePage(currentUser.permissions.pages[0]||'site-reports');},[currentUser,activePage]);
+  const [requestedPage, setRequestedPage] = useState("dashboard");
+  const setActivePage=page=>{if(page===activePage)return;setRequestedPage(page);if(page==='purchase-requests'){setPurchaseRequestLoading(true);setPurchaseRequestMessage('');}if(page==='rfqs'){setRfqLoading(true);setRfqMessage('');}if(page==='purchase-orders')setPurchaseOrderLoading(true);if(page==='quotations'){setQuotationLoading(true);setQuotationMessage('');}};
+  const activePage = currentUser?.permissions?.pages?.includes(requestedPage) ? requestedPage : currentUser?.permissions?.pages?.[0] || "dashboard";
   useEffect(()=>{
     if(!currentUser?.id)return;
     const refreshAccess=()=>axios.get(`${API_URL}/api/auth/me`).then(r=>{const user=r.data.data.user,old=JSON.parse(localStorage.getItem(AUTH_USER_KEY)||'null');const changed=old&&old.id===user.id&&(old.role!==user.role||JSON.stringify(old.projectIds||[])!==JSON.stringify(user.projectIds||[]));setCurrentUser(user);localStorage.setItem(AUTH_USER_KEY,JSON.stringify(user));if(changed)window.location.reload();}).catch(e=>{if([401,403].includes(e.response?.status)){localStorage.removeItem(AUTH_TOKEN_KEY);localStorage.removeItem(AUTH_USER_KEY);setCurrentUser(null);}});
@@ -351,7 +346,7 @@ const [dashboardData, setDashboardData] = useState({
   });
 
   const [
-    transactionSummary,
+    ,
     setTransactionSummary,
   ] = useState({
     totalIncome: 0,
@@ -600,21 +595,13 @@ const [purchaseOrderItems, setPurchaseOrderItems] =
 
 const [purchaseRequests, setPurchaseRequests] = useState([]);
 const [editingPurchaseRequestId, setEditingPurchaseRequestId] = useState(null);
-const [purchaseRequestItems, setPurchaseRequestItems] = useState([]);
 
-const [purchaseRequestItemForm, setPurchaseRequestItemForm] = useState({
-  materialId: "",
-  quantity: "",
-  unit: "",
-  requiredDate: "",
-  notes: "",
-});
 
-const [editingPurchaseRequestItemId, setEditingPurchaseRequestItemId] =
-  useState(null);
 
-const [savingPurchaseRequestItem, setSavingPurchaseRequestItem] =
-  useState(false);
+
+
+
+
 
 const [showPurchaseRequestEditModal, setShowPurchaseRequestEditModal] = useState(false);
 
@@ -714,10 +701,8 @@ const [purchaseRequestForm, setPurchaseRequestForm] = useState({
 
 const [savingPurchaseRequest, setSavingPurchaseRequest] = useState(false);
 
-const loadPurchaseRequests = async () => {
+const fetchPurchaseRequests = async () => {
   try {
-    setPurchaseRequestLoading(true);
-    setPurchaseRequestMessage("");
 
     const response = await axios.get(
       `${API_URL}/api/purchase-requests`
@@ -744,10 +729,10 @@ const loadPurchaseRequests = async () => {
     setPurchaseRequestLoading(false);
   }
 };
+const loadPurchaseRequests=()=>{setPurchaseRequestLoading(true);setPurchaseRequestMessage("");return fetchPurchaseRequests();};
 
-const loadPurchaseOrders = async () => {
+const fetchPurchaseOrders = async () => {
   try {
-    setPurchaseOrderLoading(true);
 
     const response = await axios.get(
       `${API_URL}/api/purchase-orders`
@@ -779,11 +764,12 @@ const loadPurchaseOrders = async () => {
     setPurchaseOrderLoading(false);
   }
 };
+const loadPurchaseOrders=()=>{setPurchaseOrderLoading(true);return fetchPurchaseOrders();};
 // =========================================
 // CREATE PURCHASE ORDER FROM AWARDED RFQ
 // =========================================
 
-const createPurchaseOrderFromRFQ = (rfq) => {
+const handleCreatePurchaseOrderFromRFQ = (rfq) => {
   try {
     if (!rfq) {
       setRfqMessage(
@@ -825,7 +811,7 @@ const createPurchaseOrderFromRFQ = (rfq) => {
 
     // Generate PO number
     const poNo =
-      `PO-${String(Date.now()).slice(-6)}`;
+      `PO-RFQ-${rfq.id}`;
 
     // --------------------------------
     // Prepare PO items
@@ -1277,10 +1263,8 @@ const getNextPurchaseOrderStatuses = (currentStatus) => {
 
   return transitions[currentStatus] || [];
 };
-const loadRFQs = async () => {
+const fetchRFQs = async () => {
   try {
-    setRfqLoading(true);
-    setRfqMessage("");
 
     const response = await axios.get(
       `${API_URL}/api/rfqs`
@@ -1307,6 +1291,7 @@ const loadRFQs = async () => {
     setRfqLoading(false);
   }
 };
+const loadRFQs=()=>{setRfqLoading(true);setRfqMessage("");return fetchRFQs();};
 const saveRFQ = async () => {
   try {
     const {
@@ -2140,22 +2125,6 @@ const viewRFQ = async (id) => {
   }
 };
 
-useEffect(() => {
-  if (activePage === "purchase-requests") {
-    loadPurchaseRequests();
-  }
-}, [activePage]);
-
-useEffect(() => {
-  if (activePage === "rfqs") {
-    loadRFQs();
-  }
-  if (activePage === "purchase-orders") {
-  loadPurchaseOrders();
-}
-}, [activePage]);
-
-
 const viewPurchaseRequest = async (id) => {
   try {
     const response = await axios.get(
@@ -2422,224 +2391,9 @@ const deletePurchaseRequest = async (id) => {
   }
 };
 
-const savePurchaseRequestItem = async () => {
-  if (savingPurchaseRequestItem) {
-    return;
-  }
 
-  if (!editingPurchaseRequestId) {
-    setPurchaseRequestMessage(
-      "❌ Purchase request not selected"
-    );
-    return;
-  }
 
-  const materialId = Number(
-    purchaseRequestItemForm.materialId
-  );
 
-  const quantity = Number(
-    purchaseRequestItemForm.quantity
-  );
-
-  const unit =
-    purchaseRequestItemForm.unit.trim();
-
-  if (!materialId) {
-    setPurchaseRequestMessage(
-      "❌ Material is required"
-    );
-    return;
-  }
-
-  if (!quantity || quantity <= 0) {
-    setPurchaseRequestMessage(
-      "❌ Quantity must be greater than 0"
-    );
-    return;
-  }
-
-  if (!unit) {
-    setPurchaseRequestMessage(
-      "❌ Unit is required"
-    );
-    return;
-  }
-
-  try {
-    setSavingPurchaseRequestItem(true);
-    setPurchaseRequestMessage("");
-
-    const payload = {
-      materialId,
-      quantity,
-      unit,
-      requiredDate:
-        purchaseRequestItemForm.requiredDate || null,
-      notes:
-        purchaseRequestItemForm.notes.trim() || null,
-    };
-
-    let response;
-
-    if (editingPurchaseRequestItemId) {
-      response = await axios.put(
-        `${API_URL}/api/purchase-request-items/${editingPurchaseRequestItemId}`,
-        payload
-      );
-    } else {
-      response = await axios.post(
-        `${API_URL}/api/purchase-requests/${editingPurchaseRequestId}/items`,
-        payload
-      );
-    }
-
-    if (response.data.success) {
-      const savedItem = response.data.data;
-
-      setPurchaseRequestItems((prev) => {
-        if (editingPurchaseRequestItemId) {
-          return prev.map((item) =>
-            item.id === editingPurchaseRequestItemId
-              ? {
-                  ...item,
-                  ...savedItem,
-                  materialId: String(
-                    savedItem.materialId
-                  ),
-                  quantity:
-                    savedItem.quantity,
-                  unit:
-                    savedItem.unit,
-                  requiredDate:
-                    savedItem.requiredDate
-                      ? new Date(
-                          savedItem.requiredDate
-                        )
-                          .toISOString()
-                          .split("T")[0]
-                      : "",
-                  notes:
-                    savedItem.notes || "",
-                }
-              : item
-          );
-        }
-
-        return [
-          ...prev,
-          {
-            id: savedItem.id,
-            materialId: String(
-              savedItem.materialId
-            ),
-            quantity:
-              savedItem.quantity,
-            unit:
-              savedItem.unit,
-            requiredDate:
-              savedItem.requiredDate
-                ? new Date(
-                    savedItem.requiredDate
-                  )
-                    .toISOString()
-                    .split("T")[0]
-                : "",
-            notes:
-              savedItem.notes || "",
-          },
-        ];
-      });
-
-      setPurchaseRequestItemForm({
-        materialId: "",
-        quantity: "",
-        unit: "",
-        requiredDate: "",
-        notes: "",
-      });
-
-      const wasEditing =
-        Boolean(
-          editingPurchaseRequestItemId
-        );
-
-      setEditingPurchaseRequestItemId(null);
-
-      setPurchaseRequestMessage(
-        wasEditing
-          ? "✅ Purchase request item updated successfully"
-          : "✅ Purchase request item added successfully"
-      );
-
-      await loadPurchaseRequests();
-
-      setTimeout(() => {
-        setPurchaseRequestMessage("");
-      }, 2000);
-    }
-  } catch (error) {
-    console.error(
-      "Save Purchase Request Item Error:",
-      error
-    );
-
-    setPurchaseRequestMessage(
-      `❌ ${
-        error.response?.data?.message ||
-        "Purchase request item save করা যায়নি!"
-      }`
-    );
-  } finally {
-    setSavingPurchaseRequestItem(false);
-  }
-};
-
-const handleDeletePurchaseRequestItem = async (itemId) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this purchase request item?"
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    setPurchaseRequestMessage("");
-
-    const response = await axios.delete(
-      `${API_URL}/api/purchase-request-items/${itemId}`
-    );
-
-    if (response.data.success) {
-      setPurchaseRequestItems((prev) =>
-        prev.filter((item) => item.id !== itemId)
-      );
-
-      setPurchaseRequestMessage(
-        "✅ Purchase request item deleted successfully"
-      );
-
-      await loadPurchaseRequests();
-
-      setTimeout(() => {
-        setPurchaseRequestMessage("");
-      }, 2000);
-    }
-  } catch (error) {
-    console.error(
-      "Delete Purchase Request Item Error:",
-      error
-    );
-
-    setPurchaseRequestMessage(
-      `❌ ${
-        error.response?.data?.message ||
-        "Purchase request item delete করা যায়নি!"
-      }`
-    );
-  }
-};
 
 
 const savePurchaseRequestEdit = async () => {
@@ -3483,11 +3237,11 @@ const [leadForm, setLeadForm] = useState({
     projectId: "",
   });
 
-  const [totalIncome, setTotalIncome] = useState(0);
+
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshingMaterials, setRefreshingMaterials] = useState(false);
+
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -3542,7 +3296,7 @@ const [
   const [message, setMessage] = useState("");
 
   const [incomeMessage, setIncomeMessage] = useState("");
-  const [expenseMessage, setExpenseMessage] = useState("");
+
 
  const [projectForm, setProjectForm] = useState({
   name: "",
@@ -4064,7 +3818,7 @@ const [selectedQuotation, setSelectedQuotation] =
   useState(null);
 
 const [
-  quotationViewLoading,
+  ,
   setQuotationViewLoading,
 ] = useState(false);
 
@@ -4265,10 +4019,8 @@ const [
 // LOAD QUOTATIONS
 // =========================================
 
-const loadQuotations = async () => {
+const fetchQuotations = async () => {
   try {
-    setQuotationLoading(true);
-    setQuotationMessage("");
 
     const response = await axios.get(
       `${API_URL}/api/quotations`
@@ -4295,6 +4047,7 @@ const loadQuotations = async () => {
     setQuotationLoading(false);
   }
 };
+const loadQuotations=()=>{setQuotationLoading(true);setQuotationMessage("");return fetchQuotations();};
 const closeQuotationModal = () => {
   if (!savingQuotation) {
     setShowQuotationModal(false);
@@ -7861,7 +7614,8 @@ const editPurchaseOrder = async (poId) => {
       );
 
       if (response.data.success) {
-        setMaterialCategories(
+        setMaterialCategoryPage(page);
+      setMaterialCategories(
           response.data.data || []
         );
 
@@ -9343,6 +9097,7 @@ const loadCustomers = async (
     );
 
     if (response.data.success) {
+      setCustomerPage(page);
       setCustomers(response.data.data);
 
       setCustomerPagination(
@@ -9364,19 +9119,7 @@ const loadCustomers = async (
 // LOAD USERS FOR LEAD ASSIGNMENT
 // =========================================
 
-const loadUsers = async () => {
-  try {
-    const response = await axios.get(
-      `${API_URL}/api/users`
-    );
 
-    if (response.data.success) {
-      setUsers(response.data.data);
-    }
-  } catch (error) {
-    console.error("Load Users Error:", error);
-  }
-};
 
 
 // =========================================
@@ -9401,6 +9144,7 @@ const loadLeads = async (
     );
 
     if (response.data.success) {
+      setLeadPage(page);
       setLeads(response.data.data);
 
       setLeadPagination(
@@ -10019,55 +9763,56 @@ const handleDeleteCustomer = async (id) => {
   // LOAD WHEN APP STARTS
   // =========================================
 
-  useEffect(() => {
-    if(!authLoading&&currentUser?.id)loadAllData();
-  }, [authLoading,currentUser?.id,currentUser?.role,JSON.stringify(currentUser?.projectIds||[])]);
+  const assignmentKey=JSON.stringify(currentUser?.projectIds||[]);
+  const loadAuthenticatedData=useEffectEvent(()=>loadAllData());
+  useEffect(()=>{if(!authLoading&&currentUser?.id)loadAuthenticatedData();},[authLoading,currentUser?.id,currentUser?.role,assignmentKey]);
 
-
-  useEffect(() => {
-    if (activePage === "categories") {
-      setMaterialCategoryPage(1);
-
-      loadMaterialCategories(
-        1,
-        materialCategoryLimit
-      );
-    }
-  }, [
-    activePage,
-    materialCategoryLimit,
-  ]);
-
-    useEffect(() => {
-      if (activePage === "customers") {
-        setCustomerPage(1);
-
-        loadCustomers(
-          1,
-          customerLimit
-        );
-      }
-    }, [
-      activePage,
-      customerLimit,
-    ]);
-
-useEffect(() => {
-  if (activePage === "leads") {
-    setLeadPage(1);
-    loadLeads(1, leadLimit);
-    loadUsers();
-  }
-
-}, [activePage]);
-
-useEffect(() => {
-if (activePage === "quotations") {
-    loadQuotations();
-    loadCustomers(1, 100);
-    loadProjects(1, 100);
-  }
-}, [activePage]);
+  // Navigation starts external requests; only their callbacks commit response state.
+  const pageRequests=useEffectEvent(page=>{
+    const request=(kind,path,params)=>({kind,path,params});
+    if(page==='categories')return [request('categories','material-categories',{page:1,limit:materialCategoryLimit})];
+    if(page==='customers')return [request('customers','customers',{page:1,limit:customerLimit})];
+    if(page==='leads')return [request('leads','leads',{page:1,limit:leadLimit,search:leadSearch,status:leadStatusFilter}),request('users','users')];
+    if(page==='quotations')return [request('quotations','quotations'),request('customers','customers',{page:1,limit:100}),request('projects','projects',{page:1,limit:100})];
+    if(['purchase-requests','rfqs','purchase-orders'].includes(page))return [request(page,page)];
+    return [];
+  });
+  const receivePageData=useEffectEvent((kind,payload)=>{
+    const data=payload.data||[];
+    if(kind==='categories'){setMaterialCategoryPage(1);setMaterialCategories(data);setMaterialCategoryPagination(payload.pagination||{page:1,totalRecords:0,totalPages:1});}
+    if(kind==='customers'){setCustomerPage(1);setCustomers(data);setCustomerPagination(payload.pagination);}
+    if(kind==='leads'){setLeadPage(1);setLeads(data);setLeadPagination(payload.pagination);}
+    if(kind==='users')setUsers(data);
+    if(kind==='quotations')setQuotations(data);
+    if(kind==='projects'){setProjects(data);setProjectPagination(payload.pagination);}
+    if(kind==='purchase-requests')setPurchaseRequests(data);
+    if(kind==='rfqs')setRfqs(data);
+    if(kind==='purchase-orders')setPurchaseOrders(data);
+  });
+  const failPageLoad=useEffectEvent((page,error)=>{
+    const message=error.response?.data?.message||'Unable to load page data. Please retry.';
+    if(page==='purchase-requests')setPurchaseRequestMessage(message);
+    else if(page==='rfqs')setRfqMessage(message);
+    else if(page==='purchase-orders')setPurchaseOrderMessage(message);
+    else if(page==='quotations')setQuotationMessage(message);
+    else setMessage(message);
+  });
+  const finishPageLoad=useEffectEvent(page=>{
+    if(page==='purchase-requests')setPurchaseRequestLoading(false);
+    if(page==='rfqs')setRfqLoading(false);
+    if(page==='purchase-orders')setPurchaseOrderLoading(false);
+    if(page==='quotations')setQuotationLoading(false);
+  });
+  useEffect(()=>{
+    if(authLoading||!currentUser?.id)return;
+    const controller=new AbortController();let active=true;
+    const requests=pageRequests(activePage);
+    Promise.all(requests.map(async request=>{
+      try{const response=await axios.get(API_URL+'/api/'+request.path,{params:request.params,signal:controller.signal});if(active){if(!response.data.success)throw new Error(response.data.message);receivePageData(request.kind,response.data);}}
+      catch(error){if(active)failPageLoad(activePage,error);}
+    })).finally(()=>{if(active)finishPageLoad(activePage);});
+    return()=>{active=false;controller.abort();};
+  },[authLoading,currentUser?.id,currentUser?.role,assignmentKey,activePage]);
 
   // =========================================
   // REFRESH
@@ -16791,9 +16536,7 @@ const quotationGrandTotal =
     );
   };
   const renderExpenses = () => {
-    const expenseCategories = categories.filter(
-      (category) => category.type === "EXPENSE"
-    );
+
 
     return (
       <section className="dashboard">
@@ -21245,9 +20988,7 @@ const quotationGrandTotal =
     setPurchaseRequestMessage("");
 
     const rfqNo =
-      `RFQ-${String(
-        Date.now()
-      ).slice(-6)}`;
+      `RFQ-PR-${purchaseRequest.id}`;
 
     const response =
       await axios.post(
@@ -24686,7 +24427,7 @@ const renderRFQViewModal = () => {
                           type="button"
                           className="save-button"
                           onClick={() => {
-                            createPurchaseOrderFromRFQ(rfq);
+                            handleCreatePurchaseOrderFromRFQ(rfq);
                           }}
                         >
                           Create Purchase Order
