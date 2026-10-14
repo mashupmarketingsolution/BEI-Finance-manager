@@ -15690,6 +15690,8 @@ app.get("/api/categories/paginated", async (req, res) => {
 // 404 ROUTE
 // =========================================
 
+require('./frontend').registerFrontend(app);
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
