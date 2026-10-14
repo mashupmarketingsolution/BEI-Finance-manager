@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 import axios from 'axios';
 import './Billing.css';
+import BackupRestore from './BackupRestore';
 const stamp=d=>d?new Date(d).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'Not yet';
 export function BackupNotice({apiUrl}){
  const [data,setData]=useState(null);
@@ -22,5 +23,6 @@ export default function Backups({apiUrl}){
  <p>Automatic backup requires your hosting schedule to be installed. Enabling the server setting alone does not create a schedule. Keep the recovery key separately; the cloud copy cannot be opened without it.</p>
  <h3>Recent backups</h3><div className="billing-table"><table><thead><tr><th>Created</th><th>File</th><th>Size</th><th>Cloud copy</th></tr></thead><tbody>{(data.history||[]).map(r=><tr key={r.filename}><td>{stamp(r.createdAt)}</td><td>{r.filename}</td><td>{(r.bytes/1024).toFixed(1)} KB</td><td>{r.cloud}</td></tr>)}{!data.history?.length&&<tr><td colSpan={4}>No backups recorded yet.</td></tr>}</tbody></table></div>
  </>}
+ <BackupRestore apiUrl={apiUrl}/>
  </section>;
 }

@@ -376,6 +376,7 @@ app.use('/api',accessMiddleware);
 app.use('/api',require('./project-access').middleware);
 require('./audit-log').registerAuditLog(app,prisma);
 require('./automatic-backup').registerBackups(app);
+require('./backup-restore').registerRestore(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);
@@ -580,7 +581,7 @@ async function authMiddleware(req, res, next) {
 // =========================================
 
 app.get("/", (req, res, next) => {
-  if (process.env.NODE_ENV === "production") return res.sendFile(require("path").join(__dirname, "public", "index.html"));
+  if (process.env.NODE_ENV === "production") return res.set('Cache-Control','no-cache').sendFile(require("path").join(__dirname, "public", "index.html"));
   res.json({
     success: true,
     message: "BE Interior Finance Manager API is running!",
