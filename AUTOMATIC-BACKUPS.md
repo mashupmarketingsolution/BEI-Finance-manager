@@ -77,3 +77,15 @@ If a worker crashes, verify no backup process is active before removing its priv
 - First real encrypted local backup successfully restored into a generated isolated database: **54 table schema/data hashes matched; source unchanged**. The temporary restore database and decrypted SQL were removed.
 - Browser Admin page shows SUCCESS, local backup history, Cloud Not connected and Automatic Not enabled. Manual backup requested in the browser and completion checked separately.
 - Google Drive upload uses a mocked command adapter in tests. **Real cloud upload and the hosting cron job are not enabled or verified** until the owner connects the destination and hosting is configured.
+
+## Production setup progress — 2026-10-14
+
+- Live Admin login and empty dashboard verified.
+- A production encryption key was initialized without overwriting any existing key, in the private app-root backup-private directory. Keep a separate protected recovery copy of encryption.key; never commit it.
+- First live manual backup completed SUCCESS (about 12.1 KB); cloud was NOT_CONFIGURED. This verifies encrypted local backup creation, not off-site recovery.
+- Hosting provides /bin/mysqldump and /bin/mariadb-dump; server timezone is +06 (Dhaka).
+- Official rclone v1.75.2 was installed in /home/robilea1/bei-pos-app/tools/rclone. RCLONE_BIN and RCLONE_CONFIG were prepared in cPanel; the intended private config is /home/robilea1/bei-pos-app/backup-private/rclone.conf.
+- A private Windows connection helper is available locally under deployment-private/drive-setup. The owner must run it and grant Google access directly. It requests drive.file scope (files created/opened by this app), refuses to replace an existing config, and suppresses token output. The owner uploads rclone.conf directly into the private hosting backup directory, never into a public folder or chat.
+- Pending: owner OAuth/config upload, set dedicated BACKUP_REMOTE, verify a real cloud backup, preserve recovery key off-server, and install/test the daily hosting cron. Do not call cloud protection or automatic scheduling enabled yet.
+
+Official setup references: https://rclone.org/install/ and https://rclone.org/remote_setup/ .
