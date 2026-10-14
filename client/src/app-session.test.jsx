@@ -25,6 +25,7 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();localStorage.clear();});
 const menuLabels={dashboard:'Dashboard',projects:'Projects',documents:'Documents','site-reports':'Site Reports',leads:'Leads',customers:'Customers',billing:'Client Billing','project-profit':'Project Profit & Loss',payables:'Vendor Payables',quotations:'Quotations',boqs:'BOQ',income:'Income',expenses:'Expenses',transactions:'Transactions',workers:'Workers',vendors:'Vendors',materials:'Materials',purchases:'Purchases','purchase-requests':'Purchase Requests',rfqs:'RFQ','purchase-orders':'Purchase Orders',categories:'Categories','user-access':'User Access','stock-desk':'Stock Desk',approvals:'Approvals','procurement-review':'Procurement Review','payment-requests':'Payment Requests','financial-requests':'Financial Requests','audit-log':'Audit Log'};
+menuLabels.backups='Backups';
 it.each(['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','VIEWER'])('renders exactly the authorized menu for %s',async role=>{
  sessionUser={...sessionUser,role,permissions:permissions(role)};
  localStorage.setItem('bei_auth_user',JSON.stringify(sessionUser));render(<App/>);
@@ -35,6 +36,11 @@ it.each(['ADMIN','ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','PROCUREMENT_OFF
 });
 it('opens the allowed page immediately for a restricted role',async()=>{
  sessionUser={...sessionUser,role:'SITE_SUPERVISOR',projectIds:[5],permissions:{pages:['site-reports'],writePages:['site-reports']}};localStorage.setItem('bei_auth_user',JSON.stringify(sessionUser));render(<App/>);await screen.findByRole('heading',{name:'Assigned site reports'});expect(screen.queryByRole('link',{name:'Dashboard',exact:true})).toBeNull();expect(count('/projects')).toBe(0);
+});
+it('shows backup failure and setup limits on the Admin backup page',async()=>{
+ sessionUser={...sessionUser,permissions:permissions('ADMIN')};localStorage.setItem('bei_auth_user',JSON.stringify(sessionUser));
+ const base=http.get.getMockImplementation();http.get.mockImplementation((url,...args)=>url.endsWith('/backups')?Promise.resolve({data:{success:true,data:{state:'FAILED',keyReady:false,cloudConfigured:false,automaticConfigured:false,lastError:'Backup failed during UPLOAD.',history:[],retention:'7 daily + 4 weekly snapshots'}}}):base(url,...args));
+ render(<App/>);fireEvent.click(await screen.findByRole('link',{name:'Backups',exact:true}));await screen.findByText('Backup failed during UPLOAD.');expect(screen.getByRole('button',{name:'Back up now'}).disabled).toBe(true);expect(screen.getByText('Not connected')).toBeTruthy();expect(screen.getByText('Not enabled')).toBeTruthy();expect(http.post).not.toHaveBeenCalled();
 });
 it('loads customers once per page entry and once per page-size change',async()=>{
  render(<App/>);await screen.findByRole('link',{name:'Customers',exact:true});fireEvent.click(screen.getByRole('link',{name:'Customers',exact:true}));const heading=await screen.findByRole('heading',{name:'Customers',exact:true});await waitFor(()=>expect(count('/customers')).toBe(1));await act(async()=>{});expect(count('/customers')).toBe(1);const section=heading.closest('section');fireEvent.change(within(section).getAllByRole('combobox')[0],{target:{value:'20'}});await waitFor(()=>expect(count('/customers')).toBe(2));await act(async()=>{});expect(http.get.mock.calls.filter(([url])=>url.endsWith('/customers')).at(-1)[1].params.limit).toBe(20);expect(count('/customers')).toBe(2);

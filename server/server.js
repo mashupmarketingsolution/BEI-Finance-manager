@@ -375,6 +375,7 @@ app.use('/api',require('./audit-log').auditMiddleware(prisma));
 app.use('/api',accessMiddleware);
 app.use('/api',require('./project-access').middleware);
 require('./audit-log').registerAuditLog(app,prisma);
+require('./automatic-backup').registerBackups(app);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);

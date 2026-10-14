@@ -6,6 +6,7 @@ import ProcurementReviewDesk from './ProcurementReviewDesk';
 import PaymentRequests from './PaymentRequests';
 import FinancialRequests from './FinancialRequests';
 import AuditLog from './AuditLog';
+import Backups, {BackupNotice} from './Backups';
 import {PermissionMenu,PermissionSurface} from './AccessUI';
 import Documents from "./Documents";
 import SiteReports from "./SiteReports";
@@ -27580,6 +27581,7 @@ if (!currentUser) {
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('payment-requests');}} className={activePage==='payment-requests'?'active':''}><FileCheck size={20}/><span>Payment Requests</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('financial-requests');}} className={activePage==='financial-requests'?'active':''}><FileCheck size={20}/><span>Financial Requests</span></a>
           <a href="#" onClick={e=>{e.preventDefault();setActivePage('audit-log');}} className={activePage==='audit-log'?'active':''}><FileCheck size={20}/><span>Audit Log</span></a>
+          <a href="#" onClick={e=>{e.preventDefault();setActivePage('backups');}} className={activePage==='backups'?'active':''}><FileCheck size={20}/><span>Backups</span></a>
         </PermissionMenu>
 
 
@@ -27672,6 +27674,7 @@ if (!currentUser) {
 
         {/* DASHBOARD */}
         <PermissionSurface user={currentUser} page={activePage}>
+        {currentUser.role==='ADMIN'&&activePage==='dashboard'&&<BackupNotice apiUrl={API_URL}/>}
         {activePage === "dashboard" && (
           <section className="dashboard">
 
@@ -28486,6 +28489,7 @@ if (!currentUser) {
         {activePage === 'payment-requests' && <PaymentRequests apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'financial-requests' && <FinancialRequests apiUrl={API_URL} user={currentUser}/>}
         {activePage === 'audit-log' && <AuditLog apiUrl={API_URL}/>}
+        {activePage === 'backups' && <Backups apiUrl={API_URL}/>}
 
 
         {renderProjectViewModal()}

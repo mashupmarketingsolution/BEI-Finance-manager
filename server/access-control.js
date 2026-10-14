@@ -11,6 +11,7 @@ function newUserData(body){
  return {name:body.name.trim(),username:body.username.trim().toLowerCase(),role};
 }
 const pages=['dashboard','projects','site-reports','leads','customers','billing','project-profit','payables','quotations','boqs','income','expenses','transactions','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories','stock-desk','approvals','procurement-review','payment-requests','financial-requests','audit-log','documents'];
+pages.push('backups');
 const operations=['projects','site-reports','leads','customers','quotations','boqs','workers','vendors','materials','purchases','purchase-requests','rfqs','purchase-orders','categories'];
 const finance=['billing','payables','project-profit','income','expenses','transactions','workers','payment-requests','financial-requests'];
 function basePermissions(role){
