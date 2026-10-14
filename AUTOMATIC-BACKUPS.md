@@ -89,3 +89,17 @@ If a worker crashes, verify no backup process is active before removing its priv
 - Pending: owner OAuth/config upload, set dedicated BACKUP_REMOTE, verify a real cloud backup, preserve recovery key off-server, and install/test the daily hosting cron. Do not call cloud protection or automatic scheduling enabled yet.
 
 Official setup references: https://rclone.org/install/ and https://rclone.org/remote_setup/ .
+
+## Production cloud activation — 2026-10-14
+
+The owner connected Google Drive and uploaded rclone.conf directly to the private backup directory; its permissions were restricted to 0600. BACKUP_REMOTE is gdrive:BEI-Finance-Backups. A real encrypted backup completed SUCCESS with cloud VERIFIED after downloading and comparing the remote bytes. No credentials or keys were added to Git.
+
+BACKUP_AUTO_ENABLED is true. A daily 03:00 cron was installed after checking the host is UTC+06; unrelated cron entries were preserved, with a private copy of the prior crontab. The command sources the cPanel Node virtual environment so credentials stay out of cron arguments:
+
+```sh
+0 3 * * * /bin/bash -c 'source /home/robilea1/nodevenv/bei-pos-app/24/bin/activate && cd /home/robilea1/bei-pos-app && node automatic-backup.js --scheduled' >> /home/robilea1/bei-pos-app/backup-private/backup-cron.log 2>&1 # BEI_POS_BACKUP
+```
+
+A clean-environment scheduled-mode test is used to verify the cron command. The first actual timer-triggered run is due at 03:00 Dhaka on 2026-10-15 and still needs checking after that time. Keep a separate protected off-server copy of /home/robilea1/bei-pos-app/backup-private/encryption.key; Drive copies cannot be decrypted without it. Production restore into an isolated database remains a separate recovery drill.
+
+The clean-environment scheduled-mode test completed SUCCESS with cloud VERIFIED at 22:31 Dhaka on 2026-10-14. This tests the installed command, not the future timer firing.
