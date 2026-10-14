@@ -36,3 +36,5 @@ Live deployment on 2026-10-14: Admin browser upload of the original encrypted pr
 Owner approved and cPanel Wizard successfully created the empty robilea1_pos_restore database on 2026-10-14. Wizard Step 2 is handed to the owner for a new dedicated database user/password and grants only to this database. RESTORE_DATABASE_URL and a production restore test remain pending owner private configuration.
 
 Owner configured RESTORE_DATABASE_URL privately. On 2026-10-14 the production readiness check verified connection, a completely empty robilea1_pos_restore target, and a dedicated user with grants restricted to that database. A fresh live preview passed (54 tables, 39 records); the Admin password submission and actual isolated restore are pending owner input.
+
+Production restore drill completed successfully on 2026-10-14 after owner Admin-password confirmation. Browser reported Restore: SUCCESS: all 54 tables and per-table counts (39 total records) matched in robilea1_pos_restore. Current live database was not switched or overwritten. The restored target is now populated; repeat restores require a newly reviewed empty target.
