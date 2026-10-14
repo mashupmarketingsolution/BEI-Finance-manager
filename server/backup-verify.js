@@ -55,4 +55,4 @@ async function main(){
  }
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
-module.exports={targetAllowed,canonical};
+module.exports={targetAllowed,canonical,snapshot};
