@@ -22,3 +22,15 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local historical copies and database exports (keep on disk, not in Git)
+backup_phase*/
+client/src/App.before_*.jsx
+client/src/App.corrupted_encoding_backup.jsx
+server/server.before_*.js
+server/BEI_Railway_Pre_Quotation_Revision_2026-09-24.sql
+server/backup_railway.ps1
+server/copy_railway_to_local.js
+server/quotation_audit.sql
+server/railway_inventory.js
+server/schema_for_copy_review.txt
