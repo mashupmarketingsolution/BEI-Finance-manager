@@ -3247,7 +3247,7 @@ const [leadForm, setLeadForm] = useState({
   const [refreshing, setRefreshing] = useState(false);
 
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(()=>!window.matchMedia?.("(max-width: 768px)").matches);
 
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showMaterialPriceModal, setShowMaterialPriceModal] = useState(false);
@@ -27269,6 +27269,7 @@ if (!currentUser) {
       ========================================= */}
 
       <aside
+        onClick={e=>{if(window.matchMedia?.("(max-width: 768px)").matches&&e.target.closest("a"))setSidebarOpen(false);}}
         className={`sidebar ${sidebarOpen ? "" : "sidebar-hidden"
           }`}
       >
@@ -27628,6 +27629,7 @@ if (!currentUser) {
           MAIN CONTENT
       ========================================= */}
 
+      {sidebarOpen&&<button type="button" className="mobile-menu-backdrop" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)}/>}
       <main className="main-content">
 
         {/* TOPBAR */}
@@ -27636,6 +27638,8 @@ if (!currentUser) {
           <div className="topbar-left">
             <button
               className="menu-button"
+              aria-label={sidebarOpen?"Close navigation":"Open navigation"}
+              aria-expanded={sidebarOpen}
               onClick={() =>
                 setSidebarOpen(!sidebarOpen)
               }
