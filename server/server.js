@@ -379,6 +379,7 @@ require('./automatic-backup').registerBackups(app);
 require('./backup-restore').registerRestore(app,prisma);
 require('./page-permissions').registerPagePermissions(app,prisma);
 require('./password-management').registerPasswords(app,prisma);
+require('./user-profile').registerUserProfile(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);

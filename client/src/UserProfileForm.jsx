@@ -1,0 +1,6 @@
+import {useState} from 'react';
+import axios from 'axios';
+export default function UserProfileForm({user,apiUrl,onDone,onCancel}){
+ const [name,setName]=useState(user.name),[username,setUsername]=useState(user.username),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ return <form className="billing-panel" onSubmit={async e=>{e.preventDefault();if(busy)return;setBusy(true);setError('');try{await axios.put(apiUrl+'/api/access/users/'+user.id+'/profile',{name,username,accessVersion:user.accessVersion});onDone();}catch(e){setError(e.response?.data?.message||'Unable to update user');}finally{setBusy(false);}}}><h3>Edit details for {user.username}</h3><p>Changing the login username signs this user out. Existing work stays linked to the same account.</p>{error&&<p role="alert">{error}</p>}<fieldset disabled={busy} className="billing-grid"><label>Full name<input required maxLength={150} value={name} onChange={e=>setName(e.target.value)}/></label><label>Login username<input required minLength={3} maxLength={50} pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,49}" autoComplete="off" value={username} onChange={e=>setUsername(e.target.value)}/></label><button>Save user details</button><button type="button" onClick={onCancel}>Cancel user details</button></fieldset></form>;
+}

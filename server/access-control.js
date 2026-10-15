@@ -96,10 +96,10 @@ function accessMiddleware(req,res,next){
  next();
 }
 function registerUserAccess(app,prisma){
- const select={id:true,name:true,username:true,status:true,role:true,accessVersion:true,projectAssignments:{select:{projectId:true,project:{select:{id:true,name:true}}}}};
+ const select={id:true,name:true,username:true,status:true,role:true,deletedAt:true,accessVersion:true,projectAssignments:{select:{projectId:true,project:{select:{id:true,name:true}}}}};
  const idsOf=body=>{if(body.projectIds===undefined)return undefined;if(!Array.isArray(body.projectIds)||body.projectIds.some(v=>!Number.isSafeInteger(v)||v<=0)||new Set(body.projectIds).size!==body.projectIds.length)throw Object.assign(new Error('Choose valid assigned projects without duplicates'),{status:400});return body.projectIds;};
  const checkProjects=async(db,ids)=>{if(ids&&await db.project.count({where:{id:{in:ids}}})!==ids.length)throw Object.assign(new Error('Some selected projects no longer exist'),{status:400});};
- app.get('/api/access/users',async(req,res)=>{try{res.json({success:true,data:await prisma.user.findMany({select,orderBy:{name:'asc'}}),projects:await prisma.project.findMany({select:{id:true,name:true},orderBy:{name:'asc'}}),roles,rolePages:Object.fromEntries(roles.map(role=>[role,permissions(role).pages]))});}catch{res.status(500).json({success:false,message:'Unable to load user access'});}});
+ app.get('/api/access/users',async(req,res)=>{try{res.json({success:true,data:await prisma.user.findMany({where:req.query.deleted==='true'?{}:{deletedAt:null},select,orderBy:{name:'asc'}}),projects:await prisma.project.findMany({select:{id:true,name:true},orderBy:{name:'asc'}}),roles,rolePages:Object.fromEntries(roles.map(role=>[role,permissions(role).pages]))});}catch{res.status(500).json({success:false,message:'Unable to load user access'});}});
  app.post('/api/access/users',async(req,res)=>{
   try{
    const input=newUserData(req.body),projectIds=idsOf(req.body)||[],passwordHash=await bcrypt.hash(req.body.password,12);
@@ -122,6 +122,7 @@ function registerUserAccess(app,prisma){
     const actor=await db.user.findUnique({where:{id:req.user.id}});
     if(actor?.role!=='ADMIN'||actor.status!=='ACTIVE')throw Object.assign(new Error('Admin access changed. Sign in again.'),{status:403});
     const u=await db.user.findUnique({where:{id:target}});if(!u)throw Object.assign(new Error('User not found'),{status:404});
+    if(u.deletedAt)throw Object.assign(new Error('Restore the deleted account first'),{status:409});
     if(u.accessVersion!==accessVersion)throw Object.assign(new Error('User access changed. Refresh before saving.'),{status:409});
     if(target===actor.id&&(role!=='ADMIN'||status!=='ACTIVE'))throw Object.assign(new Error('You cannot remove your own active Admin access'),{status:409});
     if(u.role==='ADMIN'&&u.status==='ACTIVE'&&(role!=='ADMIN'||status!=='ACTIVE')&&await db.user.count({where:{role:'ADMIN',status:'ACTIVE'}})<=1)throw Object.assign(new Error('Keep at least one active Admin'),{status:409});

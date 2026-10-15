@@ -1,0 +1,5 @@
+# User profile and deletion
+
+Admin User Access provides Edit name / username and Delete user. Full name is trimmed and login usernames normalised lowercase; reserved usernames (including deleted records) cannot be reused. Username changes invalidate prior sessions while retaining user ID and history. Deletion archives the account with deletedAt, marks it inactive and invalidates sessions. Ordinary list hides archived accounts. Show deleted users reveals Restore user; restore leaves the account inactive until Admin explicitly activates it. Existing role updates reject archived accounts. Own Admin deletion and last-active-Admin removal are protected. Version checks and serializable transactions reject stale changes.
+
+No real accounts were edited or deleted during implementation. Local additive migration 20261015140000_user_archive applied; regenerate Prisma and apply migration before deploying updated server elsewhere. Live deployment not performed. Backend validation/archive/restore/authorization tests and production build passed; affected UI lint passed.
