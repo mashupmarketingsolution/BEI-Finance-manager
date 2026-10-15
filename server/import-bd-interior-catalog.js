@@ -10,7 +10,7 @@ async function importCatalog(db,apply=false){
  if(!apply)return result;
  await db.beginTransaction();try{
  for(const name of result.materialCategories){const r=await db.query('INSERT INTO material_categories (name,description,status,createdAt,updatedAt) VALUES (?,?,?,NOW(3),NOW(3))',[name,'Generic interior purchasing families; BD source research 2026-10-15. Confirm project specifications.','ACTIVE']);existingGroups.set(norm(name),Number(r.insertId));}
- for(const m of result.materials)await db.query('INSERT INTO materials (code,name,categoryId,unit,specification,description,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,NOW(3),NOW(3))',[m.code,m.name,existingGroups.get(norm(m.category)),m.unit,m.specification,m.description,'ACTIVE']);
+ for(const m of result.materials)await db.query('INSERT INTO materials (code,name,categoryId,unit,brand,specification,description,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,NOW(3),NOW(3))',[m.code,m.name,existingGroups.get(norm(m.category)),m.unit,m.brand||null,m.specification,m.description,'ACTIVE']);
  for(const [type,list] of [['INCOME',result.income],['EXPENSE',result.expense]])for(const name of list)await db.query('INSERT INTO categories (name,type,status,createdAt,updatedAt) VALUES (?,?,?,NOW(3),NOW(3))',[name,type,'ACTIVE']);
  await db.commit();return result;
  }catch(e){await db.rollback();throw e;}
