@@ -377,6 +377,7 @@ app.use('/api',require('./project-access').middleware);
 require('./audit-log').registerAuditLog(app,prisma);
 require('./automatic-backup').registerBackups(app);
 require('./backup-restore').registerRestore(app,prisma);
+require('./page-permissions').registerPagePermissions(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);
@@ -474,7 +475,7 @@ app.post("/api/auth/login", async (req, res) => {
           phone: user.phone,
           status: user.status,
           role: user.role,
-          permissions: permissions(user.role),
+          permissions: await require('./page-permissions').effectivePermissions(prisma,user),
         },
       },
     });
@@ -554,7 +555,7 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    req.user = {...user,permissions:permissions(user.role)};
+    req.user = {...user,permissions:await require('./page-permissions').effectivePermissions(prisma,user)};
 
     next();
   } catch (error) {

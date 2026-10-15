@@ -45,16 +45,23 @@ function resource(path,method){
  if(root==='quotation-items'||root==='quotation-payment-milestones')return 'quotations';
  return pages.includes(root)?root:null;
 }
-function allowed(role,path,method){
+function allowed(role,path,method,effective){
  if(!roles.includes(role))return false;
- const r=resource(path,method),p=permissions(role),read=['GET','HEAD'].includes(method);
+ const r=resource(path,method),p=effective||permissions(role),read=['GET','HEAD'].includes(method);
  if(r==='self')return roles.includes(role);
  if(!r)return false;
  if(role==='ADMIN')return r!=='audit-log'||read;
- if(r==='audit-log')return false;
+ if(['audit-log','backups','user-access'].includes(r))return false;
  if(/^\/(payment-requests|financial-requests)\/[^/]+\/(approve|reject|reverse)\/?$/.test(path))return false;
- if(/^\/procurement-review\/[^/]+\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
- if(/^\/site-inspections\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER';
+ if(/^\/procurement-review\/[^/]+\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER'&&p.writePages.includes('procurement-review');
+ if(/^\/site-inspections\/[^/]+\/(approve|reject)\/?$/.test(path))return role==='PROJECT_MANAGER'&&p.writePages.includes('site-reports');
+ if(p.custom){
+  if(read&&path==='/projects'&&p.projectLookup)return true;
+  if(read&&['/vendors','/categories','/categories/expense','/categories/paginated'].includes(path)&&p.pages.some(p=>['payables','purchases','income','expenses','transactions','quotations','rfqs','purchase-orders'].includes(p)))return true;
+  if(r==='people')return read&&p.pages.some(p=>['workers','site-reports','projects'].includes(p));
+  const page=r==='attendance'?'site-reports':r==='payroll'?'workers':r;
+  return (read?p.pages:p.writePages).includes(page);
+ }
  if(role==='STOREKEEPER')return (path==='/stock-desk'&&read)||(method==='POST'&&(/^\/purchases\/\d+\/receive\/?$/.test(path)||['/stock-movements/usage','/stock-movements/return'].includes(path)));
  if(['PROJECT_MANAGER','PROCUREMENT_OFFICER'].includes(role)&&method==='DELETE'&&!['site-reports','attendance'].includes(r))return false;
  if(role==='PROCUREMENT_OFFICER'&&read&&['/projects','/categories','/categories/expense','/categories/paginated'].includes(path))return true;
@@ -68,7 +75,10 @@ function allowed(role,path,method){
 }
 function accessMiddleware(req,res,next){
  if((req.path==='/auth/login'&&req.method==='POST')||(req.path==='/health'&&req.method==='GET'))return next();
- if(!allowed(req.user?.role,req.path,req.method))return res.status(403).json({success:false,message:'Your role does not allow this action',code:'ACCESS_DENIED'});
+ if(!allowed(req.user?.role,req.path,req.method,req.user?.permissions))return res.status(403).json({success:false,message:'Your role does not allow this action',code:'ACCESS_DENIED'});
+ if(req.user?.permissions?.custom&&!req.user.permissions.pages.includes('projects')&&req.path==='/projects'){
+  const json=res.json.bind(res);res.json=payload=>json(Array.isArray(payload?.data)?{...payload,data:payload.data.map(p=>({id:p.id,name:p.name,status:p.status}))}:payload);
+ }
  // Site supervisors receive only project lookup fields and no financial daily activity.
  if(['SITE_SUPERVISOR','PROCUREMENT_OFFICER','STOREKEEPER','ACCOUNTS'].includes(req.user.role)){
   const path=req.path,method=req.method;
@@ -123,4 +133,4 @@ function registerUserAccess(app,prisma){
   }catch(e){res.status(e.status||(e.code==='P2034'?409:500)).json({success:false,message:e.status?e.message:e.code==='P2034'?'Access changed concurrently. Refresh and retry.':'Unable to update access'});}
  });
 }
-module.exports={permissions,allowed,resource,accessMiddleware,registerUserAccess,newUserData};
+module.exports={permissions,allowed,resource,accessMiddleware,registerUserAccess,newUserData,roles,pages};

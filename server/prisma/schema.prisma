@@ -6,6 +6,14 @@ datasource db {
   provider = "mysql"
 }
 
+model PagePermission {
+  subject String @id @db.VarChar(80)
+  permissions Json
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+  @@map("page_permissions")
+}
+
 model AuditEvent {
   id Int @id @default(autoincrement())
   actorId Int
