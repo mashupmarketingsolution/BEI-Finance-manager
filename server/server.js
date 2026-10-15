@@ -378,6 +378,7 @@ require('./audit-log').registerAuditLog(app,prisma);
 require('./automatic-backup').registerBackups(app);
 require('./backup-restore').registerRestore(app,prisma);
 require('./page-permissions').registerPagePermissions(app,prisma);
+require('./password-management').registerPasswords(app,prisma);
 registerUserAccess(app,prisma);
 procurementApproval.registerProcurementApproval(app,prisma);
 require('./payment-approval').registerPaymentApproval(app,prisma);
@@ -455,6 +456,7 @@ app.post("/api/auth/login", async (req, res) => {
       {
         userId: user.id,
         username: user.username,
+        passwordVersion: user.passwordVersion,
       },
       JWT_SECRET,
       {
@@ -537,6 +539,7 @@ async function authMiddleware(req, res, next) {
         phone: true,
         status: true,
         role: true,
+        passwordVersion: true,
         projectAssignments: {select:{projectId:true}},
       },
     });
@@ -548,6 +551,7 @@ async function authMiddleware(req, res, next) {
       });
     }
 
+    if ((decoded.passwordVersion ?? 1) !== user.passwordVersion) return res.status(401).json({success:false,message:"Password changed. Please sign in again."});
     if (user.status !== "ACTIVE") {
       return res.status(403).json({
         success: false,

@@ -1,3 +1,4 @@
+import PasswordForm from './PasswordForm';
 import PaginatedTable from "./PaginatedTable";
 import UserAccess from './UserAccess';
 import StockDesk from './StockDesk';
@@ -258,7 +259,9 @@ const handleLogin = async (e) => {
 // LOGOUT
 // =========================================
 
+const [showPassword,setShowPassword]=useState(false);
 const handleLogout = () => {
+  setShowPassword(false);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
 
@@ -27606,6 +27609,8 @@ if (!currentUser) {
               </div>
             </div>
 
+            <button type="button" onClick={()=>setShowPassword(v=>!v)}>Change password</button>
+            <button type="button" onClick={()=>setShowPassword(v=>!v)}>Change password</button>
             <button
               type="button"
               className="logout-button"
@@ -28482,6 +28487,7 @@ if (!currentUser) {
         {activePage === "purchase-requests" && renderPurchaseRequests()}
         {activePage === "purchase-orders" && renderPurchaseOrders()}
         {activePage === "rfqs" && renderRFQs()}
+        {showPassword&&<PasswordForm apiUrl={API_URL} onCancel={()=>setShowPassword(false)} onDone={handleLogout}/>}
         {activePage === 'user-access' && <UserAccess apiUrl={API_URL} currentUser={currentUser}/>}
         {activePage === 'stock-desk' && <StockDesk apiUrl={API_URL}/>}
         {activePage === 'approvals' && <ApprovalCenter apiUrl={API_URL} user={currentUser}/>}

@@ -78,6 +78,7 @@ model User {
   procurementActions ProcurementApprovalEvent[]
   inspectionApprovalActions InspectionApproval[]
   role UserRole @default(SITE_SUPERVISOR)
+  passwordVersion Int @default(1)
   accessVersion Int @default(1)
   assignedSiteInspections SiteInspection[] @relation("InspectionResponsible")
   createdSiteInspections SiteInspection[] @relation("InspectionCreator")

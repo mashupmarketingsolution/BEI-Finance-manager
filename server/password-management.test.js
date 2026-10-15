@@ -1,0 +1,11 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const {validatePassword}=require('./password-management');const {allowed}=require('./access-control');
+test('password validation rejects invalid inputs',()=>{for(const body of [{},{currentPassword:'old',newPassword:'short',confirmPassword:'short'},{currentPassword:'old',newPassword:'longpassword',confirmPassword:'other'},{currentPassword:'old',newPassword:'é'.repeat(40),confirmPassword:'é'.repeat(40)}])assert.throws(()=>validatePassword(body));assert.doesNotThrow(()=>validatePassword({currentPassword:'old',newPassword:'valid-password',confirmPassword:'valid-password'}));});
+test('roles can change own password but cannot reset others',()=>{for(const role of ['ACCOUNTS','PROJECT_MANAGER','SITE_SUPERVISOR','STOREKEEPER','PROCUREMENT_OFFICER','VIEWER']){assert.equal(allowed(role,'/auth/password','POST'),true);assert.equal(allowed(role,'/access/users/1/password','POST'),false);}});
+test('password route verifies current secret and increments session version without exposing hash',async()=>{
+ const bcrypt=require('bcryptjs');const {registerPasswords}=require('./password-management');const actor={id:1,role:'ADMIN',status:'ACTIVE',passwordHash:await bcrypt.hash('old-password',4)};let update;
+ const db={user:{findUnique:async()=>actor,updateMany:async args=>{update=args;return {count:1};}},$queryRawUnsafe:async()=>[]};db.$transaction=async fn=>fn(db);
+ const routes={};registerPasswords({post:(path,fn)=>routes[path]=fn},db);
+ const run=async body=>{let status=200,payload;const res={status(n){status=n;return this;},json(p){payload=p;}};await routes['/api/auth/password']({user:actor,body},res);return {status,payload};};
+ assert.equal((await run({currentPassword:'wrong',newPassword:'new-password',confirmPassword:'new-password'})).status,400);assert.equal(update,undefined);
+ const result=await run({currentPassword:'old-password',newPassword:'new-password',confirmPassword:'new-password'});assert.equal(result.status,200);assert.deepEqual(update.data.passwordVersion,{increment:1});assert.equal(await bcrypt.compare('new-password',update.data.passwordHash),true);assert.equal(JSON.stringify(result).includes('passwordHash'),false);
+});

@@ -27,7 +27,7 @@ function basePermissions(role){
 function permissions(role){const p=basePermissions(role);if(roles.includes(role)){if(!p.pages.includes('documents'))p.pages.push('documents');if(role!=='VIEWER'&&!p.writePages.includes('documents'))p.writePages.push('documents');}return p;}
 function resource(path,method){
  const parts=path.split('/').filter(Boolean),root=parts[0];
- if(root==='auth')return path==='/auth/me'&&method==='GET'?'self':null;
+ if(root==='auth')return ((path==='/auth/me'&&method==='GET')||(path==='/auth/password'&&method==='POST'))?'self':null;
  if(root==='access')return 'user-access';
  if(root==='users')return method==='GET'&&parts.length===1?'people':null;
  if(['site-reports','site-photos','site-tasks','site-inspections'].includes(root))return 'site-reports';
