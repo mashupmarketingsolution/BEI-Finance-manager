@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import axios from 'axios';
 const label=s=>s.replaceAll('-',' ').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
-export default function PagePermissionEditor({apiUrl,users}){
+function PermissionFields({apiUrl,users}){
  const [data,setData]=useState(null),[subject,setSubject]=useState('role:PROJECT_MANAGER'),[draft,setDraft]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0);
  useEffect(()=>{let live=true;axios.get(apiUrl+'/api/access/page-permissions').then(r=>{if(!r.data.data?.pages||!r.data.data?.roles)throw Error('Unable to load page permissions');if(live)setData(r.data.data);}).catch(e=>{if(live)setError(e.response?.data?.message||'Unable to load page permissions');});return()=>{live=false;};},[apiUrl,refresh]);
  const policy=(()=>{
@@ -25,4 +25,9 @@ export default function PagePermissionEditor({apiUrl,users}){
  <button type="button" onClick={()=>save(false)}>Save page permissions</button> <button type="button" onClick={()=>save(true)}>Reset to inherited/default</button>
  </fieldset>}
  </section>;
+}
+
+export default function PagePermissionEditor(props){
+ const [open,setOpen]=useState(false);
+ return <details className="billing-panel permission-disclosure" open={open} onToggle={e=>setOpen(e.currentTarget.open)}><summary>Edit page permissions</summary>{open&&<PermissionFields {...props}/>}</details>;
 }
