@@ -27610,8 +27610,8 @@ if (!currentUser) {
               </div>
             </div>
 
-            <button type="button" onClick={()=>setShowPassword(v=>!v)}>Change password</button>
-            <button type="button" onClick={()=>setShowPassword(v=>!v)}>Change password</button>
+            <button type="button" className="account-password-button" onClick={()=>{setShowPassword(v=>!v);if(window.matchMedia?.("(max-width: 768px)").matches)setSidebarOpen(false);}}>Change password</button>
+
             <button
               type="button"
               className="logout-button"

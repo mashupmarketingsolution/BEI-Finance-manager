@@ -5980,3 +5980,4 @@ tbody tr:hover {
  .password-panel{max-width:100%;padding:16px}.password-panel input{font-size:16px}
 }
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none}}
+.account-password-button{display:block;width:100%;min-height:44px;margin:8px 0;padding:10px 14px;border:1px solid #475569;border-radius:8px;background:#1e293b;color:#fff;cursor:pointer;font:inherit}.account-password-button:hover{background:#334155}
