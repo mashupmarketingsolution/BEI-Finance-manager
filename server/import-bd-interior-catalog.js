@@ -1,11 +1,12 @@
 const fs=require('node:fs'),path=require('node:path');const catalog=require('./catalog/bd-interior');
+const identity=m=>norm(m.name)+'|'+norm(m.brand||'');
 const norm=s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 async function importCatalog(db,apply=false){
  const categories=await db.query('SELECT * FROM categories'),groups=await db.query('SELECT * FROM material_categories'),materials=await db.query('SELECT * FROM materials');
- const existingGroups=new Map(groups.map(x=>[norm(x.name),x.id])),existingMaterials=new Set(materials.map(x=>norm(x.name))),existingCats=new Set(categories.map(x=>x.type+':'+norm(x.name)));
+ const existingGroups=new Map(groups.map(x=>[norm(x.name),x.id])),existingMaterials=new Set(materials.map(identity)),existingCats=new Set(categories.map(x=>x.type+':'+norm(x.name)));
  const result={materialCategories:[],materials:[],income:[],expense:[],skippedMaterials:0};
  for(const [name] of catalog.groups)if(!existingGroups.has(norm(name)))result.materialCategories.push(name);
- for(const item of catalog.materials){if(existingMaterials.has(norm(item.name))){result.skippedMaterials++;continue;}if(materials.some(x=>x.code===item.code))throw Error('Existing material code conflict: '+item.code);result.materials.push(item);existingMaterials.add(norm(item.name));}
+ for(const item of catalog.materials){if(existingMaterials.has(identity(item))){result.skippedMaterials++;continue;}if(materials.some(x=>x.code===item.code))throw Error('Existing material code conflict: '+item.code);result.materials.push(item);existingMaterials.add(identity(item));}
  for(const [type,list] of [['INCOME',catalog.income],['EXPENSE',catalog.expense]])for(const name of list)if(!existingCats.has(type+':'+norm(name))){result[type==='INCOME'?'income':'expense'].push(name);existingCats.add(type+':'+norm(name));}
  if(!apply)return result;
  await db.beginTransaction();try{

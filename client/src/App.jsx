@@ -15229,7 +15229,7 @@ const renderBOQItemModal = () => {
                       value={material.id}
                     >
                       {material.code} -{" "}
-                      {material.name}
+                      {material.name}{material.brand ? ` — ${material.brand}` : ""}
                     </option>
                   )
                 )}
@@ -17000,7 +17000,7 @@ const quotationGrandTotal =
 
                         <td>
                           <strong>
-                            {material.name}
+                            {material.name}{material.brand ? ` — ${material.brand}` : ""}
                           </strong>
 
                           {material.specification && (
@@ -17378,8 +17378,11 @@ const quotationGrandTotal =
                     name="brand"
                     value={materialForm.brand}
                     onChange={handleMaterialChange}
-                    placeholder="Akij / Partex / etc."
+                    list="material-brand-options"
+                    placeholder="Super / Ahmed / Star Partex / Akij / other"
                   />
+                  <datalist id="material-brand-options">{[...new Set(["Super","Ahmed","Star Partex","Akij",...materials.map(m=>m.brand).filter(Boolean)])].map(brand=><option key={brand} value={brand}/>)}</datalist>
+                  <small>Choose a brand or type a new brand. Keep the material name separate, e.g. Plain particle board - 12mm.</small>
 
                 </div>
 
@@ -20556,7 +20559,7 @@ const quotationGrandTotal =
                                             material.id
                                           }
                                         >
-                                          {material.name}
+                                          {material.name}{material.brand ? ` — ${material.brand}` : ""}
                                           {" - "}
                                           {material.code}
                                         </option>
@@ -23159,7 +23162,7 @@ const renderPurchaseOrderModal = () => {
                                         key={material.id}
                                         value={String(material.id)}
                                       >
-                                        {material.name}
+                                        {material.name}{material.brand ? ` — ${material.brand}` : ""}
                                       </option>
                                     ))}
 
@@ -24668,7 +24671,7 @@ const renderRFQEditModal = () => {
                           key={material.id}
                           value={material.id}
                         >
-                          {material.name} ({material.code})
+                          {material.name}{material.brand ? ` — ${material.brand}` : ""} ({material.code})
                         </option>
                       ))}
                     </select>
