@@ -1,7 +1,8 @@
 const fs=require('node:fs'),path=require('node:path');const catalog=require('./catalog/bd-interior');
 const identity=m=>norm(m.name)+'|'+norm(m.brand||'');
 const norm=s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-async function importCatalog(db,apply=false){
+async function importCatalog(db,apply=false,catalogOverride=catalog){
+ const catalog=catalogOverride;
  const categories=await db.query('SELECT * FROM categories'),groups=await db.query('SELECT * FROM material_categories'),materials=await db.query('SELECT * FROM materials');
  const existingGroups=new Map(groups.map(x=>[norm(x.name),x.id])),existingMaterials=new Set(materials.map(identity)),existingCats=new Set(categories.map(x=>x.type+':'+norm(x.name)));
  const result={materialCategories:[],materials:[],income:[],expense:[],skippedMaterials:0};
@@ -11,7 +12,7 @@ async function importCatalog(db,apply=false){
  if(!apply)return result;
  await db.beginTransaction();try{
  for(const name of result.materialCategories){const r=await db.query('INSERT INTO material_categories (name,description,status,createdAt,updatedAt) VALUES (?,?,?,NOW(3),NOW(3))',[name,'Generic interior purchasing families; BD source research 2026-10-15. Confirm project specifications.','ACTIVE']);existingGroups.set(norm(name),Number(r.insertId));}
- for(const m of result.materials)await db.query('INSERT INTO materials (code,name,categoryId,unit,brand,size,specification,description,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(3),NOW(3))',[m.code,m.name,existingGroups.get(norm(m.category)),m.unit,m.brand||null,m.size||null,m.specification,m.description,'ACTIVE']);
+ for(const m of result.materials)await db.query('INSERT INTO materials (code,name,categoryId,unit,brand,size,subCategory,specification,description,status,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(3),NOW(3))',[m.code,m.name,existingGroups.get(norm(m.category)),m.unit,m.brand||null,m.size||null,m.subCategory||null,m.specification,m.description,'ACTIVE']);
  for(const [type,list] of [['INCOME',result.income],['EXPENSE',result.expense]])for(const name of list)await db.query('INSERT INTO categories (name,type,status,createdAt,updatedAt) VALUES (?,?,?,NOW(3),NOW(3))',[name,type,'ACTIVE']);
  await db.commit();return result;
  }catch(e){await db.rollback();throw e;}
